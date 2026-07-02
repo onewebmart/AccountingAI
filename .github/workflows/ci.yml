@@ -1,0 +1,88 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  ci:
+    name: Lint · Test · Build
+    runs-on: ubuntu-latest
+
+    services:
+      # MongoDB as a replica set (required for transactions)
+      mongo:
+        image: mongo:7.0
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --eval 'db.runCommand({ ping: 1 })'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7.2-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 8
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Initialize MongoDB replica set
+        run: |
+          mongosh --host 127.0.0.1:27017 --eval "
+            try { rs.status() } catch(e) {
+              rs.initiate({ _id: 'rs0', members: [{ _id: 0, host: '127.0.0.1:27017' }] });
+            }
+          "
+
+      - name: Lint
+        run: pnpm run lint
+
+      - name: Build shared package
+        run: pnpm --filter @ai-accounting/shared run build
+
+      - name: Test
+        run: pnpm run test:ci
+        env:
+          MONGODB_URI: mongodb://127.0.0.1:27017/ai_accounting_test?replicaSet=rs0&directConnection=true
+          REDIS_HOST: 127.0.0.1
+          REDIS_PORT: 6379
+          JWT_ACCESS_SECRET: ci-test-access-secret
+          JWT_REFRESH_SECRET: ci-test-refresh-secret
+          NODE_ENV: test
+
+      - name: Build
+        run: pnpm run build
+        env:
+          MONGODB_URI: mongodb://127.0.0.1:27017/ai_accounting_test?replicaSet=rs0&directConnection=true
+
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage
+          path: apps/api/coverage/

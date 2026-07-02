@@ -1,0 +1,73 @@
+version: '3.9'
+
+services:
+  # ─── MongoDB single-node replica set ─────────────────────────────────
+  # Multi-document transactions REQUIRE a replica set.
+  # rs.initiate() is called by the init script below.
+  mongo:
+    image: mongo:7.0
+    container_name: ai_accounting_mongo
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+      - ./scripts/mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
+    healthcheck:
+      test: |
+        mongosh --quiet --eval "
+          try { rs.status() } catch(e) {
+            rs.initiate({_id:'rs0', members:[{_id:0, host:'localhost:27017'}]})
+          }
+        "
+      interval: 10s
+      timeout: 10s
+      retries: 5
+    networks:
+      - ai_accounting
+
+  # ─── Redis ───────────────────────────────────────────────────────────
+  redis:
+    image: redis:7.2-alpine
+    container_name: ai_accounting_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ai_accounting
+
+  # ─── MinIO (S3-compatible object storage) ────────────────────────────
+  minio:
+    image: minio/minio:latest
+    container_name: ai_accounting_minio
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ai_accounting
+
+volumes:
+  mongo_data:
+  redis_data:
+  minio_data:
+
+networks:
+  ai_accounting:
+    driver: bridge

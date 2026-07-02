@@ -1,0 +1,430 @@
+'use client';
+
+import { useState, useRef } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Button } from '@/components/ui/button';
+import { api } from '@/lib/api';
+import {
+  Upload,
+  FileText,
+  Loader2,
+  CheckCircle2,
+  AlertCircle,
+  Copy,
+  ChevronRight,
+  X,
+} from 'lucide-react';
+import Link from 'next/link';
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+type DocStatus = 'reading' | 'ready' | 'posted' | 'duplicate' | 'failed';
+type DocType = 'purchase_invoice' | 'sales_invoice' | 'bank_statement' | 'receipt' | 'unknown';
+
+interface InboxDoc {
+  id: string;
+  fileName: string;
+  type: DocType;
+  uploadedAt: string;
+  vendor: string | null;
+  amountPaise: number | null;
+  confidence: number | null;
+  status: DocStatus;
+  duplicateOf?: string;
+}
+
+// ── API response shape ────────────────────────────────────────────────────────
+
+interface ApiDocument {
+  _id: string;
+  originalName: string;
+  documentType?: DocType;
+  status: 'uploaded' | 'extracted' | 'posted' | 'duplicate' | 'failed';
+  vendor?: string | null;
+  totalAmountPaise?: number | null;
+  confidence?: number | null;
+  uploadedAt: string;
+  duplicateOf?: string;
+}
+
+// ── Status mapping ────────────────────────────────────────────────────────────
+
+function mapApiStatus(apiStatus: ApiDocument['status']): DocStatus {
+  switch (apiStatus) {
+    case 'uploaded': return 'reading';
+    case 'extracted': return 'ready';
+    case 'posted': return 'posted';
+    case 'duplicate': return 'duplicate';
+    case 'failed': return 'failed';
+    default: return 'reading';
+  }
+}
+
+function mapApiDoc(doc: ApiDocument): InboxDoc {
+  return {
+    id: doc._id,
+    fileName: doc.originalName,
+    type: doc.documentType ?? 'unknown',
+    uploadedAt: doc.uploadedAt,
+    vendor: doc.vendor ?? null,
+    amountPaise: doc.totalAmountPaise ?? null,
+    confidence: doc.confidence ?? null,
+    status: mapApiStatus(doc.status),
+    duplicateOf: doc.duplicateOf,
+  };
+}
+
+// ── Mock data (fallback when API returns empty) ───────────────────────────────
+
+const MOCK_DOCS: InboxDoc[] = [
+  { id: 'd-001', fileName: 'swiggy-march-invoice.pdf', type: 'purchase_invoice', uploadedAt: '2025-04-14T09:12:00Z', vendor: 'Swiggy Business', amountPaise: 13200000, confidence: 0.93, status: 'ready' },
+  { id: 'd-002', fileName: 'bank-stmt-hdfc-mar25.pdf', type: 'bank_statement', uploadedAt: '2025-04-14T09:15:00Z', vendor: null, amountPaise: null, confidence: null, status: 'reading' },
+  { id: 'd-003', fileName: 'sigma-electricals-inv.pdf', type: 'purchase_invoice', uploadedAt: '2025-04-13T14:30:00Z', vendor: 'Sigma Electricals Pvt Ltd', amountPaise: 53100000, confidence: 0.67, status: 'ready' },
+  { id: 'd-004', fileName: 'rahul-ent-invoice.jpg', type: 'sales_invoice', uploadedAt: '2025-04-12T11:00:00Z', vendor: 'Rahul Enterprises', amountPaise: 29500000, confidence: 0.97, status: 'posted' },
+  { id: 'd-005', fileName: 'swiggy-march-invoice-copy.pdf', type: 'purchase_invoice', uploadedAt: '2025-04-12T11:45:00Z', vendor: 'Swiggy Business', amountPaise: 13200000, confidence: 0.91, status: 'duplicate', duplicateOf: 'swiggy-march-invoice.pdf' },
+  { id: 'd-006', fileName: 'scan-blurry-receipt.jpg', type: 'unknown', uploadedAt: '2025-04-11T16:20:00Z', vendor: null, amountPaise: null, confidence: null, status: 'failed' },
+  { id: 'd-007', fileName: 'amazon-business-bill.pdf', type: 'purchase_invoice', uploadedAt: '2025-04-10T10:00:00Z', vendor: 'Amazon Business', amountPaise: 7430000, confidence: 0.88, status: 'posted' },
+  { id: 'd-008', fileName: 'petty-cash-receipt-apr.pdf', type: 'receipt', uploadedAt: '2025-04-09T08:30:00Z', vendor: 'Petty Cash', amountPaise: 450000, confidence: 0.79, status: 'ready' },
+];
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+const TYPE_LABELS: Record<DocType, string> = {
+  purchase_invoice: 'Purchase invoice',
+  sales_invoice: 'Sales invoice',
+  bank_statement: 'Bank statement',
+  receipt: 'Receipt',
+  unknown: 'Unknown',
+};
+
+function fmt(paise: number) {
+  return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(paise / 100);
+}
+
+function StatusChip({ status, duplicateOf }: { status: DocStatus; duplicateOf?: string }) {
+  if (status === 'reading') {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-caption font-medium text-pending-fg bg-pending-bg border border-pending-fg/30 rounded-full px-2.5 py-0.5">
+        <Loader2 size={11} className="animate-spin" /> Reading…
+      </span>
+    );
+  }
+  if (status === 'ready') {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-caption font-medium text-pending-fg bg-pending-bg border border-pending-fg/30 rounded-full px-2.5 py-0.5">
+        <span className="h-1.5 w-1.5 rounded-full bg-pending-fg" /> Ready to review
+      </span>
+    );
+  }
+  if (status === 'posted') {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-caption font-medium text-success-fg bg-success-bg border border-success-fg/30 rounded-full px-2.5 py-0.5">
+        <CheckCircle2 size={11} /> Posted
+      </span>
+    );
+  }
+  if (status === 'duplicate') {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-caption font-medium text-error-fg bg-error-bg border border-error-fg/30 rounded-full px-2.5 py-0.5">
+        <Copy size={11} /> Duplicate?
+      </span>
+    );
+  }
+  // failed or unknown
+  void duplicateOf;
+  return (
+    <span className="inline-flex items-center gap-1.5 text-caption font-medium text-error-fg bg-error-bg border border-error-fg/30 rounded-full px-2.5 py-0.5">
+      <AlertCircle size={11} /> Couldn&apos;t read
+    </span>
+  );
+}
+
+function ConfidenceDot({ value }: { value: number }) {
+  const pct = Math.round(value * 100);
+  const color = value >= 0.85 ? 'text-success-fg' : value >= 0.7 ? 'text-pending-fg' : 'text-error-fg';
+  return <span className={`font-mono text-caption ${color}`}>{pct}%</span>;
+}
+
+// ── Dropzone ──────────────────────────────────────────────────────────────────
+
+function Dropzone({ onDrop }: { onDrop: (files: File[]) => void }) {
+  const [dragging, setDragging] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const handle = (files: FileList | null) => {
+    if (!files) return;
+    onDrop(Array.from(files));
+  };
+
+  return (
+    <div
+      onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+      onDragLeave={() => setDragging(false)}
+      onDrop={(e) => { e.preventDefault(); setDragging(false); handle(e.dataTransfer.files); }}
+      onClick={() => inputRef.current?.click()}
+      className={`cursor-pointer rounded-xl border-2 border-dashed px-8 py-12 text-center transition-colors ${
+        dragging
+          ? 'border-marigold-400 bg-honey-100'
+          : 'border-line-200 bg-surface-card hover:border-marigold-400 hover:bg-honey-50'
+      }`}
+    >
+      <input
+        ref={inputRef}
+        type="file"
+        multiple
+        accept=".pdf,.jpg,.jpeg,.png,.xlsx,.xls"
+        className="hidden"
+        onChange={(e) => handle(e.target.files)}
+      />
+      <Upload size={28} className={`mx-auto mb-3 ${dragging ? 'text-marigold-400' : 'text-ink-300'}`} />
+      <p className="text-body font-medium text-ink-900 mb-1">
+        Drop bank statements, bills, invoices, or receipts
+      </p>
+      <p className="text-caption text-ink-500">
+        PDF, image, or Excel. We&apos;ll figure out what each one is.
+      </p>
+    </div>
+  );
+}
+
+// ── Page ──────────────────────────────────────────────────────────────────────
+
+type FilterStatus = 'all' | DocStatus;
+
+export default function InboxPage() {
+  const [filter, setFilter] = useState<FilterStatus>('all');
+  const [optimisticDocs, setOptimisticDocs] = useState<InboxDoc[]>([]);
+  const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
+
+  const queryClient = useQueryClient();
+
+  // ── Fetch documents ──────────────────────────────────────────────────────
+  const {
+    data: apiResponse,
+    isLoading,
+    isError,
+  } = useQuery({
+    queryKey: ['documents'],
+    queryFn: () =>
+      api.get<ApiDocument[] | { data: ApiDocument[] }>('/documents'),
+  });
+
+  // Normalise API response (array or {data:[...]})
+  const apiDocs: InboxDoc[] = (() => {
+    if (!apiResponse) return [];
+    const raw = Array.isArray(apiResponse)
+      ? apiResponse
+      : 'data' in apiResponse && Array.isArray(apiResponse.data)
+        ? apiResponse.data
+        : [];
+    return raw.map(mapApiDoc);
+  })();
+
+  // Use real data if available, fallback to mock if empty
+  const baseDocs = apiDocs.length > 0 ? apiDocs : MOCK_DOCS;
+
+  // Merge optimistic uploads at the front, exclude dismissed duplicates
+  const docs = [
+    ...optimisticDocs,
+    ...baseDocs.filter((d) => !dismissedIds.has(d.id) && !optimisticDocs.find((o) => o.id === d.id)),
+  ];
+
+  // ── Upload mutation ───────────────────────────────────────────────────────
+  const uploadMutation = useMutation({
+    mutationFn: (file: File) => {
+      const form = new FormData();
+      form.append('file', file);
+      return api.post<ApiDocument>('/documents/upload', form);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['documents'] });
+    },
+  });
+
+  const handleDrop = (files: File[]) => {
+    // Add optimistic "reading" placeholders immediately
+    const placeholders: InboxDoc[] = files.map((f, i) => ({
+      id: `upload-${Date.now()}-${i}`,
+      fileName: f.name,
+      type: 'unknown',
+      uploadedAt: new Date().toISOString(),
+      vendor: null,
+      amountPaise: null,
+      confidence: null,
+      status: 'reading',
+    }));
+    setOptimisticDocs((prev) => [...placeholders, ...prev]);
+
+    // Upload each file; on completion remove placeholder and refresh
+    files.forEach((file, i) => {
+      uploadMutation.mutate(file, {
+        onSettled: () => {
+          setOptimisticDocs((prev) => prev.filter((d) => d.id !== placeholders[i].id));
+        },
+      });
+    });
+  };
+
+  const dismissDuplicate = (id: string) => {
+    setDismissedIds((prev) => new Set([...prev, id]));
+  };
+
+  const filtered = docs.filter((d) => filter === 'all' || d.status === filter);
+  const readyCount = docs.filter((d) => d.status === 'ready').length;
+
+  const FILTER_OPTS: { value: FilterStatus; label: string }[] = [
+    { value: 'all', label: 'All' },
+    { value: 'reading', label: 'Reading…' },
+    { value: 'ready', label: 'Ready to review' },
+    { value: 'posted', label: 'Posted' },
+    { value: 'duplicate', label: 'Duplicate?' },
+    { value: 'failed', label: "Couldn't read" },
+  ];
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <h1 className="text-h1 font-display text-ink-900" style={{ fontFamily: 'var(--font-display)' }}>
+          Inbox
+        </h1>
+        {readyCount > 0 && (
+          <Button variant="primary" asChild>
+            <Link href="/review">
+              Review {readyCount} document{readyCount !== 1 ? 's' : ''} <ChevronRight size={15} />
+            </Link>
+          </Button>
+        )}
+      </div>
+
+      {/* Dropzone */}
+      <Dropzone onDrop={handleDrop} />
+
+      {/* Error state */}
+      {isError && (
+        <p className="text-body text-error-fg text-center py-4">
+          Couldn&apos;t load data. Try refreshing.
+        </p>
+      )}
+
+      {/* Filter pills */}
+      <div className="flex flex-wrap gap-2">
+        {FILTER_OPTS.map((opt) => (
+          <button
+            key={opt.value}
+            onClick={() => setFilter(opt.value)}
+            className={`rounded-full px-3 py-1.5 text-caption font-medium border transition-colors ${
+              filter === opt.value
+                ? 'bg-ink-900 text-white border-ink-900'
+                : 'bg-surface-card text-ink-600 border-line-200 hover:border-ink-400'
+            }`}
+          >
+            {opt.label}
+            {opt.value === 'ready' && readyCount > 0 && (
+              <span className="ml-1.5 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-marigold-400 px-1 text-[0.65rem] font-bold text-ink-900">
+                {readyCount}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* Document list */}
+      {isLoading && optimisticDocs.length === 0 ? (
+        <div className="flex items-center justify-center py-20 text-ink-400 text-body">
+          <Loader2 size={20} className="animate-spin mr-2" /> Loading documents…
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-20 text-center rounded-xl border border-line-200 bg-surface-card">
+          <FileText size={36} className="text-ink-300 mb-4" />
+          <p className="text-h3 font-display text-ink-900 mb-1" style={{ fontFamily: 'var(--font-display)' }}>
+            Your inbox is clear.
+          </p>
+          <p className="text-body text-ink-500">Drop a document above to begin.</p>
+        </div>
+      ) : (
+        <div className="rounded-xl border border-line-200 bg-surface-card overflow-hidden">
+          <table className="w-full text-left">
+            <thead>
+              <tr className="border-b border-line-200 bg-surface-sink">
+                {['File', 'Type', 'Uploaded', 'Vendor', 'Amount', 'Confidence', 'Status', ''].map((h) => (
+                  <th key={h} className="px-4 py-3 text-caption font-semibold text-ink-500 uppercase tracking-wide whitespace-nowrap">
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((doc) => (
+                <>
+                  <tr
+                    key={doc.id}
+                    className={`border-b border-line-100 last:border-0 transition-colors hover:bg-honey-50 ${
+                      doc.status === 'duplicate' ? 'bg-error-bg/10' : ''
+                    } ${doc.status === 'failed' ? 'opacity-60' : ''}`}
+                  >
+                    <td className="px-4 py-3 max-w-[180px]">
+                      <span className="flex items-center gap-2">
+                        <FileText size={14} className="text-ink-400 shrink-0" />
+                        <span className="font-mono text-caption text-ink-900 truncate">{doc.fileName}</span>
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-caption text-ink-600 whitespace-nowrap">
+                      {TYPE_LABELS[doc.type]}
+                    </td>
+                    <td className="px-4 py-3 text-caption text-ink-500 whitespace-nowrap">
+                      {new Date(doc.uploadedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                    </td>
+                    <td className="px-4 py-3 text-body text-ink-900 max-w-[150px] truncate">
+                      {doc.vendor ?? <span className="text-ink-300">—</span>}
+                    </td>
+                    <td className="px-4 py-3 font-mono text-body text-ink-900 whitespace-nowrap">
+                      {doc.amountPaise != null ? fmt(doc.amountPaise) : <span className="text-ink-300">—</span>}
+                    </td>
+                    <td className="px-4 py-3">
+                      {doc.confidence != null
+                        ? <ConfidenceDot value={doc.confidence} />
+                        : <span className="text-ink-300 text-caption">—</span>}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <StatusChip status={doc.status} duplicateOf={doc.duplicateOf} />
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      {doc.status === 'ready' && (
+                        <Button variant="secondary" size="sm" asChild>
+                          <Link href="/review">Review <ChevronRight size={13} /></Link>
+                        </Button>
+                      )}
+                      {doc.status === 'duplicate' && (
+                        <button
+                          onClick={() => dismissDuplicate(doc.id)}
+                          className="inline-flex items-center gap-1 text-caption text-ink-400 hover:text-error-fg transition-colors"
+                        >
+                          <X size={13} /> Skip
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                  {doc.status === 'duplicate' && doc.duplicateOf && (
+                    <tr key={`${doc.id}-dup`} className="border-b border-line-100 bg-error-bg/10">
+                      <td colSpan={8} className="px-4 py-2">
+                        <p className="text-caption text-error-fg">
+                          Looks like a duplicate of{' '}
+                          <span className="font-mono font-medium">{doc.duplicateOf}</span>.{' '}
+                          Keep both, or skip?
+                        </p>
+                      </td>
+                    </tr>
+                  )}
+                </>
+              ))}
+            </tbody>
+          </table>
+          <div className="border-t border-line-200 bg-surface-sink px-4 py-3">
+            <span className="text-caption text-ink-500">{filtered.length} document{filtered.length !== 1 ? 's' : ''}</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

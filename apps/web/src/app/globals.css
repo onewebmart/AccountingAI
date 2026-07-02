@@ -1,0 +1,176 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── Google Fonts ─────────────────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700&family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+/* ─── Design System Tokens ─────────────────────────────────────────── */
+:root {
+  /* Brand — warm */
+  --saffron-600: #e8590c;
+  --saffron-500: #f76707;
+  --saffron-700: #c84a06;
+  --marigold-400: #fab005;
+  --marigold-300: #ffd43b;
+  --honey-100: #fff4dc;
+  --honey-50: #fffbf2;
+
+  /* Neutrals */
+  --ink-900: #1f1a15;
+  --ink-700: #3a322a;
+  --ink-500: #7a6e60;
+  --ink-400: #a8998a;
+  --line-200: #ebe3d7;
+  --surface-card: #ffffff;
+  --surface-page: #fffcf6;
+  --surface-sink: #f6efe3;
+  --roast-900: #241a11;
+
+  /* Semantic states */
+  --success-fg: #1e7a47;
+  --success-bg: #e6f6ee;
+  --error-fg: #c92a2a;
+  --error-bg: #fbe9e9;
+  --info-fg: #3b5bc0;
+  --info-bg: #e9edfb;
+  --pending-fg: #945800;
+  --pending-bg: #fff4dc;
+
+  /* Radius */
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 16px;
+
+  /* Typography */
+  --font-display: 'Bricolage Grotesque', sans-serif;
+  --font-body: 'Hanken Grotesk', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  /* ─── shadcn/ui CSS variable mappings (warm-themed) ─── */
+  --background: 40 100% 99%; /* surface-page #FFFCF6 */
+  --foreground: 28 19% 10%;  /* ink-900 #1F1A15 */
+
+  --card: 0 0% 100%;
+  --card-foreground: 28 19% 10%;
+
+  --popover: 0 0% 100%;
+  --popover-foreground: 28 19% 10%;
+
+  --primary: 20 90% 48%;     /* saffron-600 #E8590C */
+  --primary-foreground: 0 0% 100%;
+
+  --secondary: 36 47% 94%;   /* surface-sink #F6EFE3 */
+  --secondary-foreground: 28 19% 10%;
+
+  --muted: 36 47% 94%;
+  --muted-foreground: 25 11% 48%; /* ink-500 */
+
+  --accent: 36 47% 94%;
+  --accent-foreground: 28 19% 10%;
+
+  --destructive: 0 72% 47%;  /* error-fg #C92A2A */
+  --destructive-foreground: 0 0% 100%;
+
+  --border: 32 30% 88%;      /* line-200 #EBE3D7 */
+  --input: 32 30% 88%;
+  --ring: 42 95% 50%;        /* marigold-400 #FAB005 */
+
+  --radius: 0.625rem;        /* r-md 10px */
+}
+
+/* ─── Base styles ──────────────────────────────────────────────────── */
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    font-size: 16px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    @apply bg-surface-page text-ink-900;
+    font-family: var(--font-body);
+    font-size: 0.9375rem;
+    line-height: 1.55;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-display);
+    color: var(--ink-900);
+  }
+
+  /* Tabular figures for all number-heavy elements */
+  table, .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Money / ID values always in JetBrains Mono */
+  .mono-data, [data-mono] {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* ─── Focus ring ───────────────────────────────────────────────────── */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--marigold-400);
+    outline-offset: 2px;
+  }
+}
+
+/* ─── Scrollbar ────────────────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--surface-sink);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--line-200);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--ink-400);
+}
+
+/* ─── Reduced motion ───────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ─── Utility classes ──────────────────────────────────────────────── */
+@layer utilities {
+  /* Pending row indicator — 3px left border in marigold */
+  .pending-row {
+    border-left: 3px solid var(--marigold-400);
+  }
+
+  /* Active sidebar item */
+  .sidebar-active {
+    background: rgba(250, 176, 5, 0.08);
+    border-left: 3px solid var(--saffron-600);
+    color: white;
+  }
+
+  /* Amber → green confirm animation */
+  .confirm-animate {
+    animation: amber-to-green 200ms ease-out forwards;
+  }
+
+  @keyframes amber-to-green {
+    0% { border-left-color: var(--marigold-400); }
+    100% { border-left-color: var(--success-fg); }
+  }
+}
