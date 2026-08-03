@@ -27,54 +27,6 @@ interface Customer {
   receivablePaise: number;
 }
 
-// ── Mock fallbacks ────────────────────────────────────────────────────────
-
-const MOCK_INVOICES: Invoice[] = [
-  {
-    _id: 'inv-001',
-    customerName: 'Rahul Enterprises',
-    invoiceNumber: 'INV-2025-0214',
-    invoiceDate: '2025-03-15',
-    dueDate: '2025-04-14',
-    status: 'posted',
-    totalPaise: 2950000,
-  },
-  {
-    _id: 'inv-002',
-    customerName: 'TechSoft Solutions Ltd',
-    invoiceNumber: 'INV-2025-0215',
-    invoiceDate: '2025-03-18',
-    dueDate: '2025-04-17',
-    status: 'sent',
-    totalPaise: 1180000,
-  },
-  {
-    _id: 'inv-003',
-    customerName: 'Kalyani Traders',
-    invoiceNumber: 'INV-2025-0213',
-    invoiceDate: '2025-03-01',
-    dueDate: null,
-    status: 'paid',
-    totalPaise: 590000,
-  },
-  {
-    _id: 'inv-004',
-    customerName: 'Mehta & Co',
-    invoiceNumber: null,
-    invoiceDate: '2025-03-20',
-    dueDate: '2025-04-19',
-    status: 'draft',
-    totalPaise: 472000,
-  },
-];
-
-const MOCK_CUSTOMERS: Customer[] = [
-  { _id: 'c-001', name: 'Rahul Enterprises', gstin: '27AAPFU0939F1ZV', receivablePaise: 2950000 },
-  { _id: 'c-002', name: 'TechSoft Solutions Ltd', gstin: '29AAACT2727Q1ZZ', receivablePaise: 1180000 },
-  { _id: 'c-003', name: 'Kalyani Traders', gstin: null, receivablePaise: 0 },
-  { _id: 'c-004', name: 'Mehta & Co', gstin: '24AACCM5606G1Z5', receivablePaise: 0 },
-];
-
 // ── Formatters ────────────────────────────────────────────────────────────
 
 function formatRupees(paise: number): string {
@@ -255,8 +207,8 @@ export default function SalesPage() {
     onError: () => showToast("Couldn&apos;t send invoice. Try again.", 'info'),
   });
 
-  const invoices = (invoicesQuery.data && invoicesQuery.data.length > 0) ? invoicesQuery.data : MOCK_INVOICES;
-  const customers = (customersQuery.data && customersQuery.data.length > 0) ? customersQuery.data : MOCK_CUSTOMERS;
+  const invoices = invoicesQuery.data ?? [];
+  const customers = customersQuery.data ?? [];
 
   const totalReceivable = customers.reduce((s, c) => s + c.receivablePaise, 0);
   const openInvoices = invoices.filter((i) => i.status !== 'paid' && i.status !== 'draft');

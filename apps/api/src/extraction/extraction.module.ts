@@ -4,6 +4,7 @@ import { ExtractedDocument, ExtractedDocumentSchema } from './schemas/extracted-
 import { ExtractionService } from './extraction.service';
 import { GeminiExtractionService } from './gemini-extraction.service';
 import { OcrModule } from '../ocr/ocr.module';
+import { TenancyModule } from '../tenancy/tenancy.module';
 
 @Module({
   imports: [
@@ -11,6 +12,7 @@ import { OcrModule } from '../ocr/ocr.module';
       { name: ExtractedDocument.name, schema: ExtractedDocumentSchema },
     ]),
     OcrModule, // for UsageMeterService
+    TenancyModule, // for the Organization model — gives extraction its "who am I" context
   ],
   providers: [ExtractionService, GeminiExtractionService],
   exports: [ExtractionService],

@@ -21,7 +21,8 @@ import { getModelToken } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import configuration from '../config/configuration';
 import { ExtractionService } from './extraction.service';
-import { GroqExtractionService } from './groq-extraction.service';
+import { GeminiExtractionService } from './gemini-extraction.service';
+import { Organization, OrganizationSchema } from '../tenancy/schemas/organization.schema';
 import { ExtractedDocument, ExtractedDocumentSchema, ExtractedDocumentDocument } from './schemas/extracted-document.schema';
 import { UsageMeter, UsageMeterSchema, UsageMeterDocument } from '../ocr/schemas/usage-meter.schema';
 import { UsageMeterService } from '../ocr/usage-meter.service';
@@ -82,12 +83,13 @@ beforeAll(async () => {
       MongooseModule.forFeature([
         { name: ExtractedDocument.name, schema: ExtractedDocumentSchema },
         { name: UsageMeter.name, schema: UsageMeterSchema },
+        { name: Organization.name, schema: OrganizationSchema },
       ]),
     ],
     providers: [
       ExtractionService,
       UsageMeterService,
-      { provide: GroqExtractionService, useValue: fakeGroq },
+      { provide: GeminiExtractionService, useValue: fakeGroq },
     ],
   }).compile();
 

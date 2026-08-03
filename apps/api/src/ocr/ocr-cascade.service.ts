@@ -2,7 +2,7 @@ import { Injectable, Inject, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { OcrResult, OcrResultDocument } from './schemas/ocr-result.schema';
-import { OCR_PROVIDER, OcrProvider } from './providers/ocr.provider.interface';
+import { OCR_PROVIDER, OcrProvider, OcrProviderResult } from './providers/ocr.provider.interface';
 import { GeminiVisionService } from './gemini-vision.service';
 import { UsageMeterService } from './usage-meter.service';
 import { PdfTextExtractorService } from './pdf-text-extractor.service';
@@ -49,7 +49,17 @@ export class OcrCascadeService {
 
     if (mimeType === 'application/pdf') {
       // ── Tier 1: native-text PDF ────────────────────────────────────────
-      const { text: extractedText, pageCount: pdfPageCount } = await this.pdfExtractor.extract(buffer);
+      let extractedText = '';
+      let pdfPageCount = 1;
+      try {
+        const parsed = await this.pdfExtractor.extract(buffer);
+        extractedText = parsed.text;
+        pdfPageCount = parsed.pageCount;
+      } catch (err) {
+        // A corrupt or image-only PDF must not kill the pipeline — fall through
+        // to the vision tier, which reads scans directly.
+        this.logger.warn(`Document ${documentId}: PDF text layer unreadable (${String(err)})`);
+      }
       pageCount = pdfPageCount;
 
       if (extractedText.length >= NATIVE_TEXT_THRESHOLD) {
@@ -66,7 +76,8 @@ export class OcrCascadeService {
         rawText = ocr.text;
         layoutJson = ocr.layoutJson;
         confidence = ocr.confidence;
-        pageCount = ocr.pageCount;
+        pageCount = Math.max(ocr.pageCount, pdfPageCount);
+        await this.meterProviderTokens(orgId, ocr);
       }
     } else {
       // ── Tier 2: image (PNG, JPEG, TIFF, WEBP) ─────────────────────────
@@ -77,15 +88,16 @@ export class OcrCascadeService {
       layoutJson = ocr.layoutJson;
       confidence = ocr.confidence;
       pageCount = ocr.pageCount;
+      await this.meterProviderTokens(orgId, ocr);
     }
 
     // ── Tier 3: vision LLM fallback if confidence is too low ──────────────
-    if (confidence < OCR_CONFIDENCE_THRESHOLD) {
+    // Skipped when Tier 2 was already a vision LLM — the same bytes through the
+    // same model returns the same text for twice the tokens.
+    if (confidence < OCR_CONFIDENCE_THRESHOLD && !this.ocrProvider.isVisionLlm) {
       this.logger.log(`Document ${documentId}: low confidence (${confidence.toFixed(2)}), escalating to Tier 3 (Gemini vision)`);
 
-      // Only send images to Groq vision — convert PDFs to first-page image via raw buffer
-      const visionMimeType = mimeType === 'application/pdf' ? 'image/jpeg' : mimeType;
-      const visionResult = await this.geminiVision.extractText(buffer, visionMimeType);
+      const visionResult = await this.geminiVision.extractText(buffer, mimeType);
 
       tier = 3;
       rawText = visionResult.text || rawText; // keep Tier 2 text if vision returns nothing
@@ -93,6 +105,10 @@ export class OcrCascadeService {
       layoutJson = { ...layoutJson, tier3Source: 'gemini-vision' };
 
       await this.usageMeter.recordAiTokens(orgId, visionResult.tokensIn, visionResult.tokensOut);
+    }
+
+    if (!rawText.trim()) {
+      throw new Error('OCR produced no readable text for this document.');
     }
 
     const processingMs = Date.now() - start;
@@ -115,5 +131,12 @@ export class OcrCascadeService {
     );
 
     return { ocrResult, tier };
+  }
+
+  /** LLM-backed OCR providers report token spend; meter it against the org. */
+  private async meterProviderTokens(orgId: string, result: OcrProviderResult): Promise<void> {
+    if (result.tokensIn || result.tokensOut) {
+      await this.usageMeter.recordAiTokens(orgId, result.tokensIn ?? 0, result.tokensOut ?? 0);
+    }
   }
 }

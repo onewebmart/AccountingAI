@@ -38,100 +38,51 @@ interface BookEntry {
   matchedBankLineId: string | null;
 }
 
-interface StatementResponse {
-  bankLines: BankLine[];
-  bookEntries: BookEntry[];
-  openingBalancePaise?: number;
-  closingBalancePaise?: number;
+/** Shapes returned by the reconciliation API. */
+interface ApiStatement {
+  _id: string;
+  periodStart: string;
+  periodEnd: string;
+  openingBalancePaise: number;
+  closingBalancePaise: number;
+  totalLines: number;
+  matchedLines: number;
+  status: string;
 }
 
-// ── Mock fallbacks ────────────────────────────────────────────────────────
+interface DiffReport {
+  statementId: string;
+  periodStart: string;
+  periodEnd: string;
+  openingBalancePaise: number;
+  closingBalancePaise: number;
+  glBalancePaise: number;
+  differencePaise: number;
+  totalLines: number;
+  matchedLines: number;
+  unmatchedLines: number;
+  isReconciled: boolean;
+  lines: Array<{
+    id: string;
+    date: string;
+    description: string;
+    reference: string | null;
+    debitPaise: number;
+    creditPaise: number;
+    matchStatus: MatchStatus;
+    matchedJournalId: string | null;
+  }>;
+}
 
-const MOCK_BANK_LINES: BankLine[] = [
-  {
-    _id: 'bl-001',
-    date: '2025-03-03',
-    description: 'NEFT OUT — Swiggy Business',
-    reference: 'SBIN2025030300001',
-    debitPaise: 1180000,
-    creditPaise: 0,
-    matchStatus: 'confirmed',
-    matchedBookEntry: 'be-001',
-  },
-  {
-    _id: 'bl-002',
-    date: '2025-03-07',
-    description: 'NEFT IN — Rahul Enterprises',
-    reference: 'HDFC2025030700221',
-    debitPaise: 0,
-    creditPaise: 2950000,
-    matchStatus: 'confirmed',
-    matchedBookEntry: 'be-002',
-  },
-  {
-    _id: 'bl-003',
-    date: '2025-03-10',
-    description: 'NEFT OUT — Sigma Electricals',
-    reference: 'SBIN2025031000088',
-    debitPaise: 5310000,
-    creditPaise: 0,
-    matchStatus: 'auto_matched',
-    matchedBookEntry: 'be-003',
-  },
-  {
-    _id: 'bl-004',
-    date: '2025-03-14',
-    description: 'UPI credit — unknown',
-    reference: 'UPI2025031499999',
-    debitPaise: 0,
-    creditPaise: 100000,
-    matchStatus: 'unmatched',
-    matchedBookEntry: null,
-  },
-  {
-    _id: 'bl-005',
-    date: '2025-03-18',
-    description: 'ATM cash withdrawal',
-    reference: null,
-    debitPaise: 200000,
-    creditPaise: 0,
-    matchStatus: 'unmatched',
-    matchedBookEntry: null,
-  },
-];
-
-const MOCK_BOOK_ENTRIES: BookEntry[] = [
-  {
-    _id: 'be-001',
-    date: '2025-03-03',
-    narration: 'Payment — Swiggy Business bill SWG/2025/0941',
-    voucherType: 'PAYMENT',
-    amountPaise: 1180000,
-    side: 'credit',
-    matchedBankLineId: 'bl-001',
-  },
-  {
-    _id: 'be-002',
-    date: '2025-03-07',
-    narration: 'Receipt — Rahul Enterprises INV-2025-0214',
-    voucherType: 'RECEIPT',
-    amountPaise: 2950000,
-    side: 'debit',
-    matchedBankLineId: 'bl-002',
-  },
-  {
-    _id: 'be-003',
-    date: '2025-03-09',
-    narration: 'Payment — Sigma Electricals SE/2025/087',
-    voucherType: 'PAYMENT',
-    amountPaise: 5310000,
-    side: 'credit',
-    matchedBankLineId: 'bl-003',
-  },
-];
-
-const OPENING_BALANCE = 15000000;
-const BANK_CLOSING = 11360000;
+interface ApiJournal {
+  _id: string;
+  voucherNumber: string;
+  voucherType: string;
+  date: string;
+  description: string;
+  totalDebitPaise: number;
+  totalCreditPaise: number;
+}
 
 // ── Formatters ────────────────────────────────────────────────────────────
 
@@ -196,31 +147,66 @@ export default function BankingPage() {
   // Auto-select first account when accounts load
   const effectiveAccountId = selectedAccountId ?? accounts[0]?._id ?? null;
 
-  // Fetch statement lines for selected account
-  const statementQuery = useQuery<StatementResponse>({
+  // Statements for the selected account, newest first.
+  const statementsQuery = useQuery<ApiStatement[]>({
     queryKey: ['banking', 'statements', effectiveAccountId],
-    queryFn: () => api.get<StatementResponse>(`/banking/statements?bankAccountId=${effectiveAccountId}`),
+    queryFn: () =>
+      api.get<ApiStatement[]>(`/banking/statements?bankAccountId=${effectiveAccountId}`),
     enabled: !!effectiveAccountId,
   });
 
-  // Determine data to display (API or mock fallback)
-  const useMockData = !effectiveAccountId || (statementQuery.isSuccess && !statementQuery.data?.bankLines?.length && !statementQuery.data?.bookEntries?.length);
+  const latestStatement = statementsQuery.data?.[0] ?? null;
 
-  const rawBankLines: BankLine[] = statementQuery.data?.bankLines?.length
-    ? statementQuery.data.bankLines
-    : MOCK_BANK_LINES;
+  // The reconciliation report carries the imported bank lines and their match state.
+  const reportQuery = useQuery<DiffReport>({
+    queryKey: ['banking', 'report', latestStatement?._id],
+    queryFn: () => api.get<DiffReport>(`/banking/statements/${latestStatement!._id}/report`),
+    enabled: !!latestStatement,
+  });
 
-  const bookEntries: BookEntry[] = statementQuery.data?.bookEntries?.length
-    ? statementQuery.data.bookEntries
-    : MOCK_BOOK_ENTRIES;
+  // The book side of the reconciliation: vouchers posted in the statement period.
+  const journalsQuery = useQuery<{ data: ApiJournal[] }>({
+    queryKey: ['journals', latestStatement?.periodStart, latestStatement?.periodEnd],
+    queryFn: () =>
+      api.get<{ data: ApiJournal[] }>(
+        `/journals?from=${latestStatement!.periodStart}&to=${latestStatement!.periodEnd}`,
+      ),
+    enabled: !!latestStatement,
+  });
+
+  const rawBankLines: BankLine[] = (reportQuery.data?.lines ?? []).map((l) => ({
+    _id: l.id,
+    date: l.date,
+    description: l.description,
+    reference: l.reference,
+    debitPaise: l.debitPaise,
+    creditPaise: l.creditPaise,
+    matchStatus: l.matchStatus,
+    matchedBookEntry: l.matchedJournalId,
+  }));
+
+  const matchedJournalIds = new Set(
+    (reportQuery.data?.lines ?? []).map((l) => l.matchedJournalId).filter(Boolean),
+  );
+
+  const bookEntries: BookEntry[] = (journalsQuery.data?.data ?? []).map((j) => ({
+    _id: j._id,
+    date: j.date,
+    narration: j.description || j.voucherNumber,
+    voucherType: j.voucherType,
+    amountPaise: j.totalDebitPaise,
+    // A voucher that increases the bank balance is a receipt; everything else is a payment.
+    side: j.voucherType === 'receipt' || j.voucherType === 'sales' ? 'debit' : 'credit',
+    matchedBankLineId: matchedJournalIds.has(j._id) ? j._id : null,
+  }));
 
   // Apply local confirmed state to bank lines
   const lines: BankLine[] = rawBankLines.map((l) =>
     localConfirmed.has(l._id) ? { ...l, matchStatus: 'confirmed' as MatchStatus } : l,
   );
 
-  const openingBalance = statementQuery.data?.openingBalancePaise ?? OPENING_BALANCE;
-  const bankClosing = statementQuery.data?.closingBalancePaise ?? BANK_CLOSING;
+  const openingBalance = reportQuery.data?.openingBalancePaise ?? 0;
+  const bankClosing = reportQuery.data?.closingBalancePaise ?? 0;
 
   const matchedLines = lines.filter(
     (l) => l.matchStatus === 'confirmed' || l.matchStatus === 'auto_matched' || l.matchStatus === 'manually_matched',
@@ -266,8 +252,8 @@ export default function BankingPage() {
     confirmMutation.mutate(matchedPairs);
   };
 
-  // If no accounts and accounts loaded (empty API), show upload empty state
-  if (accountsQuery.isSuccess && accounts.length === 0 && !useMockData) {
+  // No bank account yet — prompt for a statement upload rather than an empty grid.
+  if (accountsQuery.isSuccess && accounts.length === 0) {
     return (
       <div className="space-y-6">
         <div className="flex items-start justify-between">
@@ -353,20 +339,20 @@ export default function BankingPage() {
       )}
 
       {/* Loading / error state for statement */}
-      {statementQuery.isLoading && effectiveAccountId && (
+      {reportQuery.isLoading && effectiveAccountId && (
         <div className="rounded-lg border border-line-200 bg-surface-card p-8 text-center text-caption text-ink-400">
           Loading…
         </div>
       )}
 
-      {statementQuery.isError && (
+      {reportQuery.isError && (
         <div className="rounded-lg border border-line-200 bg-surface-card p-8 text-center text-caption text-error-fg">
           Couldn&apos;t load data.
         </div>
       )}
 
       {/* Main reconciliation UI */}
-      {(!statementQuery.isLoading || !effectiveAccountId) && !statementQuery.isError && (
+      {(!reportQuery.isLoading || !effectiveAccountId) && !reportQuery.isError && (
         <>
           {/* Summary band */}
           <div className="rounded-lg border border-line-200 bg-surface-card p-4">

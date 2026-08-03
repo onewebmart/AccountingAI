@@ -61,19 +61,6 @@ function mapApiJournal(j: ApiJournal): Voucher {
   };
 }
 
-// ── Mock fallback ─────────────────────────────────────────────────────────────
-
-const MOCK_VOUCHERS: Voucher[] = [
-  { id: 'v-001', voucherNo: 'PUR/2025-26/0001', date: '2025-04-03', type: 'purchase', party: 'Swiggy Business', debitPaise: 13200000, creditPaise: 13200000, status: 'posted' },
-  { id: 'v-002', voucherNo: 'SAL/2025-26/0001', date: '2025-04-05', type: 'sales', party: 'Rahul Enterprises', debitPaise: 29500000, creditPaise: 29500000, status: 'posted' },
-  { id: 'v-003', voucherNo: 'PMT/2025-26/0001', date: '2025-04-07', type: 'payment', party: 'Sigma Electricals Pvt Ltd', debitPaise: 53100000, creditPaise: 53100000, status: 'posted' },
-  { id: 'v-004', voucherNo: 'RCT/2025-26/0001', date: '2025-04-09', type: 'receipt', party: 'Horizon Exports', debitPaise: 18500000, creditPaise: 18500000, status: 'posted' },
-  { id: 'v-005', voucherNo: 'PUR/2025-26/0002', date: '2025-04-11', type: 'purchase', party: 'Amazon Business', debitPaise: 7430000, creditPaise: 7430000, status: 'reversed', reversedBy: 'PUR/2025-26/0002-R' },
-  { id: 'v-006', voucherNo: 'JNL/2025-26/0001', date: '2025-04-14', type: 'journal', party: '—', debitPaise: 5000000, creditPaise: 5000000, status: 'posted' },
-  { id: 'v-007', voucherNo: 'SAL/2025-26/0002', date: '2025-04-18', type: 'sales', party: 'Acme Corp', debitPaise: 11800000, creditPaise: 11800000, status: 'posted' },
-  { id: 'v-008', voucherNo: 'CTR/2025-26/0001', date: '2025-04-22', type: 'contra', party: 'HDFC Bank ↔ Petty Cash', debitPaise: 2000000, creditPaise: 2000000, status: 'posted' },
-];
-
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const TYPE_LABELS: Record<Exclude<VoucherType, 'all'>, string> = {
@@ -181,8 +168,7 @@ export default function VouchersPage() {
     return raw.map(mapApiJournal);
   })();
 
-  // Use real data if available, fallback to mock if empty
-  const baseVouchers = apiVouchers.length > 0 ? apiVouchers : MOCK_VOUCHERS;
+  const baseVouchers = apiVouchers;
 
   // Apply optimistic reversals
   const vouchers = baseVouchers.map((v) =>

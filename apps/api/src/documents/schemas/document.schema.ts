@@ -49,6 +49,13 @@ export class Document {
   /** BullMQ job ID — set after the processing job is enqueued */
   @Prop()
   jobId?: string;
+
+  /**
+   * What an uploaded spreadsheet produced: which sheets were recognised, how many
+   * rows became bank lines or proposals, and any per-row warnings.
+   */
+  @Prop({ type: MongooseSchema.Types.Mixed, default: null })
+  importSummary?: Record<string, unknown> | null;
 }
 
 export const DocumentSchema = SchemaFactory.createForClass(Document);

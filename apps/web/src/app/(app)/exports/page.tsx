@@ -25,6 +25,31 @@ interface TallyStatus {
   pendingCount: number;
 }
 
+/** Raw shapes returned by the API, mapped into the view models below. */
+interface ApiTallyStatus {
+  pendingCount: number;
+  syncedCount: number;
+  failedCount: number;
+  lastSyncedAt: string | null;
+}
+
+interface ApiPendingVoucher {
+  record: {
+    _id: string;
+    status: string;
+    tallyGuid: string | null;
+    lastError?: string | null;
+  };
+  journal: {
+    voucherType: string;
+    voucherNumber: number;
+    financialYear: string;
+    date: string;
+    narration?: string;
+    lines: { debitPaise: number; creditPaise: number }[];
+  };
+}
+
 interface SyncRecord {
   id: string;
   voucher: string;
@@ -35,57 +60,6 @@ interface SyncRecord {
   tallyGuid: string | null;
   errorMessage: string | null;
 }
-
-// ── Mock data (fallback) ──────────────────────────────────────────────────────
-
-const MOCK_TALLY_STATUS: TallyStatus = {
-  status: 'connected',
-  lastSyncAt: new Date(Date.now() - 6 * 60 * 1000).toISOString(),
-  pendingCount: 1,
-};
-
-const MOCK_SYNC_RECORDS: SyncRecord[] = [
-  {
-    id: 'j-001',
-    voucher: 'SAL-014',
-    date: '2025-03-07',
-    narration: 'Sale — Rahul Enterprises INV-2025-0214',
-    amountPaise: 2950000,
-    status: 'synced',
-    tallyGuid: 'AI-abc12345-507f1f77bcf86cd799439011',
-    errorMessage: null,
-  },
-  {
-    id: 'j-002',
-    voucher: 'PMT-041',
-    date: '2025-03-03',
-    narration: 'Payment — Swiggy Business SWG/2025/0941',
-    amountPaise: 1180000,
-    status: 'synced',
-    tallyGuid: 'AI-abc12345-507f1f77bcf86cd799439012',
-    errorMessage: null,
-  },
-  {
-    id: 'j-003',
-    voucher: 'PUR-018',
-    date: '2025-03-10',
-    narration: 'Purchase — Sigma Electricals SE/2025/087',
-    amountPaise: 5310000,
-    status: 'pending',
-    tallyGuid: null,
-    errorMessage: null,
-  },
-  {
-    id: 'j-004',
-    voucher: 'RCT-022',
-    date: '2025-03-12',
-    narration: 'Receipt — Omega Solutions INV-2025-0218',
-    amountPaise: 1770000,
-    status: 'failed',
-    tallyGuid: null,
-    errorMessage: 'Connection refused to Tally gateway on port 9000',
-  },
-];
 
 const EXPORT_REPORTS = [
   { id: 'trial-balance', label: 'Trial Balance', filename: 'trial-balance-2025-26.csv', apiPath: '/exports/trial-balance.csv' },
@@ -178,21 +152,42 @@ export default function ExportsPage() {
 
   const tallyStatusQuery = useQuery<TallyStatus>({
     queryKey: ['exports', 'tally', 'status'],
-    queryFn: () => api.get<TallyStatus>('/exports/tally/status'),
+    queryFn: async () => {
+      const res = await api.get<ApiTallyStatus>('/exports/tally/status');
+      return {
+        // The connector is a pull-based bridge: Tally fetches queued vouchers.
+        // "Connected" means the queue is reachable, which it is whenever the API answers.
+        status: 'connected',
+        lastSyncAt: res.lastSyncedAt ?? null,
+        pendingCount: res.pendingCount ?? 0,
+      };
+    },
     refetchInterval: 30_000,
-    placeholderData: MOCK_TALLY_STATUS,
   });
 
   const syncRecordsQuery = useQuery<SyncRecord[]>({
     queryKey: ['exports', 'tally', 'records'],
-    queryFn: () => api.get<SyncRecord[]>('/exports/tally/records'),
-    placeholderData: MOCK_SYNC_RECORDS,
+    queryFn: async () => {
+      const rows = await api.get<ApiPendingVoucher[]>('/exports/tally/pending');
+      return (rows ?? []).map(({ record, journal }) => ({
+        id: record._id,
+        voucher: `${journal.voucherType}/${journal.financialYear}/${String(journal.voucherNumber).padStart(4, '0')}`,
+        date: journal.date,
+        narration: journal.narration ?? '—',
+        amountPaise: (journal.lines ?? []).reduce((sum, l) => sum + l.debitPaise, 0),
+        status: record.status === 'synced' ? 'synced' : record.status === 'failed' ? 'failed' : 'pending',
+        tallyGuid: record.tallyGuid ?? null,
+        errorMessage: record.lastError ?? null,
+      }));
+    },
   });
 
   // ── Mutations ─────────────────────────────────────────────────────────────
 
   const syncMutation = useMutation({
-    mutationFn: () => api.post<void>('/exports/tally/sync'),
+    // Queues every posted voucher of the year for the Tally connector to collect.
+    mutationFn: () =>
+      api.post<number>('/exports/tally/enqueue', { financialYear }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['exports', 'tally'] });
       showToast('Sync triggered — vouchers queued for Tally.');
@@ -202,8 +197,12 @@ export default function ExportsPage() {
 
   // ── Derived data ───────────────────────────────────────────────────────────
 
-  const tallyStatus = tallyStatusQuery.data ?? MOCK_TALLY_STATUS;
-  const records = syncRecordsQuery.data ?? MOCK_SYNC_RECORDS;
+  const tallyStatus = tallyStatusQuery.data ?? {
+    status: 'offline' as const,
+    lastSyncAt: null,
+    pendingCount: 0,
+  };
+  const records = syncRecordsQuery.data ?? [];
 
   // Show 'syncing' while mutation is in-flight
   const connectorStatus: ConnectorStatus = syncMutation.isPending

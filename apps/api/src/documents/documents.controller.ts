@@ -4,17 +4,21 @@ import {
   Get,
   Param,
   Query,
+  Res,
   UseInterceptors,
   UploadedFile,
   BadRequestException,
+  UnauthorizedException,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
+import type { Response } from 'express';
 import { Permission, DocumentStatus } from '@ai-accounting/shared';
-import { RequirePermission, CurrentUser, JwtPayload } from '../auth/decorators';
+import { RequirePermission, CurrentUser, JwtPayload, Public } from '../auth/decorators';
 import { DocumentsService } from './documents.service';
+import { StorageService } from './storage.service';
 
 const ALLOWED_MIME_TYPES = new Set([
   'application/pdf',
@@ -22,15 +26,43 @@ const ALLOWED_MIME_TYPES = new Set([
   'image/png',
   'image/webp',
   'image/tiff',
+  'image/heic',
+  'image/heif',
   'application/vnd.ms-excel',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'text/csv',
+  'application/csv',
 ]);
+
+/** Some browsers send text/plain or an empty type for .csv — trust the extension too. */
+const ALLOWED_EXTENSIONS = /\.(pdf|jpe?g|png|webp|tiff?|heic|heif|xlsx?|csv)$/i;
+
+const CONTENT_TYPES: Record<string, string> = {
+  pdf: 'application/pdf',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  webp: 'image/webp',
+  tif: 'image/tiff',
+  tiff: 'image/tiff',
+  csv: 'text/csv',
+  xls: 'application/vnd.ms-excel',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+};
+
+function mimeTypeForKey(key: string): string {
+  const ext = key.split('.').pop()?.toLowerCase() ?? '';
+  return CONTENT_TYPES[ext] ?? 'application/octet-stream';
+}
 
 const MAX_SIZE_BYTES = 20 * 1024 * 1024; // 20 MB
 
 @Controller('documents')
 export class DocumentsController {
-  constructor(private docs: DocumentsService) {}
+  constructor(
+    private docs: DocumentsService,
+    private storage: StorageService,
+  ) {}
 
   @Post('upload')
   @HttpCode(HttpStatus.CREATED)
@@ -40,7 +72,7 @@ export class DocumentsController {
       storage: memoryStorage(),
       limits: { fileSize: MAX_SIZE_BYTES },
       fileFilter: (_req, file, cb) => {
-        if (ALLOWED_MIME_TYPES.has(file.mimetype)) {
+        if (ALLOWED_MIME_TYPES.has(file.mimetype) || ALLOWED_EXTENSIONS.test(file.originalname)) {
           cb(null, true);
         } else {
           cb(new BadRequestException(`File type "${file.mimetype}" is not supported.`), false);
@@ -71,6 +103,31 @@ export class DocumentsController {
       duplicateOf: doc.duplicateOf?.toString(),
       jobId: doc.jobId,
     };
+  }
+
+  /**
+   * Streams a locally-stored file for a signed, time-limited link. Public by
+   * necessity — a browser cannot attach an Authorization header to an <img> or
+   * <iframe> — so the HMAC signature is what authorises the read.
+   */
+  @Public()
+  @Get('file')
+  async streamLocalFile(
+    @Query('key') key: string,
+    @Query('expires') expires: string,
+    @Query('sig') sig: string,
+    @Res() res: Response,
+  ) {
+    if (!key || !expires || !sig) throw new BadRequestException('Invalid file link.');
+    if (!this.storage.verifySignature(key, Number(expires), sig)) {
+      throw new UnauthorizedException('This file link has expired.');
+    }
+
+    const buffer = await this.storage.download(key);
+    res.setHeader('Content-Type', mimeTypeForKey(key));
+    res.setHeader('Content-Length', buffer.length);
+    res.setHeader('Cache-Control', 'private, max-age=300');
+    res.end(buffer);
   }
 
   @Get()

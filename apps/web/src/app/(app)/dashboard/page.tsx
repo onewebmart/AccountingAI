@@ -19,13 +19,17 @@ import Link from 'next/link';
 
 // ── API response types ──────────────────────────────────────────────────────
 
-interface ProfitLossReport {
-  totalIncomePaise?: number;
-  totalExpensesPaise?: number;
-  cashOnHandPaise?: number;
-  gstDuePaise?: number;
-  // API may return different field shapes — handled below with fallbacks
-  [key: string]: unknown;
+const FINANCIAL_YEAR = '2025-26';
+
+interface DashboardSummary {
+  financialYear: string;
+  period: string;
+  incomeMTD: number;
+  expensesMTD: number;
+  cashOnHand: number;
+  gstDue: number;
+  gstInputCredit: number;
+  gstOutputLiability: number;
 }
 
 interface ProposalListResponse {
@@ -44,36 +48,28 @@ interface InsightsResponse {
   items?: { text: string }[];
 }
 
-// ── Fallback mock values (keep UI populated in dev) ────────────────────────
-
-const MOCK_KPIS = {
-  incomeMTD: 84210000,
-  expensesMTD: 51030000,
-  cashOnHand: 129000000,
-  gstDue: 8420000,
-};
-
 // ── Page ───────────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
   const { data: plData, isLoading: plLoading } = useQuery({
-    queryKey: ['reports', 'profit-loss', '2025-26'],
-    queryFn: () => api.get<ProfitLossReport>('/reports/profit-loss?financialYear=2025-26'),
+    queryKey: ['reports', 'dashboard', FINANCIAL_YEAR],
+    queryFn: () =>
+      api.get<DashboardSummary>(`/reports/dashboard?financialYear=${FINANCIAL_YEAR}`),
   });
 
   const { data: proposalsData, isLoading: proposalsLoading } = useQuery({
-    queryKey: ['proposals', 'pending'],
-    queryFn: () => api.get<ProposalListResponse | { id: string }[]>('/proposals?status=pending'),
+    queryKey: ['proposals', 'proposed'],
+    queryFn: () => api.get<ProposalListResponse | { id: string }[]>('/proposals?status=proposed'),
   });
 
   const { data: docsData, isLoading: docsLoading } = useQuery({
     queryKey: ['documents', 'uploaded'],
-    queryFn: () => api.get<DocumentListResponse | { id: string }[]>('/documents?status=uploaded'),
+    queryFn: () => api.get<DocumentListResponse | { id: string }[]>('/documents'),
   });
 
   const { data: insightsData } = useQuery({
-    queryKey: ['insights', '2025-26'],
-    queryFn: () => api.get<InsightsResponse>('/insights?financialYear=2025-26'),
+    queryKey: ['insights', FINANCIAL_YEAR],
+    queryFn: () => api.get<InsightsResponse>(`/insights?financialYear=${FINANCIAL_YEAR}`),
   });
 
   // Resolve pending proposals count
@@ -94,24 +90,11 @@ export default function DashboardPage() {
     return 0;
   })();
 
-  // Resolve KPIs — use real data when present, fall back to mock
   const kpis = {
-    incomeMTD:
-      typeof plData?.totalIncomePaise === 'number'
-        ? plData.totalIncomePaise
-        : MOCK_KPIS.incomeMTD,
-    expensesMTD:
-      typeof plData?.totalExpensesPaise === 'number'
-        ? plData.totalExpensesPaise
-        : MOCK_KPIS.expensesMTD,
-    cashOnHand:
-      typeof plData?.cashOnHandPaise === 'number'
-        ? plData.cashOnHandPaise
-        : MOCK_KPIS.cashOnHand,
-    gstDue:
-      typeof plData?.gstDuePaise === 'number'
-        ? plData.gstDuePaise
-        : MOCK_KPIS.gstDue,
+    incomeMTD: plData?.incomeMTD ?? 0,
+    expensesMTD: plData?.expensesMTD ?? 0,
+    cashOnHand: plData?.cashOnHand ?? 0,
+    gstDue: plData?.gstDue ?? 0,
   };
 
   const isLoadingAny = plLoading || proposalsLoading || docsLoading;

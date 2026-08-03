@@ -1,6 +1,8 @@
 'use client';
 
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { api } from '@/lib/api';
 import {
   AlertTriangle,
   Building2,
@@ -38,6 +40,42 @@ interface FeatureFlagRow {
   overriddenBy: string | null;
 }
 
+/** Raw API shapes, mapped into the row models above. */
+interface ApiOrg {
+  _id: string;
+  name: string;
+  gstin?: string;
+  isActive?: boolean;
+}
+
+interface ApiCostRow {
+  orgId: string;
+  orgName: string;
+  period: string;
+  ocrPagesTier1: number;
+  ocrPagesTier2: number;
+  ocrPagesTier3: number;
+  groqTokensIn: number;
+  groqTokensOut: number;
+  totalCostPaise: number;
+  marginAlert: boolean;
+}
+
+interface ApiCostSummary {
+  period: string;
+  totalCostPaise: number;
+  byOrg: ApiCostRow[];
+}
+
+interface ApiAuditLog {
+  _id: string;
+  orgId: string;
+  action: string;
+  performedBy?: string;
+  createdAt: string;
+  meta?: Record<string, unknown>;
+}
+
 interface AuditRow {
   id: string;
   orgId: string;
@@ -48,30 +86,8 @@ interface AuditRow {
   meta: string;
 }
 
-// ── Mock data ─────────────────────────────────────────────────────────────────
 
-const MOCK_ORGS: OrgRow[] = [
-  { orgId: 'org-001', name: 'Acme Traders Pvt. Ltd.', plan: 'business', status: 'active', costPaise: 1428300, ocrPages: 4271, groqTokens: 182000, marginAlert: true, memberCount: 6 },
-  { orgId: 'org-002', name: 'Sharma & Sons', plan: 'starter', status: 'active', costPaise: 84200, ocrPages: 623, groqTokens: 45000, marginAlert: false, memberCount: 3 },
-  { orgId: 'org-003', name: 'Omega Solutions', plan: 'enterprise', status: 'active', costPaise: 2210000, ocrPages: 9841, groqTokens: 312000, marginAlert: true, memberCount: 14 },
-  { orgId: 'org-004', name: 'Horizon Exports', plan: 'free', status: 'past_due', costPaise: 15600, ocrPages: 87, groqTokens: 8200, marginAlert: false, memberCount: 2 },
-  { orgId: 'org-005', name: 'Raj Consultancy', plan: 'starter', status: 'active', costPaise: 62100, ocrPages: 411, groqTokens: 28000, marginAlert: false, memberCount: 4 },
-];
 
-const MOCK_FLAGS: FeatureFlagRow[] = [
-  { orgId: 'org-001', orgName: 'Acme Traders Pvt. Ltd.', flagName: 'vision_ocr_enabled', enabled: true, overriddenBy: 'platform-admin-1' },
-  { orgId: 'org-001', orgName: 'Acme Traders Pvt. Ltd.', flagName: 'white_label', enabled: false, overriddenBy: null },
-  { orgId: 'org-003', orgName: 'Omega Solutions', flagName: 'vision_ocr_enabled', enabled: true, overriddenBy: 'platform-admin-1' },
-  { orgId: 'org-003', orgName: 'Omega Solutions', flagName: 'white_label', enabled: true, overriddenBy: 'platform-admin-1' },
-  { orgId: 'org-003', orgName: 'Omega Solutions', flagName: 'tally_sync', enabled: true, overriddenBy: 'platform-admin-1' },
-];
-
-const MOCK_AUDIT: AuditRow[] = [
-  { id: 'a-001', orgId: 'org-001', orgName: 'Acme Traders', action: 'impersonate', performedBy: 'platform-admin-1', timestamp: '2025-03-14T10:32:00Z', meta: 'Support session' },
-  { id: 'a-002', orgId: 'org-003', orgName: 'Omega Solutions', action: 'plan_change', performedBy: 'platform-admin-1', timestamp: '2025-03-12T14:18:00Z', meta: 'starter → enterprise' },
-  { id: 'a-003', orgId: 'org-003', orgName: 'Omega Solutions', action: 'flag_enabled', performedBy: 'platform-admin-1', timestamp: '2025-03-12T14:20:00Z', meta: 'white_label = true' },
-  { id: 'a-004', orgId: 'org-004', orgName: 'Horizon Exports', action: 'plan_change', performedBy: 'platform-admin-1', timestamp: '2025-03-10T09:00:00Z', meta: 'business → free' },
-];
 
 // ── Formatters ─────────────────────────────────────────────────────────────────
 
@@ -321,9 +337,58 @@ const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
 export default function PlatformAdminPage() {
   const [activeTab, setActiveTab] = useState<Tab>('cost');
   const [impersonating, setImpersonating] = useState<OrgRow | null>(null);
-  const [period] = useState('2025-03');
+  const [period] = useState(() => new Date().toISOString().slice(0, 7));
 
-  const alertCount = MOCK_ORGS.filter((o) => o.marginAlert).length;
+  // Cost is metered per org per period and already carries the org name and
+  // margin flag, so it doubles as the organisation list.
+  const costQuery = useQuery<ApiCostSummary>({
+    queryKey: ['platform', 'cost', period],
+    queryFn: () => api.get<ApiCostSummary>(`/platform/cost?period=${period}`),
+  });
+
+  const orgsQuery = useQuery<ApiOrg[]>({
+    queryKey: ['platform', 'orgs'],
+    queryFn: () => api.get<ApiOrg[]>('/platform/orgs'),
+  });
+
+  const auditQuery = useQuery<ApiAuditLog[]>({
+    queryKey: ['platform', 'audit'],
+    queryFn: () => api.get<ApiAuditLog[]>('/platform/audit'),
+  });
+
+  const costByOrg = new Map((costQuery.data?.byOrg ?? []).map((r) => [r.orgId, r]));
+
+  const orgs: OrgRow[] = (orgsQuery.data ?? []).map((o) => {
+    const cost = costByOrg.get(o._id);
+    return {
+      orgId: o._id,
+      name: o.name,
+      plan: 'free',
+      status: o.isActive === false ? 'cancelled' : 'active',
+      costPaise: cost?.totalCostPaise ?? 0,
+      ocrPages:
+        (cost?.ocrPagesTier1 ?? 0) + (cost?.ocrPagesTier2 ?? 0) + (cost?.ocrPagesTier3 ?? 0),
+      groqTokens: (cost?.groqTokensIn ?? 0) + (cost?.groqTokensOut ?? 0),
+      marginAlert: cost?.marginAlert ?? false,
+      memberCount: 0,
+    };
+  });
+
+  const auditLogs: AuditRow[] = (auditQuery.data ?? []).map((l) => ({
+    id: l._id,
+    orgId: l.orgId,
+    orgName: l.orgId,
+    action: l.action,
+    performedBy: l.performedBy ?? '—',
+    timestamp: l.createdAt,
+    meta: l.meta ? JSON.stringify(l.meta) : '',
+  }));
+
+  // Feature flags are stored per org and fetched on demand from the org detail
+  // route; the overview lists none until an org is opened.
+  const flags: FeatureFlagRow[] = [];
+
+  const alertCount = orgs.filter((o) => o.marginAlert).length;
 
   return (
     <>
@@ -374,10 +439,10 @@ export default function PlatformAdminPage() {
         {/* Content */}
         <main className="px-8 py-6">
           <div className="rounded-xl border border-white/10 bg-white/5 p-6">
-            {activeTab === 'cost' && <CostTab orgs={MOCK_ORGS} />}
-            {activeTab === 'orgs' && <OrgsTab orgs={MOCK_ORGS} onImpersonate={setImpersonating} />}
-            {activeTab === 'flags' && <FlagsTab flags={MOCK_FLAGS} />}
-            {activeTab === 'audit' && <AuditTab logs={MOCK_AUDIT} />}
+            {activeTab === 'cost' && <CostTab orgs={orgs} />}
+            {activeTab === 'orgs' && <OrgsTab orgs={orgs} onImpersonate={setImpersonating} />}
+            {activeTab === 'flags' && <FlagsTab flags={flags} />}
+            {activeTab === 'audit' && <AuditTab logs={auditLogs} />}
           </div>
         </main>
 

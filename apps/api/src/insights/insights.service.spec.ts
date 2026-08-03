@@ -27,6 +27,7 @@ import configuration from '../config/configuration';
 import { InsightsService, InsightType } from './insights.service';
 import { ReportsService } from '../reports/reports.service';
 import { Journal, JournalSchema, JournalDocument } from '../gl/schemas/journal.schema';
+import { LedgerAccount, LedgerAccountSchema } from '../gl/schemas/ledger-account.schema';
 import { Counter, CounterSchema } from '../gl/schemas/counter.schema';
 import { AuditLog, AuditLogSchema } from '../gl/schemas/audit-log.schema';
 import { PurchaseBill, PurchaseBillSchema, PurchaseBillDocument } from '../purchase/schemas/purchase-bill.schema';
@@ -105,6 +106,7 @@ beforeAll(async () => {
       ConfigModule.forRoot({ isGlobal: true, load: [configuration] }),
       MongooseModule.forRoot(replSet.getUri()),
       MongooseModule.forFeature([
+        { name: LedgerAccount.name, schema: LedgerAccountSchema },
         { name: Journal.name, schema: JournalSchema },
         { name: Counter.name, schema: CounterSchema },
         { name: AuditLog.name, schema: AuditLogSchema },

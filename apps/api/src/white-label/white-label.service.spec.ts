@@ -117,6 +117,7 @@ async function createProposal(orgId: string, status = ProposedEntryStatus.PROPOS
     invoiceDate: null,
     amountsPaise: { taxableValue: 100000, cgst: 9000, sgst: 9000, igst: 0, cess: 0, total: 118000 },
     confidenceOverall: 0.9,
+    fieldConfidence: { vendor: 0.9, invoiceNumber: 0.9, invoiceDate: 0.9, amounts: 0.9 },
     rawWarnings: [],
     suggestedLines: [],
     financialYear: '2025-26',

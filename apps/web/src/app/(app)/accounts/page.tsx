@@ -25,31 +25,6 @@ interface NewAccountForm {
   parentId?: string;
 }
 
-// ── Mock fallback data ─────────────────────────────────────────────────────────
-
-const MOCK_ACCOUNTS: Account[] = [
-  // Assets
-  { _id: 'a1', name: 'Current Assets', type: 'ASSET', parentId: null, balancePaise: 0, isGroup: true },
-  { _id: 'a2', name: 'Cash & Cash Equivalents', type: 'ASSET', parentId: 'a1', balancePaise: 125000_00, isGroup: false },
-  { _id: 'a3', name: 'Accounts Receivable', type: 'ASSET', parentId: 'a1', balancePaise: 320000_00, isGroup: false },
-  { _id: 'a4', name: 'Fixed Assets', type: 'ASSET', parentId: null, balancePaise: 0, isGroup: true },
-  { _id: 'a5', name: 'Office Equipment', type: 'ASSET', parentId: 'a4', balancePaise: 85000_00, isGroup: false },
-  // Liabilities
-  { _id: 'l1', name: 'Current Liabilities', type: 'LIABILITY', parentId: null, balancePaise: 0, isGroup: true },
-  { _id: 'l2', name: 'Accounts Payable', type: 'LIABILITY', parentId: 'l1', balancePaise: 97000_00, isGroup: false },
-  { _id: 'l3', name: 'GST Payable', type: 'LIABILITY', parentId: 'l1', balancePaise: 18500_00, isGroup: false },
-  // Income
-  { _id: 'i1', name: 'Operating Revenue', type: 'INCOME', parentId: null, balancePaise: 0, isGroup: true },
-  { _id: 'i2', name: 'Sales Revenue', type: 'INCOME', parentId: 'i1', balancePaise: 750000_00, isGroup: false },
-  { _id: 'i3', name: 'Service Revenue', type: 'INCOME', parentId: 'i1', balancePaise: 125000_00, isGroup: false },
-  // Expenses
-  { _id: 'e1', name: 'Operating Expenses', type: 'EXPENSE', parentId: null, balancePaise: 0, isGroup: true },
-  { _id: 'e2', name: 'Rent', type: 'EXPENSE', parentId: 'e1', balancePaise: 60000_00, isGroup: false },
-  { _id: 'e3', name: 'Salaries & Wages', type: 'EXPENSE', parentId: 'e1', balancePaise: 240000_00, isGroup: false },
-  // Capital
-  { _id: 'c1', name: 'Owner\'s Capital', type: 'CAPITAL', parentId: null, balancePaise: 500000_00, isGroup: false },
-];
-
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const ACCOUNT_TYPES: { type: AccountType; label: string }[] = [
@@ -325,7 +300,7 @@ export default function AccountsPage() {
     queryFn: () => api.get<Account[]>('/gl/accounts'),
   });
 
-  const accounts = remoteAccounts ?? MOCK_ACCOUNTS;
+  const accounts = remoteAccounts ?? [];
 
   const handleSuccess = () => {
     qc.invalidateQueries({ queryKey: ['gl', 'accounts'] });

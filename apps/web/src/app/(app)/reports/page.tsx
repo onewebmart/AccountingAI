@@ -76,97 +76,60 @@ interface AgeingBucket {
   total: number;
 }
 
+/** Shapes the API actually returns — mapped into the view models above. */
+interface ApiTbEntry {
+  accountDescription: string;
+  accountType: string;
+  totalDebitPaise: number;
+  totalCreditPaise: number;
+  netPaise: number;
+}
+
+interface ApiTrialBalance {
+  entries: ApiTbEntry[];
+  grandTotalDebitPaise: number;
+  grandTotalCreditPaise: number;
+  isBalanced: boolean;
+}
+
+interface ApiPl {
+  revenueLines: ApiTbEntry[];
+  expenseLines: ApiTbEntry[];
+  totalRevenuePaise: number;
+  totalExpensesPaise: number;
+  netIncomePaise: number;
+}
+
+interface ApiBs {
+  assetLines: ApiTbEntry[];
+  liabilityLines: ApiTbEntry[];
+  capitalLines: ApiTbEntry[];
+  retainedEarningsPaise: number;
+  totalAssetsPaise: number;
+  totalLiabilitiesPaise: number;
+  totalEquityPaise: number;
+  isTiedOut: boolean;
+}
+
+interface ApiCashFlow {
+  cashInflowsPaise: number;
+  cashOutflowsPaise: number;
+  netCashFlowPaise: number;
+}
+
+interface ApiDayBookEntry {
+  date: string;
+  voucherType: string;
+  voucherNumber: number;
+  narration: string;
+  totalAmountPaise: number;
+  lines: { description: string; debitPaise: number; creditPaise: number }[];
+}
+
 interface AgeingResponse {
   ap: AgeingBucket;
   ar: AgeingBucket;
 }
-
-// ── Mock data (fallback) ──────────────────────────────────────────────────────
-
-const MOCK_TB: TbRow[] = [
-  { account: 'Accounts Receivable', type: 'ASSETS', debit: 2950000, credit: 0 },
-  { account: 'Bank / Cash Account', type: 'ASSETS', debit: 3450000, credit: 1800000 },
-  { account: 'GST Input Tax Credit', type: 'ASSETS', debit: 324000, credit: 0 },
-  { account: 'Accounts Payable', type: 'LIABILITIES', debit: 0, credit: 2714000 },
-  { account: 'GST Output Tax', type: 'LIABILITIES', debit: 0, credit: 531000 },
-  { account: 'Sales / Revenue Account', type: 'INCOME', debit: 0, credit: 2950000 },
-  { account: 'Purchase / Expense Account', type: 'EXPENSE', debit: 2390000, credit: 0 },
-  { account: 'Share Capital', type: 'CAPITAL', debit: 0, credit: 119000 },
-];
-
-const MOCK_PL: PlResponse = {
-  income: [{ account: 'Sales / Revenue Account', paise: 2950000 }],
-  expenses: [{ account: 'Purchase / Expense Account', paise: 2390000 }],
-  netProfitPaise: 560000,
-  revenue: [{ account: 'Sales / Revenue Account', paise: 2950000 }],
-  totalRevenue: 2950000,
-  totalExpenses: 2390000,
-  netIncome: 560000,
-};
-
-const MOCK_BS: BsResponse = {
-  assets: [
-    { account: 'Bank / Cash Account', paise: 1650000 },
-    { account: 'Accounts Receivable', paise: 2950000 },
-    { account: 'GST Input Tax Credit', paise: 324000 },
-  ],
-  liabilities: [
-    { account: 'Accounts Payable', paise: 2714000 },
-    { account: 'GST Output Tax', paise: 531000 },
-  ],
-  equity: [{ account: 'Share Capital', paise: 119000 }],
-  capital: [{ account: 'Share Capital', paise: 119000 }],
-  retainedEarnings: 560000,
-  totalAssets: 4924000,
-  totalLiabilities: 3245000,
-  totalEquity: 679000,
-  isTiedOut: true,
-};
-
-const MOCK_CASH_FLOW: CashFlowResponse = {
-  inflows: 3450000,
-  outflows: 1800000,
-  netCashFlow: 1650000,
-};
-
-const MOCK_DAY_BOOK: DayBookEntry[] = [
-  {
-    date: '2025-03-03',
-    voucher: 'PMT-041',
-    narration: 'Payment — Swiggy Business SWG/2025/0941',
-    amount: 1180000,
-    lines: [
-      { desc: 'Accounts Payable', dr: 1180000, cr: 0 },
-      { desc: 'Bank / Cash Account', dr: 0, cr: 1180000 },
-    ],
-  },
-  {
-    date: '2025-03-07',
-    voucher: 'RCT-022',
-    narration: 'Receipt — Rahul Enterprises INV-2025-0214',
-    amount: 2950000,
-    lines: [
-      { desc: 'Bank / Cash Account', dr: 2950000, cr: 0 },
-      { desc: 'Accounts Receivable', dr: 0, cr: 2950000 },
-    ],
-  },
-  {
-    date: '2025-03-10',
-    voucher: 'PUR-018',
-    narration: 'Purchase — Sigma Electricals SE/2025/087',
-    amount: 5310000,
-    lines: [
-      { desc: 'Purchase / Expense Account', dr: 4500000, cr: 0 },
-      { desc: 'GST Input Tax Credit', dr: 810000, cr: 0 },
-      { desc: 'Accounts Payable', dr: 0, cr: 5310000 },
-    ],
-  },
-];
-
-const MOCK_AGEING: AgeingResponse = {
-  ap: { current: 1500000, days1_30: 800000, days31_60: 400000, days61_90: 0, over90: 14000, total: 2714000 },
-  ar: { current: 1200000, days1_30: 1200000, days31_60: 550000, days61_90: 0, over90: 0, total: 2950000 },
-};
 
 // ── Formatters ─────────────────────────────────────────────────────────────────
 
@@ -274,81 +237,137 @@ export default function ReportsPage() {
 
   const tbQuery = useQuery<TbRow[]>({
     queryKey: ['reports', 'trial-balance', financialYear],
-    queryFn: () => api.get<TbRow[]>(`/reports/trial-balance?financialYear=${financialYear}`),
+    queryFn: async () => {
+      const res = await api.get<ApiTrialBalance>(
+        `/reports/trial-balance?financialYear=${financialYear}`,
+      );
+      return (res.entries ?? []).map((e) => ({
+        account: e.accountDescription,
+        type: e.accountType,
+        debit: e.totalDebitPaise,
+        credit: e.totalCreditPaise,
+      }));
+    },
     enabled: reportType === 'tb',
-    placeholderData: MOCK_TB,
   });
 
   const plQuery = useQuery<PlResponse>({
     queryKey: ['reports', 'profit-loss', financialYear],
-    queryFn: () => api.get<PlResponse>(`/reports/profit-loss?financialYear=${financialYear}`),
+    queryFn: async () => {
+      const res = await api.get<ApiPl>(`/reports/profit-loss?financialYear=${financialYear}`);
+      return {
+        // Income sits on the credit side, expenses on the debit side, so flip the
+        // sign on revenue to show both as positive magnitudes.
+        income: (res.revenueLines ?? []).map((l) => ({ account: l.accountDescription, paise: -l.netPaise })),
+        expenses: (res.expenseLines ?? []).map((l) => ({ account: l.accountDescription, paise: l.netPaise })),
+        netProfitPaise: res.netIncomePaise ?? 0,
+      };
+    },
     enabled: reportType === 'pl',
-    placeholderData: MOCK_PL,
   });
 
   const bsQuery = useQuery<BsResponse>({
     queryKey: ['reports', 'balance-sheet', financialYear],
-    queryFn: () => api.get<BsResponse>(`/reports/balance-sheet?financialYear=${financialYear}`),
+    queryFn: async () => {
+      const res = await api.get<ApiBs>(`/reports/balance-sheet?financialYear=${financialYear}`);
+      return {
+        assets: (res.assetLines ?? []).map((l) => ({ account: l.accountDescription, paise: l.netPaise })),
+        liabilities: (res.liabilityLines ?? []).map((l) => ({ account: l.accountDescription, paise: -l.netPaise })),
+        equity: [
+          ...(res.capitalLines ?? []).map((l) => ({ account: l.accountDescription, paise: -l.netPaise })),
+          ...(res.retainedEarningsPaise
+            ? [{ account: 'Retained earnings', paise: res.retainedEarningsPaise }]
+            : []),
+        ],
+        totalAssets: res.totalAssetsPaise,
+        totalLiabilities: res.totalLiabilitiesPaise,
+        totalEquity: res.totalEquityPaise,
+        isTiedOut: res.isTiedOut,
+      };
+    },
     enabled: reportType === 'bs',
-    placeholderData: MOCK_BS,
   });
 
   const cashFlowQuery = useQuery<CashFlowResponse>({
     queryKey: ['reports', 'cash-flow', financialYear],
-    queryFn: () => api.get<CashFlowResponse>(`/reports/cash-flow?financialYear=${financialYear}`),
+    queryFn: async () => {
+      const res = await api.get<ApiCashFlow>(`/reports/cash-flow?financialYear=${financialYear}`);
+      return {
+        inflows: res.cashInflowsPaise ?? 0,
+        outflows: res.cashOutflowsPaise ?? 0,
+        netCashFlow: res.netCashFlowPaise ?? 0,
+      };
+    },
     enabled: reportType === 'cashflow',
-    placeholderData: MOCK_CASH_FLOW,
   });
 
   const dayBookQuery = useQuery<DayBookEntry[]>({
     queryKey: ['reports', 'day-book', financialYear],
     queryFn: async () => {
-      const res = await api.get<{ data?: DayBookEntry[] } | DayBookEntry[]>(
-        `/reports/day-book?financialYear=${financialYear}&page=1`,
+      const res = await api.get<ApiDayBookEntry[] | { data?: ApiDayBookEntry[] }>(
+        `/reports/day-book?financialYear=${financialYear}`,
       );
-      return Array.isArray(res) ? res : (res.data ?? MOCK_DAY_BOOK);
+      const rows = Array.isArray(res) ? res : (res.data ?? []);
+      return rows.map((e) => ({
+        date: e.date,
+        voucher: `${e.voucherType}/${e.voucherNumber}`,
+        narration: e.narration || '—',
+        amount: e.totalAmountPaise,
+        lines: (e.lines ?? []).map((l) => ({
+          desc: l.description,
+          dr: l.debitPaise,
+          cr: l.creditPaise,
+        })),
+      }));
     },
     enabled: reportType === 'daybook',
-    placeholderData: MOCK_DAY_BOOK,
   });
 
   const ageingQuery = useQuery<AgeingResponse>({
     queryKey: ['reports', 'ageing', financialYear],
     queryFn: async () => {
-      const [apRes, arRes] = await Promise.all([
-        api.get<AgeingBucket>(`/reports/ageing?financialYear=${financialYear}&type=ap`),
-        api.get<AgeingBucket>(`/reports/ageing?financialYear=${financialYear}&type=ar`),
+      // Ageing is owned by the sub-ledgers: payables by purchase, receivables by sales.
+      const [ap, ar] = await Promise.all([
+        api.get<AgeingBucket>('/purchase/ap-ageing'),
+        api.get<AgeingBucket>('/sales/ar-ageing'),
       ]);
-      return { ap: apRes, ar: arRes };
+      return { ap, ar };
     },
     enabled: reportType === 'ageing',
-    placeholderData: MOCK_AGEING,
   });
 
   // ── Derived data ───────────────────────────────────────────────────────────
 
-  const tbRows = tbQuery.data ?? MOCK_TB;
-  const tbTotal = tbRows.reduce((s, e) => s + e.debit, 0);
+  const EMPTY_BUCKET: AgeingBucket = {
+    current: 0, days1_30: 0, days31_60: 0, days61_90: 0, over90: 0, total: 0,
+  };
 
-  const pl = plQuery.data ?? MOCK_PL;
-  const plIncome = pl.income ?? pl.revenue ?? MOCK_PL.income;
-  const plExpenses = pl.expenses ?? MOCK_PL.expenses;
-  const plTotalRevenue = plIncome.reduce((s, r) => s + r.paise, 0);
-  const plTotalExpenses = plExpenses.reduce((s, e) => s + e.paise, 0);
-  const plNet = pl.netProfitPaise ?? pl.netIncome ?? (plTotalRevenue - plTotalExpenses);
+  const tbRows = tbQuery.data ?? [];
+  // Debit and credit are totalled separately — showing one figure under both
+  // columns would hide the very imbalance a trial balance exists to reveal.
+  const tbDebitTotal = tbRows.reduce((s, e) => s + e.debit, 0);
+  const tbCreditTotal = tbRows.reduce((s, e) => s + e.credit, 0);
 
-  const bs = bsQuery.data ?? MOCK_BS;
-  const bsAssets = bs.assets ?? MOCK_BS.assets;
-  const bsLiabilities = bs.liabilities ?? MOCK_BS.liabilities;
-  const bsEquity = bs.equity ?? bs.capital ?? MOCK_BS.equity;
-  const bsTotalAssets = bs.totalAssets ?? bsAssets.reduce((s, a) => s + a.paise, 0);
-  const bsTotalLiabilities = bs.totalLiabilities ?? bsLiabilities.reduce((s, l) => s + l.paise, 0);
-  const bsTotalEquity = bs.totalEquity ?? bsEquity.reduce((s, e) => s + e.paise, 0) + (bs.retainedEarnings ?? 0);
-  const bsIsTiedOut = bs.isTiedOut ?? Math.abs(bsTotalAssets - (bsTotalLiabilities + bsTotalEquity)) < 100;
+  const pl = plQuery.data;
+  const plIncome = pl?.income ?? [];
+  const plExpenses = pl?.expenses ?? [];
+  const plTotalRevenue = plIncome.reduce((s, l) => s + l.paise, 0);
+  const plTotalExpenses = plExpenses.reduce((s, l) => s + l.paise, 0);
+  const plNet = pl?.netProfitPaise ?? plTotalRevenue - plTotalExpenses;
 
-  const cf = cashFlowQuery.data ?? MOCK_CASH_FLOW;
-  const dayBook = dayBookQuery.data ?? MOCK_DAY_BOOK;
-  const ageing = ageingQuery.data ?? MOCK_AGEING;
+  const bs = bsQuery.data;
+  const bsAssets = bs?.assets ?? [];
+  const bsLiabilities = bs?.liabilities ?? [];
+  const bsEquity = bs?.equity ?? [];
+  const bsTotalAssets = bs?.totalAssets ?? bsAssets.reduce((s, l) => s + l.paise, 0);
+  const bsTotalLiabilities =
+    bs?.totalLiabilities ?? bsLiabilities.reduce((s, l) => s + l.paise, 0);
+  const bsTotalEquity = bs?.totalEquity ?? bsEquity.reduce((s, l) => s + l.paise, 0);
+  const bsIsTiedOut = bs?.isTiedOut ?? bsTotalAssets === bsTotalLiabilities + bsTotalEquity;
+
+  const cf = cashFlowQuery.data ?? { inflows: 0, outflows: 0, netCashFlow: 0 };
+  const dayBook = dayBookQuery.data ?? [];
+  const ageing = ageingQuery.data ?? { ap: EMPTY_BUCKET, ar: EMPTY_BUCKET };
 
   // ── Report-specific loading/error state ────────────────────────────────────
 
@@ -508,12 +527,7 @@ export default function ReportsPage() {
               />
               <SectionTable
                 title="Capital & Equity"
-                rows={[
-                  ...bsEquity,
-                  ...(bs.retainedEarnings !== undefined
-                    ? [{ account: 'Retained Earnings (Net Income)', paise: bs.retainedEarnings }]
-                    : []),
-                ]}
+                rows={bsEquity}
                 total={bsTotalEquity}
               />
               <div className="flex justify-between border-t-2 border-ink-900 pt-3">
@@ -596,8 +610,8 @@ export default function ReportsPage() {
             <tfoot>
               <tr className="border-t-2 border-ink-900">
                 <td colSpan={2} className="py-3 font-bold text-body text-ink-900">Total</td>
-                <td className="py-3 font-mono font-bold text-ink-900">{fmt(tbTotal)}</td>
-                <td className="py-3 font-mono font-bold text-ink-900">{fmt(tbTotal)}</td>
+                <td className="py-3 font-mono font-bold text-ink-900">{fmt(tbDebitTotal)}</td>
+                <td className="py-3 font-mono font-bold text-ink-900">{fmt(tbCreditTotal)}</td>
                 <td />
               </tr>
             </tfoot>

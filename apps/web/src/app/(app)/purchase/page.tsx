@@ -27,54 +27,6 @@ interface Vendor {
   outstandingPaise: number;
 }
 
-// ── Mock fallbacks ────────────────────────────────────────────────────────
-
-const MOCK_BILLS: Bill[] = [
-  {
-    _id: 'bill-001',
-    vendorName: 'Swiggy Business',
-    billNumber: 'SWG/2025/0941',
-    billDate: '2025-03-10',
-    dueDate: '2025-04-09',
-    status: 'posted',
-    totalPaise: 1180000,
-  },
-  {
-    _id: 'bill-002',
-    vendorName: 'Sigma Electricals Pvt Ltd',
-    billNumber: 'SE/2025/087',
-    billDate: '2025-03-08',
-    dueDate: '2025-04-07',
-    status: 'posted',
-    totalPaise: 5310000,
-  },
-  {
-    _id: 'bill-003',
-    vendorName: 'Amazon Business',
-    billNumber: 'AMZ-B2B-2025-3302',
-    billDate: '2025-03-01',
-    dueDate: null,
-    status: 'paid',
-    totalPaise: 354000,
-  },
-  {
-    _id: 'bill-004',
-    vendorName: 'Zomato for Business',
-    billNumber: null,
-    billDate: '2025-03-15',
-    dueDate: '2025-04-14',
-    status: 'draft',
-    totalPaise: 236000,
-  },
-];
-
-const MOCK_VENDORS: Vendor[] = [
-  { _id: 'v-001', name: 'Swiggy Business', gstin: '29AABCS1429B1ZA', outstandingPaise: 1180000 },
-  { _id: 'v-002', name: 'Sigma Electricals Pvt Ltd', gstin: null, outstandingPaise: 5310000 },
-  { _id: 'v-003', name: 'Amazon Business', gstin: '07AABCA3918J1ZT', outstandingPaise: 0 },
-  { _id: 'v-004', name: 'Zomato for Business', gstin: '27AABCZ1234B1ZX', outstandingPaise: 0 },
-];
-
 // ── Formatters ────────────────────────────────────────────────────────────
 
 function formatRupees(paise: number): string {
@@ -336,8 +288,8 @@ export default function PurchasePage() {
     queryFn: () => api.get<Vendor[]>('/purchase/vendors'),
   });
 
-  const bills = (billsQuery.data && billsQuery.data.length > 0) ? billsQuery.data : MOCK_BILLS;
-  const vendors = (vendorsQuery.data && vendorsQuery.data.length > 0) ? vendorsQuery.data : MOCK_VENDORS;
+  const bills = billsQuery.data ?? [];
+  const vendors = vendorsQuery.data ?? [];
 
   const totalOutstanding = vendors.reduce((s, v) => s + v.outstandingPaise, 0);
   const postedBills = bills.filter((b) => b.status === 'posted');

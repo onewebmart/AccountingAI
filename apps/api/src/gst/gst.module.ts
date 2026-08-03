@@ -8,6 +8,8 @@ import { Customer, CustomerSchema } from '../sales/schemas/customer.schema';
 import { ProposedEntry, ProposedEntrySchema } from '../proposals/schemas/proposed-entry.schema';
 import { GstService } from './gst.service';
 import { GstController } from './gst.controller';
+import { Gstr2bImportService } from './gstr2b-import.service';
+import { IngestModule } from '../ingest/ingest.module';
 
 @Module({
   imports: [
@@ -19,9 +21,10 @@ import { GstController } from './gst.controller';
       { name: Customer.name, schema: CustomerSchema },
       { name: ProposedEntry.name, schema: ProposedEntrySchema },
     ]),
+    IngestModule, // spreadsheet parsing for GSTR-2B Excel downloads
   ],
   controllers: [GstController],
-  providers: [GstService],
+  providers: [GstService, Gstr2bImportService],
   exports: [GstService],
 })
 export class GstModule {}

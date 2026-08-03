@@ -40,25 +40,14 @@ interface FirmConfig {
   clientPortalEnabled?: boolean;
 }
 
-// ── Mock fallbacks ─────────────────────────────────────────────────────────────
-
-const MOCK_FIRM_NAME = 'Sharma & Associates';
-const MOCK_FIRM_SLUG = 'sharma-associates';
-
-const MOCK_CONFIG: FirmConfig = {
-  name: MOCK_FIRM_NAME,
+/** Shown until the firm has saved its own branding. */
+const DEFAULT_CONFIG: FirmConfig = {
+  name: '',
   logoUrl: '',
   accentColor: '#E8590C',
   customDomain: '',
   clientPortalEnabled: true,
 };
-
-const MOCK_CLIENTS: ClientSummary[] = [
-  { orgId: 'org-1', name: 'Mehta Exports Pvt Ltd', pendingReviewCount: 7, overdueApCount: 2, gstDueDays: 4 },
-  { orgId: 'org-2', name: 'Kapoor Textiles', pendingReviewCount: 0, overdueApCount: 0, gstDueDays: 18 },
-  { orgId: 'org-3', name: 'Sunrise Foods Ltd', pendingReviewCount: 3, overdueApCount: 5, gstDueDays: 4 },
-  { orgId: 'org-4', name: 'Verma Construction', pendingReviewCount: 1, overdueApCount: 0, gstDueDays: 11 },
-];
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
@@ -143,7 +132,7 @@ function ClientsTab() {
     queryFn: () => api.get<ClientSummary[]>('/firm/clients'),
   });
 
-  const clients = remoteClients ?? MOCK_CLIENTS;
+  const clients = remoteClients ?? [];
 
   const addClientMutation = useMutation({
     mutationFn: (body: { name: string; gstin?: string }) =>
@@ -281,7 +270,7 @@ function BrandingTab() {
     queryFn: () => api.get<FirmConfig>('/firm/config'),
   });
 
-  const config = remoteConfig ?? MOCK_CONFIG;
+  const config = remoteConfig ?? DEFAULT_CONFIG;
 
   const [form, setForm] = useState<Partial<FirmConfig>>({});
   const [saved, setSaved] = useState(false);
@@ -392,10 +381,10 @@ function DomainTab() {
     queryFn: () => api.get<FirmConfig>('/firm/config'),
   });
 
-  const config = remoteConfig ?? MOCK_CONFIG;
+  const config = remoteConfig ?? DEFAULT_CONFIG;
   const firmSlug = config.name
     ? config.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
-    : MOCK_FIRM_SLUG;
+    : 'your-firm';
 
   const [domain, setDomain] = useState('');
   const [initialised, setInitialised] = useState(false);
@@ -490,7 +479,7 @@ export default function FirmPortalPage() {
     queryFn: () => api.get<FirmConfig>('/firm/config'),
   });
 
-  const firmName = firmConfig?.name ?? MOCK_FIRM_NAME;
+  const firmName = firmConfig?.name || 'Your firm';
 
   return (
     <div className="min-h-screen bg-[#FFFCF6] p-6 md:p-8">

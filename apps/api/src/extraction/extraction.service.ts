@@ -2,8 +2,9 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { ExtractedDocument, ExtractedDocumentDocument } from './schemas/extracted-document.schema';
-import { GeminiExtractionService } from './gemini-extraction.service';
+import { GeminiExtractionService, OrgContext } from './gemini-extraction.service';
 import { UsageMeterService } from '../ocr/usage-meter.service';
+import { Organization, OrganizationDocument } from '../tenancy/schemas/organization.schema';
 
 export interface ExtractionInput {
   documentId: string;
@@ -19,6 +20,60 @@ const VALID_DOC_TYPES = new Set([
   'receipt',
   'bill',
 ]);
+
+const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+
+/**
+ * Normalise whatever date the document printed into YYYY-MM-DD.
+ *
+ * Indian invoices overwhelmingly use dd/mm/yyyy, so an ambiguous pair like 05/04
+ * is read day-first. Everything downstream (financial year, posting date, GST
+ * period) depends on this, so an unparseable date returns null rather than a guess.
+ */
+export function normaliseDate(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const raw = value.trim();
+  if (!raw) return null;
+
+  const iso = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (iso) {
+    const [, y, m, d] = iso;
+    return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+  }
+
+  const dmy = raw.match(/^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})$/);
+  if (dmy) {
+    let [, day, month, year] = dmy;
+    if (year.length === 2) year = Number(year) > 70 ? `19${year}` : `20${year}`;
+    // A value above 12 in the first slot can only be a day, which also rules out
+    // the mm/dd ordering some scanned US-style templates use.
+    if (Number(month) > 12 && Number(day) <= 12) [day, month] = [month, day];
+    if (Number(month) > 12 || Number(day) > 31) return null;
+    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+  }
+
+  const dMonY = raw.match(/^(\d{1,2})[\s\-/]([A-Za-z]{3,})[\s\-/,]*(\d{2,4})$/);
+  if (dMonY) {
+    const idx = MONTHS.indexOf(dMonY[2].slice(0, 3).toLowerCase());
+    if (idx >= 0) {
+      let year = dMonY[3];
+      if (year.length === 2) year = `20${year}`;
+      return `${year}-${String(idx + 1).padStart(2, '0')}-${dMonY[1].padStart(2, '0')}`;
+    }
+  }
+
+  const monDY = raw.match(/^([A-Za-z]{3,})[\s\-/]+(\d{1,2})[\s\-/,]+(\d{2,4})$/);
+  if (monDY) {
+    const idx = MONTHS.indexOf(monDY[1].slice(0, 3).toLowerCase());
+    if (idx >= 0) {
+      let year = monDY[3];
+      if (year.length === 2) year = `20${year}`;
+      return `${year}-${String(idx + 1).padStart(2, '0')}-${monDY[2].padStart(2, '0')}`;
+    }
+  }
+
+  return null;
+}
 
 /** Validates the raw Groq JSON against the canonical contract. Returns the normalized object or null. */
 function validateAndNormalize(raw: unknown): ReturnType<typeof buildDbPayload> | null {
@@ -53,6 +108,10 @@ function validateAndNormalize(raw: unknown): ReturnType<typeof buildDbPayload> |
   const warnings: string[] = Array.isArray(d.raw_warnings)
     ? (d.raw_warnings as unknown[]).filter((w): w is string => typeof w === 'string')
     : [];
+
+  if (invoiceDate.value && !normaliseDate(invoiceDate.value)) {
+    warnings.push(`could not read the invoice date "${String(invoiceDate.value)}" — set it manually`);
+  }
 
   // Advisory check: line-item amounts should sum to taxable value
   if (lineItems.length > 0) {
@@ -94,8 +153,13 @@ function buildDbPayload(
       confidence: typeof invoiceNumber.confidence === 'number' ? (invoiceNumber.confidence as number) : 0,
     },
     invoiceDate: {
-      value: typeof invoiceDate.value === 'string' ? invoiceDate.value : null,
-      confidence: typeof invoiceDate.confidence === 'number' ? (invoiceDate.confidence as number) : 0,
+      // Stored ISO so the financial year, posting date and GST period all derive
+      // from one unambiguous format regardless of how the invoice printed it.
+      value: normaliseDate(invoiceDate.value),
+      confidence:
+        typeof invoiceDate.confidence === 'number' && normaliseDate(invoiceDate.value)
+          ? (invoiceDate.confidence as number)
+          : 0,
     },
     placeOfSupply: typeof d.place_of_supply === 'string' ? d.place_of_supply : null,
     currency: 'INR',
@@ -128,9 +192,23 @@ export class ExtractionService {
   constructor(
     @InjectModel(ExtractedDocument.name)
     private extractedModel: Model<ExtractedDocumentDocument>,
+    @InjectModel(Organization.name)
+    private orgModel: Model<OrganizationDocument>,
     private gemini: GeminiExtractionService,
     private usageMeter: UsageMeterService,
   ) {}
+
+  /** The org's own identity, so extraction can tell inward bills from outward invoices. */
+  private async orgContext(orgId: string): Promise<OrgContext | undefined> {
+    try {
+      const org = await this.orgModel.findById(orgId).select('name gstin state').exec();
+      if (!org) return undefined;
+      return { name: org.name, gstin: org.gstin ?? null, state: org.state ?? null };
+    } catch (err) {
+      this.logger.warn(`Could not load org context for ${orgId}: ${String(err)}`);
+      return undefined;
+    }
+  }
 
   async extract(input: ExtractionInput): Promise<ExtractedDocumentDocument> {
     const { documentId, orgId, ocrResultId, ocrText } = input;
@@ -141,10 +219,12 @@ export class ExtractionService {
     let totalTokensIn = 0;
     let totalTokensOut = 0;
 
+    const org = await this.orgContext(orgId);
+
     // Attempt extraction up to twice (one try + one retry on parse/validation failure)
     for (let attempt = 0; attempt <= 1; attempt++) {
       try {
-        const { rawJson, tokensIn, tokensOut } = await this.gemini.extract(ocrText);
+        const { rawJson, tokensIn, tokensOut } = await this.gemini.extract(ocrText, org);
         lastRawJson = rawJson;
         totalTokensIn += tokensIn;
         totalTokensOut += tokensOut;

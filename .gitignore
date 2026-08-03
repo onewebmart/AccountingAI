@@ -14,3 +14,6 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-store/
 uploads/
+# Local-disk document storage (STORAGE_DRIVER=local) — holds uploaded bills
+.storage/
+*.tsbuildinfo
