@@ -561,6 +561,14 @@ export class GstService {
         total: totalPaise,
       },
       confidenceOverall: 0.75,
+      // The figures come straight off the GST portal, so the amounts and party
+      // identity are dependable; only the expense account still needs a human.
+      fieldConfidence: {
+        vendor: line.supplierGstin ? 0.95 : 0.6,
+        invoiceNumber: line.invoiceNumber ? 0.95 : 0.3,
+        invoiceDate: line.invoiceDate ? 0.95 : 0.3,
+        amounts: 0.95,
+      },
       rawWarnings: ['Created from GSTR-2B import — review before posting.'],
       suggestedLines,
       financialYear: fy,

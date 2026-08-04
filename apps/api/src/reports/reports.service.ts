@@ -3,6 +3,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { AccountType, JournalStatus } from '@ai-accounting/shared';
 import { Journal, JournalDocument } from '../gl/schemas/journal.schema';
+import { LedgerAccount, LedgerAccountDocument } from '../gl/schemas/ledger-account.schema';
 
 // ── Account classification ─────────────────────────────────────────────────
 
@@ -19,6 +20,16 @@ export function classifyAccount(description: string): AccountType {
   if (d.includes('capital') || d.includes('equity') || d.includes('retained')) return AccountType.CAPITAL;
   // ASSETS: receivable, bank, cash, gst input, prepaid, stock, etc.
   return AccountType.ASSETS;
+}
+
+/** Calendar span of an Indian financial year label such as "2025-26". */
+export function financialYearRange(financialYear: string): { start: string; end: string } {
+  const startYear = Number(financialYear.split('-')[0]);
+  if (!Number.isFinite(startYear)) {
+    // Unparseable label — use a range wide enough not to hide anything.
+    return { start: '1900-01-01', end: '2999-12-31' };
+  }
+  return { start: `${startYear}-04-01`, end: `${startYear + 1}-03-31` };
 }
 
 // ── DTOs ───────────────────────────────────────────────────────────────────
@@ -96,6 +107,18 @@ export interface DayBookEntry {
   lines: Array<{ description: string; debitPaise: number; creditPaise: number }>;
 }
 
+export interface DashboardSummary {
+  financialYear: string;
+  /** YYYY-MM the month-to-date figures cover. */
+  period: string;
+  incomeMTD: number;
+  expensesMTD: number;
+  cashOnHand: number;
+  gstDue: number;
+  gstInputCredit: number;
+  gstOutputLiability: number;
+}
+
 export interface CashFlowReport {
   financialYear: string;
   period: string | null;
@@ -110,6 +133,8 @@ export interface CashFlowReport {
 export class ReportsService {
   constructor(
     @InjectModel(Journal.name) private journalModel: Model<JournalDocument>,
+    @InjectModel(LedgerAccount.name)
+    private accountModel: Model<LedgerAccountDocument>,
   ) {}
 
   // ── Internal: load posted journals for a financial year (optionally filtered by period) ──
@@ -129,21 +154,37 @@ export class ReportsService {
 
   // ── Build account map from journal lines ────────────────────────────────
 
-  private buildAccountMap(journals: JournalDocument[]): Map<string, TbEntry> {
+  /**
+   * Group journal lines by account.
+   *
+   * Lines that reference a real ledger account are grouped by that account and take
+   * its declared type; the name-based classifier is only a fallback for lines whose
+   * account no longer resolves, so a renamed account can never silently change which
+   * side of the balance sheet it lands on.
+   */
+  private buildAccountMap(
+    journals: JournalDocument[],
+    accounts: Map<string, { name: string; type: AccountType }>,
+  ): Map<string, TbEntry> {
     const map = new Map<string, TbEntry>();
+
     for (const j of journals) {
       for (const line of j.lines) {
-        const desc = line.description || 'Unknown Account';
-        if (!map.has(desc)) {
-          map.set(desc, {
+        const accountId = line.accountId?.toString();
+        const account = accountId ? accounts.get(accountId) : undefined;
+        const desc = account?.name ?? line.description ?? 'Unknown Account';
+        const key = accountId && account ? accountId : desc;
+
+        if (!map.has(key)) {
+          map.set(key, {
             accountDescription: desc,
-            accountType: classifyAccount(desc),
+            accountType: account?.type ?? classifyAccount(desc),
             totalDebitPaise: 0,
             totalCreditPaise: 0,
             netPaise: 0,
           });
         }
-        const entry = map.get(desc)!;
+        const entry = map.get(key)!;
         entry.totalDebitPaise += line.debitPaise;
         entry.totalCreditPaise += line.creditPaise;
         entry.netPaise = entry.totalDebitPaise - entry.totalCreditPaise;
@@ -152,11 +193,89 @@ export class ReportsService {
     return map;
   }
 
+  /** Ledger accounts for the org, keyed by id, for report grouping. */
+  private async loadAccounts(
+    orgId: string,
+  ): Promise<Map<string, { name: string; type: AccountType }>> {
+    const accounts = await this.accountModel.find({ orgId }).select('name type').lean().exec();
+    return new Map(
+      accounts.map((a) => [
+        a._id.toString(),
+        { name: a.name, type: a.type as AccountType },
+      ]),
+    );
+  }
+
+  /**
+   * Headline numbers for the dashboard: this month's income and spend, the money
+   * actually in hand, and the net GST position.
+   */
+  async getDashboardSummary(
+    orgId: string,
+    financialYear: string,
+    month?: string,
+  ): Promise<DashboardSummary> {
+    const period = month ?? new Date().toISOString().slice(0, 7);
+
+    const [yearJournals, monthJournals, accounts] = await Promise.all([
+      this.loadJournals(orgId, financialYear),
+      this.loadJournals(orgId, financialYear, period),
+      this.loadAccounts(orgId),
+    ]);
+
+    const monthEntries = [...this.buildAccountMap(monthJournals, accounts).values()];
+    const incomeMTD = monthEntries
+      .filter((e) => e.accountType === AccountType.INCOME)
+      .reduce((s, e) => s + (e.totalCreditPaise - e.totalDebitPaise), 0);
+    const expensesMTD = monthEntries
+      .filter((e) => e.accountType === AccountType.EXPENSE)
+      .reduce((s, e) => s + (e.totalDebitPaise - e.totalCreditPaise), 0);
+
+    // Cash and GST are running positions, so they come off the whole year, not the month.
+    const systemAccounts = await this.accountModel
+      .find({ orgId })
+      .select('_id systemKey')
+      .lean()
+      .exec();
+    const keyById = new Map(
+      systemAccounts.map((a) => [a._id.toString(), a.systemKey as string | undefined]),
+    );
+
+    let cashOnHand = 0;
+    let gstInput = 0;
+    let gstOutput = 0;
+
+    for (const j of yearJournals) {
+      for (const line of j.lines) {
+        const key = keyById.get(line.accountId?.toString() ?? '');
+        if (!key) continue;
+        const net = line.debitPaise - line.creditPaise;
+
+        if (key === 'BANK' || key === 'CASH') cashOnHand += net;
+        else if (key.startsWith('GST_INPUT')) gstInput += net;
+        else if (key.startsWith('GST_OUTPUT')) gstOutput += -net;
+      }
+    }
+
+    return {
+      financialYear,
+      period,
+      incomeMTD,
+      expensesMTD,
+      cashOnHand,
+      // Output tax collected less input credit available; never shown as negative
+      // because a credit balance is a refund position, not an amount owed.
+      gstDue: Math.max(0, gstOutput - gstInput),
+      gstInputCredit: gstInput,
+      gstOutputLiability: gstOutput,
+    };
+  }
+
   // ── Trial Balance ────────────────────────────────────────────────────────
 
   async getTrialBalance(orgId: string, financialYear: string): Promise<TrialBalanceReport> {
     const journals = await this.loadJournals(orgId, financialYear);
-    const accountMap = this.buildAccountMap(journals);
+    const accountMap = this.buildAccountMap(journals, await this.loadAccounts(orgId));
     const entries = [...accountMap.values()].sort((a, b) =>
       a.accountDescription.localeCompare(b.accountDescription),
     );
@@ -179,7 +298,7 @@ export class ReportsService {
     period?: string | null,
   ): Promise<PlReport> {
     const journals = await this.loadJournals(orgId, financialYear, period);
-    const accountMap = this.buildAccountMap(journals);
+    const accountMap = this.buildAccountMap(journals, await this.loadAccounts(orgId));
     const entries = [...accountMap.values()];
 
     const revenueLines = entries.filter((e) => e.accountType === AccountType.INCOME);
@@ -216,7 +335,7 @@ export class ReportsService {
   ): Promise<BsReport> {
     const today = asOf ?? new Date().toISOString().slice(0, 10);
     const journals = await this.loadJournals(orgId, financialYear);
-    const accountMap = this.buildAccountMap(journals);
+    const accountMap = this.buildAccountMap(journals, await this.loadAccounts(orgId));
     const entries = [...accountMap.values()];
 
     const assetLines = entries.filter((e) => e.accountType === AccountType.ASSETS);
@@ -301,16 +420,20 @@ export class ReportsService {
 
   async getDayBook(
     orgId: string,
-    startDate: string,
-    endDate: string,
+    startDate: string | undefined,
+    endDate: string | undefined,
     financialYear: string,
   ): Promise<DayBookEntry[]> {
+    // Without an explicit range, show the whole financial year. Passing undefined
+    // bounds straight into $gte/$lte would match nothing and look like "no data".
+    const { start, end } = financialYearRange(financialYear);
+
     const journals = await this.journalModel
       .find({
         orgId,
         financialYear,
         status: JournalStatus.POSTED,
-        date: { $gte: startDate, $lte: endDate },
+        date: { $gte: startDate || start, $lte: endDate || end },
       })
       .sort({ date: 1, voucherNumber: 1 })
       .lean()

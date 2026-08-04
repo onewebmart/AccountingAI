@@ -15,6 +15,16 @@ interface AuthRequest {
 export class ReportsController {
   constructor(private readonly reportsService: ReportsService) {}
 
+  /** Headline KPIs for the dashboard — income, spend, cash and GST position. */
+  @Get('dashboard')
+  getDashboard(
+    @Request() req: AuthRequest,
+    @Query('financialYear') financialYear: string,
+    @Query('month') month?: string,
+  ) {
+    return this.reportsService.getDashboardSummary(req.user.orgId, financialYear, month);
+  }
+
   @Get('trial-balance')
   getTrialBalance(@Request() req: AuthRequest, @Query('financialYear') financialYear: string) {
     return this.reportsService.getTrialBalance(req.user.orgId, financialYear);
@@ -51,8 +61,8 @@ export class ReportsController {
   getDayBook(
     @Request() req: AuthRequest,
     @Query('financialYear') financialYear: string,
-    @Query('startDate') startDate: string,
-    @Query('endDate') endDate: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
   ) {
     return this.reportsService.getDayBook(req.user.orgId, startDate, endDate, financialYear);
   }

@@ -10,7 +10,7 @@ interface AuthRequest {
 }
 
 @UseGuards(JwtAuthGuard, PermissionGuard)
-@Controller('v1/banking')
+@Controller('banking')
 export class BankingController {
   constructor(private readonly reconciliationService: ReconciliationService) {}
 

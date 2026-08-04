@@ -71,71 +71,6 @@ function mapApiProposal(p: ApiProposal): ProposedEntryData {
   };
 }
 
-// ── Mock fallback ─────────────────────────────────────────────────────────────
-
-const MOCK_ENTRIES: ProposedEntryData[] = [
-  {
-    id: 'prop-001',
-    documentType: 'purchase_invoice',
-    vendorName: 'Swiggy Business',
-    vendorGstin: '29AABCS1429B1ZA',
-    invoiceNumber: 'SWG-99281',
-    invoiceDate: '2025-03-12',
-    confidenceOverall: 0.93,
-    fieldConfidence: { vendor: 0.95, invoiceNumber: 0.97, invoiceDate: 0.96, amounts: 0.91 },
-    rawWarnings: [],
-    amountsPaise: {
-      taxableValue: 120000,
-      cgst: 6000,
-      sgst: 6000,
-      igst: 0,
-      cess: 0,
-      total: 132000,
-    },
-  },
-  {
-    id: 'prop-002',
-    documentType: 'purchase_invoice',
-    vendorName: 'Sigma Electricals Pvt Ltd',
-    vendorGstin: null,
-    invoiceNumber: 'SE/2025/087',
-    invoiceDate: '2025-03-08',
-    confidenceOverall: 0.67,
-    fieldConfidence: { vendor: 0.82, invoiceNumber: 0.78, invoiceDate: 0.91, amounts: 0.61 },
-    rawWarnings: [
-      'GSTIN not found in document',
-      'Line items do not sum to total (difference: ₹120)',
-    ],
-    amountsPaise: {
-      taxableValue: 4500000,
-      cgst: 405000,
-      sgst: 405000,
-      igst: 0,
-      cess: 0,
-      total: 5310000,
-    },
-  },
-  {
-    id: 'prop-003',
-    documentType: 'sales_invoice',
-    vendorName: 'Rahul Enterprises',
-    vendorGstin: '27AAPFU0939F1ZV',
-    invoiceNumber: 'INV-2025-0214',
-    invoiceDate: '2025-03-15',
-    confidenceOverall: 0.97,
-    fieldConfidence: { vendor: 0.98, invoiceNumber: 0.99, invoiceDate: 0.97, amounts: 0.96 },
-    rawWarnings: [],
-    amountsPaise: {
-      taxableValue: 2500000,
-      cgst: 225000,
-      sgst: 225000,
-      igst: 0,
-      cess: 0,
-      total: 2950000,
-    },
-  },
-];
-
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function ReviewQueuePage() {
@@ -152,9 +87,9 @@ export default function ReviewQueuePage() {
     isLoading,
     isError,
   } = useQuery({
-    queryKey: ['proposals', 'pending'],
+    queryKey: ['proposals', 'proposed'],
     queryFn: () =>
-      api.get<ApiProposal[] | { data: ApiProposal[] }>('/proposals?status=pending'),
+      api.get<ApiProposal[] | { data: ApiProposal[] }>('/proposals?status=proposed'),
   });
 
   const apiProposals: ProposedEntryData[] = (() => {
@@ -167,16 +102,18 @@ export default function ReviewQueuePage() {
     return raw.map(mapApiProposal);
   })();
 
-  // Use real data if available, fallback to mock if empty
-  const allEntries = (apiProposals.length > 0 ? apiProposals : MOCK_ENTRIES)
-    .filter((e) => !removedIds.has(e.id));
+  const allEntries = apiProposals.filter((e) => !removedIds.has(e.id));
 
   // ── Approve mutation ────────────────────────────────────────────────────
   const approveMutation = useMutation({
-    mutationFn: (id: string) =>
-      api.post(`/proposals/${id}/approve`, { lines: [] }),
+    // An empty body accepts the AI-suggested lines as they stand. Sending
+    // `lines: []` would instead post a journal with no lines at all.
+    mutationFn: (id: string) => api.post(`/proposals/${id}/approve`, {}),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['proposals'] });
+      // The posting also creates a voucher, a bill/invoice and ledger movement.
+      queryClient.invalidateQueries({ queryKey: ['documents'] });
+      queryClient.invalidateQueries({ queryKey: ['journals'] });
     },
   });
 

@@ -22,7 +22,7 @@ import { Model } from 'mongoose';
 import configuration from '../config/configuration';
 import { OcrCascadeService } from './ocr-cascade.service';
 import { UsageMeterService } from './usage-meter.service';
-import { GroqVisionService } from './groq-vision.service';
+import { GeminiVisionService } from './gemini-vision.service';
 import { PdfTextExtractorService } from './pdf-text-extractor.service';
 import { OcrResult, OcrResultSchema, OcrResultDocument } from './schemas/ocr-result.schema';
 import { UsageMeter, UsageMeterSchema, UsageMeterDocument } from './schemas/usage-meter.schema';
@@ -43,7 +43,7 @@ const fakeOcrProvider: OcrProvider = {
   recognize: jest.fn(),
 };
 
-// Fake Groq vision service
+// Fake vision service standing in for Gemini
 const fakeGroqVision = {
   extractText: jest.fn(),
 };
@@ -70,7 +70,7 @@ beforeAll(async () => {
       OcrCascadeService,
       UsageMeterService,
       { provide: OCR_PROVIDER, useValue: fakeOcrProvider },
-      { provide: GroqVisionService, useValue: fakeGroqVision },
+      { provide: GeminiVisionService, useValue: fakeGroqVision },
       { provide: PdfTextExtractorService, useValue: fakePdfExtractor },
     ],
   }).compile();

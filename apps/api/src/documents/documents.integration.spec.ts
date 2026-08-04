@@ -31,6 +31,7 @@ import { TenancyModule } from '../tenancy/tenancy.module';
 import { DocumentsService, DOCUMENT_PROCESSING_QUEUE } from './documents.service';
 import { DocumentsController } from './documents.controller';
 import { StorageService } from './storage.service';
+import { ProposedEntry, ProposedEntrySchema } from '../proposals/schemas/proposed-entry.schema';
 import { Document, DocumentSchema, DocumentDocument } from './schemas/document.schema';
 import { DocumentStatus, UserRole } from '@ai-accounting/shared';
 
@@ -87,7 +88,11 @@ beforeAll(async () => {
         ],
       }),
       MongooseModule.forRoot(uri),
-      MongooseModule.forFeature([{ name: Document.name, schema: DocumentSchema }]),
+      MongooseModule.forFeature([
+        { name: Document.name, schema: DocumentSchema },
+        // The list endpoint joins in proposals so the Inbox can show vendor and amount.
+        { name: ProposedEntry.name, schema: ProposedEntrySchema },
+      ]),
       TenancyModule,
       AuthModule,
     ],

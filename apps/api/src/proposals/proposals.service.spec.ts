@@ -28,6 +28,13 @@ import { Journal, JournalSchema, JournalDocument } from '../gl/schemas/journal.s
 import { Counter, CounterSchema } from '../gl/schemas/counter.schema';
 import { AuditLog, AuditLogSchema } from '../gl/schemas/audit-log.schema';
 import { PostingService } from '../gl/posting.service';
+import { AccountsService } from '../gl/accounts.service';
+import { LedgerAccount, LedgerAccountSchema } from '../gl/schemas/ledger-account.schema';
+import { SubledgerSyncService } from './subledger-sync.service';
+import { Vendor, VendorSchema } from '../purchase/schemas/vendor.schema';
+import { PurchaseBill, PurchaseBillSchema } from '../purchase/schemas/purchase-bill.schema';
+import { Customer, CustomerSchema } from '../sales/schemas/customer.schema';
+import { SalesInvoice, SalesInvoiceSchema } from '../sales/schemas/sales-invoice.schema';
 import { ProposedEntryStatus } from '@ai-accounting/shared';
 import { REDIS_CLIENT } from '../redis/redis.module';
 
@@ -86,12 +93,19 @@ beforeAll(async () => {
         { name: Journal.name, schema: JournalSchema },
         { name: Counter.name, schema: CounterSchema },
         { name: AuditLog.name, schema: AuditLogSchema },
+        { name: LedgerAccount.name, schema: LedgerAccountSchema },
+        { name: Vendor.name, schema: VendorSchema },
+        { name: PurchaseBill.name, schema: PurchaseBillSchema },
+        { name: Customer.name, schema: CustomerSchema },
+        { name: SalesInvoice.name, schema: SalesInvoiceSchema },
       ]),
     ],
     providers: [
       ProposalsService,
       PostingService,
       LearningService,
+      AccountsService,
+      SubledgerSyncService,
       { provide: REDIS_CLIENT, useValue: redisMock },
     ],
   }).compile();
@@ -132,15 +146,23 @@ describe('createFromExtracted', () => {
     expect(totalDebit).toBe(1180000);     // = total paise
   });
 
-  it('includes GST line when cgst/sgst are non-zero', async () => {
+  it('splits input GST across the CGST and SGST ledgers', async () => {
     const extracted = await seedExtracted(extractedModel);
     const proposal = await svc.createFromExtracted(extracted._id.toString(), ORG_ID);
 
-    const gstLine = proposal.suggestedLines.find((l) =>
-      l.accountName.toLowerCase().includes('gst'),
-    );
-    expect(gstLine).toBeDefined();
-    expect(gstLine!.debitPaise).toBe(180000); // 90000 cgst + 90000 sgst
+    // CGST and SGST are separate ledgers under GST law — they are set off against
+    // their own output heads and reported separately, so they never share a line.
+    const cgstLine = proposal.suggestedLines.find((l) => /cgst/i.test(l.accountName));
+    const sgstLine = proposal.suggestedLines.find((l) => /sgst/i.test(l.accountName));
+
+    expect(cgstLine).toBeDefined();
+    expect(sgstLine).toBeDefined();
+    expect(cgstLine!.debitPaise).toBe(90000);
+    expect(sgstLine!.debitPaise).toBe(90000);
+
+    // Each line points at a real chart-of-accounts entry, not a placeholder id.
+    expect(cgstLine!.accountCode).toBe('1300');
+    expect(sgstLine!.accountCode).toBe('1310');
   });
 
   it('computes correct financial year from invoice date', async () => {
@@ -312,11 +334,12 @@ describe('learning loop (Phase 9)', () => {
     });
     const proposal1 = await svc.createFromExtracted(extracted1._id.toString(), ORG_ID);
 
-    // AI suggested generic "Purchase / Expense Account"
+    // With nothing learned yet, the AI falls back to the seeded Purchases account.
     const aiExpenseLine = proposal1.suggestedLines.find(
       (l) => l.debitPaise > 0 && !l.accountName.toLowerCase().includes('gst'),
     );
-    expect(aiExpenseLine?.accountName).toBe('Purchase / Expense Account');
+    expect(aiExpenseLine?.accountName).toBe('Purchases');
+    expect(aiExpenseLine?.isAiSuggested).toBe(true);
 
     // Human corrects: uses "Food Expense" instead
     await svc.approve({
@@ -365,6 +388,6 @@ describe('learning loop (Phase 9)', () => {
       (l) => l.debitPaise > 0 && !l.accountName.toLowerCase().includes('gst'),
     );
     expect(expenseLine?.isAiSuggested).toBe(true);
-    expect(expenseLine?.accountName).toBe('Purchase / Expense Account');
+    expect(expenseLine?.accountName).toBe('Purchases');
   });
 });

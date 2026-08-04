@@ -20,7 +20,7 @@ interface AuthRequest {
 }
 
 @UseGuards(JwtAuthGuard, PermissionGuard)
-@Controller('v1/purchase')
+@Controller('purchase')
 export class PurchaseController {
   constructor(
     private readonly vendorsService: VendorsService,

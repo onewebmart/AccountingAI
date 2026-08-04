@@ -49,68 +49,6 @@ interface InsightsApiResponse {
   insights: Insight[];
 }
 
-// ── Mock data (fallback) ──────────────────────────────────────────────────────
-
-const MOCK_INSIGHTS: Insight[] = [
-  {
-    id: 'overdue-ap',
-    type: 'overdue_ap',
-    priority: 'high',
-    headline: '3 vendors usually paid by now',
-    explanation: '₹ 1,80,000 in bills are past their usual payment date.',
-    amountPaise: 18000000,
-    actionLabel: 'View bills',
-    actionHref: '/purchase',
-  },
-  {
-    id: 'cashflow-warning',
-    type: 'cashflow_warning',
-    priority: 'high',
-    headline: 'Cash outflows exceeded inflows this month',
-    explanation: 'Net cash flow: −₹ 42,000 — more going out than coming in.',
-    amountPaise: -4200000,
-    actionLabel: 'View Cash Flow',
-    actionHref: '/reports?type=cash-flow',
-  },
-  {
-    id: 'expense-spike',
-    type: 'expense_spike',
-    priority: 'medium',
-    headline: 'Expenses up 18% this month',
-    explanation: 'Mostly logistics. Want to see the breakdown?',
-    changePercent: 18,
-    amountPaise: 8260000,
-    actionLabel: 'View P&L',
-    actionHref: '/reports?type=profit-loss',
-  },
-  {
-    id: 'gst-due-soon',
-    type: 'gst_due_soon',
-    priority: 'medium',
-    headline: 'GST due in 6 days',
-    explanation: 'Reconcile 2B first to claim full input credit.',
-    actionLabel: 'Reconcile 2B',
-    actionHref: '/gst',
-  },
-  {
-    id: 'monthly-summary',
-    type: 'monthly_summary',
-    priority: 'low',
-    headline: 'Revenue ₹ 7,00,000 · Expenses ₹ 3,20,000 this month',
-    explanation: 'Net income ₹ 3,80,000 — profitable month.',
-    amountPaise: 38000000,
-    actionLabel: 'View P&L',
-    actionHref: '/reports?type=profit-loss',
-  },
-  {
-    id: 'health-score',
-    type: 'health_score',
-    priority: 'low',
-    headline: 'Business health: 65/100',
-    explanation: 'Some areas need attention — review overdue bills and expenses.',
-  },
-];
-
 // ── Icon per insight type ─────────────────────────────────────────────────────
 
 function InsightIcon({ type }: { type: InsightType }) {
@@ -244,11 +182,9 @@ export default function InsightsPage() {
   const insightsQuery = useQuery<InsightsApiResponse>({
     queryKey: ['insights', financialYear],
     queryFn: () => api.get<InsightsApiResponse>(`/insights?financialYear=${financialYear}`),
-    placeholderData: { insights: MOCK_INSIGHTS },
   });
 
-  // Normalise: API returns { insights: [...] }, fallback to mock
-  const insights = insightsQuery.data?.insights ?? MOCK_INSIGHTS;
+  const insights = insightsQuery.data?.insights ?? [];
   const highCount = insights.filter((i) => i.priority === 'high').length;
 
   return (

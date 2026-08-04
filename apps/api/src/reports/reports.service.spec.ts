@@ -25,6 +25,7 @@ import { Journal, JournalSchema, JournalDocument } from '../gl/schemas/journal.s
 import { Counter, CounterSchema } from '../gl/schemas/counter.schema';
 import { AuditLog, AuditLogSchema } from '../gl/schemas/audit-log.schema';
 import { PostingService } from '../gl/posting.service';
+import { LedgerAccount, LedgerAccountSchema } from '../gl/schemas/ledger-account.schema';
 import { AccountType, VoucherType } from '@ai-accounting/shared';
 
 const ORG_ID = new Types.ObjectId().toString();
@@ -74,6 +75,7 @@ beforeAll(async () => {
         { name: Journal.name, schema: JournalSchema },
         { name: Counter.name, schema: CounterSchema },
         { name: AuditLog.name, schema: AuditLogSchema },
+        { name: LedgerAccount.name, schema: LedgerAccountSchema },
       ]),
     ],
     providers: [ReportsService, PostingService],

@@ -29,6 +29,7 @@ import { ExportsService } from './exports.service';
 import { ReportsService } from '../reports/reports.service';
 import { TallySyncRecord, TallySyncRecordSchema, TallySyncRecordDocument } from './schemas/tally-sync-record.schema';
 import { Journal, JournalSchema, JournalDocument } from '../gl/schemas/journal.schema';
+import { LedgerAccount, LedgerAccountSchema } from '../gl/schemas/ledger-account.schema';
 import { Counter, CounterSchema } from '../gl/schemas/counter.schema';
 import { AuditLog, AuditLogSchema } from '../gl/schemas/audit-log.schema';
 import { PostingService } from '../gl/posting.service';
@@ -76,6 +77,7 @@ beforeAll(async () => {
       ConfigModule.forRoot({ isGlobal: true, load: [configuration] }),
       MongooseModule.forRoot(replSet.getUri()),
       MongooseModule.forFeature([
+        { name: LedgerAccount.name, schema: LedgerAccountSchema },
         { name: TallySyncRecord.name, schema: TallySyncRecordSchema },
         { name: Journal.name, schema: JournalSchema },
         { name: Counter.name, schema: CounterSchema },

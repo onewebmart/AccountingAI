@@ -46,6 +46,16 @@ export default () => ({
 
   gemini: {
     apiKey: process.env.GEMINI_API_KEY ?? '',
+    /** Vision model used for OCR of images and scanned PDFs. */
+    visionModel: process.env.GEMINI_VISION_MODEL ?? 'gemini-2.5-flash',
+    /** Text model used to turn OCR output into structured invoice JSON. */
+    extractionModel: process.env.GEMINI_EXTRACTION_MODEL ?? 'gemini-2.5-flash',
+  },
+
+  storage: {
+    /** "s3" for MinIO/S3, "local" to write under STORAGE_LOCAL_DIR. */
+    driver: process.env.STORAGE_DRIVER ?? 'auto',
+    localDir: process.env.STORAGE_LOCAL_DIR ?? '.storage',
   },
 
   urls: {

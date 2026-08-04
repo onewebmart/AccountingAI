@@ -3,7 +3,11 @@
  *
  * Proves: the PermissionGuard enforces the role-permission matrix server-side.
  * Key assertion: an Employee-role JWT is rejected (403) when calling the
- * POST /journals endpoint, while an Accountant-role JWT is accepted (202).
+ * POST /journals endpoint, while an Accountant-role JWT gets past the guard.
+ *
+ * These tests are about authorisation, not posting semantics. An empty body now
+ * reaches the controller's own validation and comes back 400 — which is itself
+ * proof the guard let the request through, where a blocked role never would.
  *
  * "The server is the enforcer — UI hiding is convenience, not security."
  */
@@ -110,22 +114,22 @@ describe('RBAC — POST /journals (requires journal:post permission)', () => {
       .expect(403);
   });
 
-  it('ACCOUNTANT role is accepted with 202', async () => {
+  it('ACCOUNTANT role passes the permission guard', async () => {
     const token = makeAccessToken(UserRole.ACCOUNTANT);
     await request(app.getHttpServer())
       .post('/api/v1/journals')
       .set('Authorization', `Bearer ${token}`)
       .send({})
-      .expect(202);
+      .expect(400); // through the guard, stopped by voucher validation
   });
 
-  it('COMPANY_ADMIN role is accepted with 202', async () => {
+  it('COMPANY_ADMIN role passes the permission guard', async () => {
     const token = makeAccessToken(UserRole.COMPANY_ADMIN);
     await request(app.getHttpServer())
       .post('/api/v1/journals')
       .set('Authorization', `Bearer ${token}`)
       .send({})
-      .expect(202);
+      .expect(400);
   });
 
   it('unauthenticated request is rejected with 401', async () => {

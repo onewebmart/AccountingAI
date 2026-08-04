@@ -44,24 +44,6 @@ interface TeamMember {
   joinedAt?: string;
 }
 
-// ── Mock fallbacks ─────────────────────────────────────────────────────────────
-
-const MOCK_SETTINGS: OrgSettings = {
-  orgName: 'Acme Traders Pvt. Ltd.',
-  gstin: '27AAPFU0939F1ZV',
-  pan: 'AAPFU0939F',
-  state: '27',
-  financialYearStart: 4,
-  timezone: 'Asia/Kolkata',
-};
-
-const MOCK_TEAM: TeamMember[] = [
-  { userId: 'u-001', name: 'Ronak Shah', email: 'ronak@acmetraders.in', role: 'COMPANY_ADMIN', isActive: true, joinedAt: '2024-04-01' },
-  { userId: 'u-002', name: 'Priya Mehta', email: 'priya@acmetraders.in', role: 'ACCOUNTANT', isActive: true, joinedAt: '2024-07-15' },
-  { userId: 'u-003', name: 'Amit Verma', email: 'amit@acmetraders.in', role: 'EMPLOYEE', isActive: true, joinedAt: '2025-01-10' },
-  { userId: 'u-004', name: 'Nisha Patel', email: 'nisha@acmetraders.in', role: 'CA_REVIEWER', isActive: false, joinedAt: '2024-09-01' },
-];
-
 const ROLE_LABELS: Record<string, string> = {
   COMPANY_ADMIN: 'Company admin',
   ACCOUNTANT: 'Accountant',
@@ -105,7 +87,7 @@ function GeneralTab() {
     queryFn: () => api.get<OrgSettings>('/settings'),
   });
 
-  const settings = remoteSettings ?? MOCK_SETTINGS;
+  const settings = remoteSettings ?? ({} as OrgSettings);
 
   const [form, setForm] = useState({
     orgName: '',
@@ -209,7 +191,7 @@ function TeamTab() {
     queryFn: () => api.get<TeamMember[]>('/settings/team'),
   });
 
-  const members = remoteMembers ?? MOCK_TEAM;
+  const members = remoteMembers ?? [];
 
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState('EMPLOYEE');
@@ -351,7 +333,7 @@ function TaxGstTab() {
     queryFn: () => api.get<OrgSettings>('/settings'),
   });
 
-  const settings = remoteSettings ?? MOCK_SETTINGS;
+  const settings = remoteSettings ?? ({} as OrgSettings);
 
   const [form, setForm] = useState({
     gstin: '',

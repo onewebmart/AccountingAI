@@ -9,21 +9,57 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
+import {
+  IsArray,
+  IsInt,
+  IsMongoId,
+  IsOptional,
+  IsString,
+  Min,
+  ValidateNested,
+} from 'class-validator';
+import { Type } from 'class-transformer';
 import { Permission, ProposedEntryStatus } from '@ai-accounting/shared';
 import { RequirePermission, CurrentUser, JwtPayload } from '../auth/decorators';
 import { ProposalsService } from './proposals.service';
 
+/**
+ * The global ValidationPipe runs with whitelist + forbidNonWhitelisted, so every
+ * accepted property needs a class-validator decorator. Without them the pipe sees
+ * no whitelist at all and rejects the request outright.
+ */
+class ApproveLineDto {
+  @IsMongoId()
+  accountId: string;
+
+  @IsString()
+  accountName: string;
+
+  @IsInt()
+  @Min(0)
+  debitPaise: number;
+
+  @IsInt()
+  @Min(0)
+  creditPaise: number;
+
+  @IsOptional()
+  @IsString()
+  description?: string;
+}
+
 class ApproveBodyDto {
-  lines?: Array<{
-    accountId: string;
-    accountName: string;
-    debitPaise: number;
-    creditPaise: number;
-    description?: string;
-  }>;
+  /** Human-corrected journal lines. Omitted when the AI suggestion is accepted as-is. */
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ApproveLineDto)
+  lines?: ApproveLineDto[];
 }
 
 class RejectBodyDto {
+  @IsOptional()
+  @IsString()
   reason?: string;
 }
 

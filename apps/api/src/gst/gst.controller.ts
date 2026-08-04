@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Controller,
   Get,
   Post,
@@ -6,13 +7,18 @@ import {
   Query,
   Body,
   Request,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionGuard } from '../auth/guards/permission.guard';
 import { RequirePermission } from '../auth/decorators';
 import { Permission } from '@ai-accounting/shared';
 import { GstService, ImportGstr2bLineDto } from './gst.service';
+import { Gstr2bImportService } from './gstr2b-import.service';
 
 interface AuthRequest {
   user: { orgId: string; sub: string };
@@ -22,7 +28,10 @@ interface AuthRequest {
 @UseGuards(JwtAuthGuard, PermissionGuard)
 @RequirePermission(Permission.MANAGE_GST)
 export class GstController {
-  constructor(private readonly gstService: GstService) {}
+  constructor(
+    private readonly gstService: GstService,
+    private readonly gstr2bImport: Gstr2bImportService,
+  ) {}
 
   @Get('purchase-register')
   getPurchaseRegister(
@@ -48,6 +57,42 @@ export class GstController {
     @Body() body: { period: string; lines: ImportGstr2bLineDto[] },
   ) {
     return this.gstService.importGstr2b(req.user.orgId, body.period, body.lines);
+  }
+
+  /**
+   * Import a GSTR-2B straight from the portal download — either the JSON file or
+   * the Excel/CSV export. Saves re-keying every inward invoice by hand.
+   */
+  @Post('import-2b/file')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      limits: { fileSize: 25 * 1024 * 1024 },
+      fileFilter: (_req, file, cb) => {
+        if (/\.(json|xlsx?|csv)$/i.test(file.originalname)) cb(null, true);
+        else cb(new BadRequestException('Upload the GSTR-2B JSON or Excel file.'), false);
+      },
+    }),
+  )
+  async importGstr2bFile(
+    @Request() req: AuthRequest,
+    @UploadedFile() file: Express.Multer.File,
+    @Query('period') period?: string,
+  ) {
+    if (!file) throw new BadRequestException('No file provided.');
+
+    const parsed = await this.gstr2bImport.parse(file.buffer, file.originalname, period);
+    const saved = await this.gstService.importGstr2b(
+      req.user.orgId,
+      parsed.period,
+      parsed.lines,
+    );
+
+    return {
+      period: parsed.period,
+      imported: saved.length,
+      warnings: parsed.warnings.slice(0, 20),
+    };
   }
 
   @Post('reconcile-2b')

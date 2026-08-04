@@ -39,24 +39,47 @@ interface ApiDocument {
   _id: string;
   originalName: string;
   documentType?: DocType;
-  status: 'uploaded' | 'extracted' | 'posted' | 'duplicate' | 'failed';
+  /** Server-side pipeline state — see DocumentStatus in @ai-accounting/shared. */
+  status:
+    | 'UPLOADED'
+    | 'CLASSIFYING'
+    | 'EXTRACTING'
+    | 'EXTRACTED'
+    | 'PROPOSED'
+    | 'APPROVED'
+    | 'REJECTED'
+    | 'DUPLICATE'
+    | 'FAILED';
   vendor?: string | null;
+  invoiceNumber?: string | null;
   totalAmountPaise?: number | null;
   confidence?: number | null;
+  proposalId?: string | null;
   uploadedAt: string;
   duplicateOf?: string;
+  duplicateOfName?: string;
 }
 
 // ── Status mapping ────────────────────────────────────────────────────────────
 
 function mapApiStatus(apiStatus: ApiDocument['status']): DocStatus {
   switch (apiStatus) {
-    case 'uploaded': return 'reading';
-    case 'extracted': return 'ready';
-    case 'posted': return 'posted';
-    case 'duplicate': return 'duplicate';
-    case 'failed': return 'failed';
-    default: return 'reading';
+    case 'UPLOADED':
+    case 'CLASSIFYING':
+    case 'EXTRACTING':
+      return 'reading';
+    case 'EXTRACTED':
+    case 'PROPOSED':
+      return 'ready';
+    case 'APPROVED':
+      return 'posted';
+    case 'DUPLICATE':
+      return 'duplicate';
+    case 'REJECTED':
+    case 'FAILED':
+      return 'failed';
+    default:
+      return 'reading';
   }
 }
 
@@ -70,22 +93,9 @@ function mapApiDoc(doc: ApiDocument): InboxDoc {
     amountPaise: doc.totalAmountPaise ?? null,
     confidence: doc.confidence ?? null,
     status: mapApiStatus(doc.status),
-    duplicateOf: doc.duplicateOf,
+    duplicateOf: doc.duplicateOfName ?? doc.duplicateOf,
   };
 }
-
-// ── Mock data (fallback when API returns empty) ───────────────────────────────
-
-const MOCK_DOCS: InboxDoc[] = [
-  { id: 'd-001', fileName: 'swiggy-march-invoice.pdf', type: 'purchase_invoice', uploadedAt: '2025-04-14T09:12:00Z', vendor: 'Swiggy Business', amountPaise: 13200000, confidence: 0.93, status: 'ready' },
-  { id: 'd-002', fileName: 'bank-stmt-hdfc-mar25.pdf', type: 'bank_statement', uploadedAt: '2025-04-14T09:15:00Z', vendor: null, amountPaise: null, confidence: null, status: 'reading' },
-  { id: 'd-003', fileName: 'sigma-electricals-inv.pdf', type: 'purchase_invoice', uploadedAt: '2025-04-13T14:30:00Z', vendor: 'Sigma Electricals Pvt Ltd', amountPaise: 53100000, confidence: 0.67, status: 'ready' },
-  { id: 'd-004', fileName: 'rahul-ent-invoice.jpg', type: 'sales_invoice', uploadedAt: '2025-04-12T11:00:00Z', vendor: 'Rahul Enterprises', amountPaise: 29500000, confidence: 0.97, status: 'posted' },
-  { id: 'd-005', fileName: 'swiggy-march-invoice-copy.pdf', type: 'purchase_invoice', uploadedAt: '2025-04-12T11:45:00Z', vendor: 'Swiggy Business', amountPaise: 13200000, confidence: 0.91, status: 'duplicate', duplicateOf: 'swiggy-march-invoice.pdf' },
-  { id: 'd-006', fileName: 'scan-blurry-receipt.jpg', type: 'unknown', uploadedAt: '2025-04-11T16:20:00Z', vendor: null, amountPaise: null, confidence: null, status: 'failed' },
-  { id: 'd-007', fileName: 'amazon-business-bill.pdf', type: 'purchase_invoice', uploadedAt: '2025-04-10T10:00:00Z', vendor: 'Amazon Business', amountPaise: 7430000, confidence: 0.88, status: 'posted' },
-  { id: 'd-008', fileName: 'petty-cash-receipt-apr.pdf', type: 'receipt', uploadedAt: '2025-04-09T08:30:00Z', vendor: 'Petty Cash', amountPaise: 450000, confidence: 0.79, status: 'ready' },
-];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -207,6 +217,20 @@ export default function InboxPage() {
     queryKey: ['documents'],
     queryFn: () =>
       api.get<ApiDocument[] | { data: ApiDocument[] }>('/documents'),
+    // OCR and extraction run in a background worker, so poll while anything is
+    // still being read and stop once the queue is clear.
+    refetchInterval: (query) => {
+      const res = query.state.data;
+      const raw = Array.isArray(res)
+        ? res
+        : res && 'data' in res && Array.isArray(res.data)
+          ? res.data
+          : [];
+      const stillReading = raw.some((d) =>
+        ['UPLOADED', 'CLASSIFYING', 'EXTRACTING'].includes(d.status),
+      );
+      return stillReading ? 3000 : false;
+    },
   });
 
   // Normalise API response (array or {data:[...]})
@@ -220,13 +244,10 @@ export default function InboxPage() {
     return raw.map(mapApiDoc);
   })();
 
-  // Use real data if available, fallback to mock if empty
-  const baseDocs = apiDocs.length > 0 ? apiDocs : MOCK_DOCS;
-
   // Merge optimistic uploads at the front, exclude dismissed duplicates
   const docs = [
     ...optimisticDocs,
-    ...baseDocs.filter((d) => !dismissedIds.has(d.id) && !optimisticDocs.find((o) => o.id === d.id)),
+    ...apiDocs.filter((d) => !dismissedIds.has(d.id) && !optimisticDocs.find((o) => o.id === d.id)),
   ];
 
   // ── Upload mutation ───────────────────────────────────────────────────────

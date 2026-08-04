@@ -8,6 +8,8 @@ import { StorageService } from './storage.service';
 import { OcrCascadeService } from '../ocr/ocr-cascade.service';
 import { ExtractionService } from '../extraction/extraction.service';
 import { ProposalsService } from '../proposals/proposals.service';
+import { SpreadsheetIngestService } from '../ingest/spreadsheet-ingest.service';
+import { isSpreadsheet } from '../ingest/spreadsheet-parser.service';
 
 export interface DocumentProcessingJob {
   documentId: string;
@@ -15,6 +17,7 @@ export interface DocumentProcessingJob {
   s3Key: string;
   mimeType: string;
   isDuplicate: boolean;
+  originalName?: string;
 }
 
 @Processor(DOCUMENT_PROCESSING_QUEUE)
@@ -27,12 +30,13 @@ export class DocumentProcessingProcessor extends WorkerHost {
     private ocrCascade: OcrCascadeService,
     private extraction: ExtractionService,
     private proposals: ProposalsService,
+    private spreadsheets: SpreadsheetIngestService,
   ) {
     super();
   }
 
   async process(job: Job<DocumentProcessingJob>): Promise<void> {
-    const { documentId, orgId, s3Key, mimeType, isDuplicate } = job.data;
+    const { documentId, orgId, s3Key, mimeType, isDuplicate, originalName } = job.data;
 
     // Duplicates keep their DUPLICATE status — a human decides the next action.
     if (isDuplicate) {
@@ -43,8 +47,16 @@ export class DocumentProcessingProcessor extends WorkerHost {
     await this.docs.updateStatus(documentId, DocumentStatus.CLASSIFYING);
 
     try {
-      // Step 1: OCR cascade
       const buffer = await this.storage.download(s3Key);
+
+      // Spreadsheets carry their own structure — parse the cells instead of
+      // running OCR over a rendering of them.
+      if (isSpreadsheet(mimeType, originalName ?? '')) {
+        await this.processSpreadsheet(documentId, orgId, originalName ?? 'upload.xlsx', buffer);
+        return;
+      }
+
+      // Step 1: OCR cascade
       const { tier, ocrResult } = await this.ocrCascade.process({
         documentId,
         orgId,
@@ -76,5 +88,38 @@ export class DocumentProcessingProcessor extends WorkerHost {
       await this.docs.updateStatus(documentId, DocumentStatus.FAILED);
       throw err; // re-throw so BullMQ retries per job config
     }
+  }
+
+  private async processSpreadsheet(
+    documentId: string,
+    orgId: string,
+    fileName: string,
+    buffer: Buffer,
+  ): Promise<void> {
+    await this.docs.updateStatus(documentId, DocumentStatus.EXTRACTING);
+
+    const results = await this.spreadsheets.ingest({
+      orgId,
+      documentId,
+      fileName,
+      buffer,
+    });
+
+    const imported = results.reduce((s, r) => s + r.rowsImported, 0);
+    const proposals = results.reduce((s, r) => s + r.proposalsCreated, 0);
+
+    this.logger.log(
+      `Document ${documentId}: spreadsheet ingested — ` +
+        results.map((r) => `${r.sheetName}:${r.kind}=${r.rowsImported}`).join(', '),
+    );
+
+    await this.docs.setSpreadsheetOutcome(documentId, results);
+
+    // Bank statements land in reconciliation rather than the review queue, so a
+    // statement-only import is complete even with zero proposals.
+    await this.docs.updateStatus(
+      documentId,
+      imported > 0 || proposals > 0 ? DocumentStatus.PROPOSED : DocumentStatus.FAILED,
+    );
   }
 }

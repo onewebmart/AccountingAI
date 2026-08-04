@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import {
@@ -61,111 +61,6 @@ interface ReconcileResult {
   missingIn2b: number;
   mismatched: number;
 }
-
-// ── Mock data (fallback) ──────────────────────────────────────────────────────
-
-const MOCK_PURCHASE_REGISTER: PurchaseRegisterEntry[] = [
-  {
-    id: 'pr-001',
-    vendorName: 'Sigma Electricals',
-    supplierGstin: '27AAPFS0939F1ZV',
-    invoiceNumber: 'SE/2025/087',
-    invoiceDate: '2025-03-10',
-    taxableValuePaise: 450000,
-    cgstPaise: 40500,
-    sgstPaise: 40500,
-    igstPaise: 0,
-    itcEligiblePaise: 81000,
-    isInterState: false,
-  },
-  {
-    id: 'pr-002',
-    vendorName: 'Delhi Hardware Co',
-    supplierGstin: '07AAPFD0939F1ZV',
-    invoiceNumber: 'DHC/2025/112',
-    invoiceDate: '2025-03-15',
-    taxableValuePaise: 180000,
-    cgstPaise: 0,
-    sgstPaise: 0,
-    igstPaise: 32400,
-    itcEligiblePaise: 32400,
-    isInterState: true,
-  },
-  {
-    id: 'pr-003',
-    vendorName: 'ACME Supplies',
-    supplierGstin: '27AAPFA0939F1ZV',
-    invoiceNumber: 'ACME/2025/045',
-    invoiceDate: '2025-03-22',
-    taxableValuePaise: 250000,
-    cgstPaise: 22500,
-    sgstPaise: 22500,
-    igstPaise: 0,
-    itcEligiblePaise: 45000,
-    isInterState: false,
-  },
-];
-
-const MOCK_SALES_REGISTER: SalesRegisterEntry[] = [
-  {
-    id: 'sr-001',
-    customerName: 'Rahul Enterprises',
-    invoiceNumber: 'INV-2025-0214',
-    invoiceDate: '2025-03-07',
-    taxableValuePaise: 250000,
-    cgstPaise: 0,
-    sgstPaise: 0,
-    igstPaise: 45000,
-    isInterState: true,
-  },
-  {
-    id: 'sr-002',
-    customerName: 'Priya Tech Solutions',
-    invoiceNumber: 'INV-2025-0215',
-    invoiceDate: '2025-03-18',
-    taxableValuePaise: 150000,
-    cgstPaise: 13500,
-    sgstPaise: 13500,
-    igstPaise: 0,
-    isInterState: false,
-  },
-];
-
-const MOCK_2B_LINES: Gstr2bLine[] = [
-  {
-    id: 'g2b-001',
-    supplierGstin: '27AAPFS0939F1ZV',
-    supplierName: 'Sigma Electricals',
-    invoiceNumber: 'SE/2025/087',
-    invoiceDate: '2025-03-10',
-    taxableValuePaise: 450000,
-    itcEligiblePaise: 81000,
-    reconStatus: 'matched',
-    mismatchType: null,
-  },
-  {
-    id: 'g2b-002',
-    supplierGstin: '07AAPFD0939F1ZV',
-    supplierName: 'Delhi Hardware Co',
-    invoiceNumber: 'DHC/2025/112',
-    invoiceDate: '2025-03-15',
-    taxableValuePaise: 195000,
-    itcEligiblePaise: 35100,
-    reconStatus: 'mismatched',
-    mismatchType: 'amount_differs',
-  },
-  {
-    id: 'g2b-003',
-    supplierGstin: '29AAPFK0939F1ZV',
-    supplierName: 'Karnataka Goods',
-    invoiceNumber: 'KA/2025/999',
-    invoiceDate: '2025-03-20',
-    taxableValuePaise: 60000,
-    itcEligiblePaise: 10800,
-    reconStatus: 'missing_in_books',
-    mismatchType: null,
-  },
-];
 
 // ── Formatters ────────────────────────────────────────────────────────────────
 
@@ -258,6 +153,7 @@ const PERIOD_OPTIONS = [
 export default function GstPage() {
   const [tab, setTab] = useState<Tab>('recon');
   const [period, setPeriod] = useState('2025-03');
+  const file2bInputRef = useRef<HTMLInputElement>(null);
   const [toast, setToast] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
@@ -276,7 +172,6 @@ export default function GstPage() {
       api.get<PurchaseRegisterEntry[]>(
         `/gst/purchase-register?period=${period}&buyerStateCode=${STATE_CODE}`,
       ),
-    placeholderData: MOCK_PURCHASE_REGISTER,
   });
 
   const salesQuery = useQuery<SalesRegisterEntry[]>({
@@ -285,30 +180,37 @@ export default function GstPage() {
       api.get<SalesRegisterEntry[]>(
         `/gst/sales-register?period=${period}&buyerStateCode=${STATE_CODE}`,
       ),
-    placeholderData: MOCK_SALES_REGISTER,
   });
 
   const lines2bQuery = useQuery<Gstr2bLine[]>({
-    queryKey: ['gst', '2b-lines'],
-    queryFn: () => api.get<Gstr2bLine[]>('/gst/2b/lines'),
-    placeholderData: MOCK_2B_LINES,
+    queryKey: ['gst', '2b-lines', period],
+    queryFn: () => api.get<Gstr2bLine[]>(`/gst/recon-lines?period=${period}`),
   });
 
   // ── Mutations ─────────────────────────────────────────────────────────────
 
+  // The portal hands you a JSON or Excel download — send the file itself rather
+  // than asking the user to re-key every inward invoice.
   const import2bMutation = useMutation({
-    mutationFn: () => api.post<void>('/gst/2b/lines', { lines: [] }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['gst', '2b-lines'] });
-      showToast('GSTR-2B imported successfully.');
+    mutationFn: (file: File) => {
+      const form = new FormData();
+      form.append('file', file);
+      return api.post<{ period: string; imported: number; warnings: string[] }>(
+        `/gst/import-2b/file?period=${period}`,
+        form,
+      );
     },
-    onError: () => showToast('Import failed — please try again.'),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ['gst'] });
+      showToast(`Imported ${res.imported} GSTR-2B lines for ${res.period}.`);
+    },
+    onError: (err: Error) => showToast(err.message || 'Import failed — please try again.'),
   });
 
   const reconcileMutation = useMutation({
     mutationFn: () =>
       api.post<ReconcileResult>(
-        `/gst/reconcile?period=${period}&buyerStateCode=${STATE_CODE}`,
+        `/gst/reconcile-2b?period=${period}&buyerStateCode=${STATE_CODE}`,
       ),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['gst', '2b-lines'] });
@@ -319,9 +221,9 @@ export default function GstPage() {
 
   // ── Derived data ───────────────────────────────────────────────────────────
 
-  const purchaseRows = purchaseQuery.data ?? MOCK_PURCHASE_REGISTER;
-  const salesRows = salesQuery.data ?? MOCK_SALES_REGISTER;
-  const lines = lines2bQuery.data ?? MOCK_2B_LINES;
+  const purchaseRows = purchaseQuery.data ?? [];
+  const salesRows = salesQuery.data ?? [];
+  const lines = lines2bQuery.data ?? [];
   const has2B = lines.length > 0;
 
   const totalInBooks = purchaseRows.reduce((s, e) => s + e.itcEligiblePaise, 0);
@@ -333,12 +235,40 @@ export default function GstPage() {
     .reduce((s, l) => s + l.itcEligiblePaise, 0);
   const missingInBooks = lines.filter((l) => l.reconStatus === 'missing_in_books');
 
+  // Turns a 2B line the books are missing into a proposal for the review queue.
+  // It never posts directly: a human still approves it (Invariant 4).
+  const createEntryMutation = useMutation({
+    mutationFn: (lineId: string) =>
+      api.post<{ _id: string }>(`/gst/recon-lines/${lineId}/create-entry`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['gst'] });
+      queryClient.invalidateQueries({ queryKey: ['proposals'] });
+    },
+  });
+
   const handleCreateEntry = (lineId: string, supplierName: string | null) => {
-    showToast(`Entry created for ${supplierName ?? 'supplier'} — review in queue.`);
+    createEntryMutation.mutate(lineId, {
+      onSuccess: () =>
+        showToast(`Entry created for ${supplierName ?? 'supplier'} — review in queue.`),
+      onError: () => showToast('Could not create the entry — try again.'),
+    });
   };
 
   return (
     <div className="space-y-6">
+      {/* Hidden picker driving both "Import GSTR-2B" buttons */}
+      <input
+        ref={file2bInputRef}
+        type="file"
+        accept=".json,.xlsx,.xls,.csv"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) import2bMutation.mutate(file);
+          e.target.value = '';
+        }}
+      />
+
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
@@ -536,7 +466,7 @@ export default function GstPage() {
                 Download your 2B from the GSTN portal and upload it here.
               </p>
               <Button
-                onClick={() => import2bMutation.mutate()}
+                onClick={() => file2bInputRef.current?.click()}
                 disabled={import2bMutation.isPending}
                 className="flex items-center gap-2"
               >
@@ -557,7 +487,7 @@ export default function GstPage() {
                 </Button>
                 <Button
                   variant="secondary"
-                  onClick={() => import2bMutation.mutate()}
+                  onClick={() => file2bInputRef.current?.click()}
                   disabled={import2bMutation.isPending}
                   className="flex items-center gap-2"
                 >
