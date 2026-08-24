@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
+import { ReportBarChart } from '@/components/reports/report-chart';
 import { CheckCircle, Download, Send, FileText } from 'lucide-react';
 import { api } from '@/lib/api';
 
@@ -521,6 +522,21 @@ export default function ReportsPage() {
               Profit & Loss — FY {financialYear}
             </h2>
           </div>
+          <div className="mb-8 grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <ReportBarChart
+              title="Revenue by account"
+              tone="green"
+              rows={plIncome.map((r) => ({ label: r.account, valuePaise: r.paise }))}
+              emptyMessage="No revenue posted for this year yet."
+            />
+            <ReportBarChart
+              title="Expenses by account"
+              tone="saffron"
+              rows={plExpenses.map((r) => ({ label: r.account, valuePaise: r.paise }))}
+              emptyMessage="No expenses posted for this year yet."
+            />
+          </div>
+
           <div className="grid grid-cols-2 gap-8">
             <SectionTable
               title="Revenue"
@@ -617,6 +633,17 @@ export default function ReportsPage() {
             </h2>
             <TiedOutBadge ok={true} />
           </div>
+
+          <div className="mb-8">
+            <ReportBarChart
+              title="Balances by account"
+              // Net of the two sides — a chart of debits alone would misread a
+              // contra balance as a large positive one.
+              rows={tbRows.map((r) => ({ label: r.account, valuePaise: r.debit - r.credit }))}
+              emptyMessage="Nothing posted for this year yet."
+            />
+          </div>
+
           <table className="w-full text-left">
             <thead>
               <tr className="border-b border-line-200">

@@ -130,6 +130,7 @@ export default function BankingPage() {
   const [localConfirmed, setLocalConfirmed] = useState<Set<string>>(new Set());
 
   const queryClient = useQueryClient();
+  const [uploading, setUploading] = useState(false);
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -224,32 +225,65 @@ export default function BankingPage() {
   const glBalance = openingBalance + matchedCredits - matchedDebits;
   const difference = bankClosing - glBalance;
 
-  // Confirm matches mutation
+  /**
+   * Confirms the auto-matched lines against the statement.
+   *
+   * This used to POST to /banking/reconciliation, which does not exist, and
+   * then report success from onError anyway — so the screen said "matches
+   * confirmed" while the ledger was untouched. Reconciliation that lies about
+   * what it reconciled is worse than reconciliation that fails loudly.
+   */
   const confirmMutation = useMutation({
-    mutationFn: (matchedPairs: { bankLineId: string; bookEntryId: string }[]) =>
-      api.post('/banking/reconciliation', { matchedPairs }),
-    onSuccess: () => {
-      // Mark auto-matched lines as confirmed locally
+    mutationFn: (statementId: string) =>
+      api.post(`/banking/statements/${statementId}/confirm`),
+    onSuccess: (_data, statementId) => {
       const newConfirmed = new Set(localConfirmed);
       autoMatchedLines.forEach((l) => newConfirmed.add(l._id));
       setLocalConfirmed(newConfirmed);
       showToast(`${autoMatchedLines.length} matches confirmed`);
       queryClient.invalidateQueries({ queryKey: ['banking', 'statements', effectiveAccountId] });
+      queryClient.invalidateQueries({ queryKey: ['banking', 'report', statementId] });
     },
-    onError: () => {
-      // Optimistic local confirm even if API fails (graceful degradation)
-      const newConfirmed = new Set(localConfirmed);
-      autoMatchedLines.forEach((l) => newConfirmed.add(l._id));
-      setLocalConfirmed(newConfirmed);
-      showToast(`${autoMatchedLines.length} matches confirmed`);
+    onError: (err) => {
+      showToast(
+        err instanceof Error ? `Couldn't confirm — ${err.message}` : "Couldn't confirm matches",
+      );
     },
   });
 
   const handleConfirmMatches = () => {
-    const matchedPairs = autoMatchedLines
-      .filter((l) => l.matchedBookEntry)
-      .map((l) => ({ bankLineId: l._id, bookEntryId: l.matchedBookEntry! }));
-    confirmMutation.mutate(matchedPairs);
+    // The server confirms every auto-match on the statement, so it needs the
+    // statement — not a list of pairs the client assembled.
+    if (!latestStatement?._id) {
+      showToast('No statement to confirm yet');
+      return;
+    }
+    confirmMutation.mutate(latestStatement._id);
+  };
+
+  /**
+   * Uploading a statement goes through the ordinary document pipeline: the
+   * spreadsheet ingest already classifies a bank statement sheet and creates
+   * the BankStatement and its lines, so there is nothing bank-specific to
+   * build here — and one upload path means one place for parsing to be right.
+   */
+  const uploadStatement = async (file: File) => {
+    const body = new FormData();
+    body.append('file', file);
+
+    setUploading(true);
+    try {
+      await api.post('/documents/upload', body);
+      showToast('Statement uploaded — reading it now');
+      // The lines appear once the worker finishes, so re-check shortly.
+      setTimeout(() => {
+        void queryClient.invalidateQueries({ queryKey: ['banking'] });
+      }, 4000);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Couldn't upload that file");
+    } finally {
+      setUploading(false);
+    }
   };
 
   // No bank account yet — prompt for a statement upload rather than an empty grid.
@@ -272,10 +306,23 @@ export default function BankingPage() {
             Import a statement to reconcile.
           </h2>
           <p className="text-body text-ink-500 mb-6">Upload your bank statement and we&apos;ll match the lines.</p>
-          <Button onClick={() => showToast('Upload statement — coming soon')} className="flex items-center gap-2">
+          <label className="inline-flex cursor-pointer items-center gap-2 rounded-sm bg-saffron-600 px-4 py-2.5 text-body font-medium text-white transition-opacity hover:opacity-90">
             <Upload size={14} />
-            Upload statement
-          </Button>
+            {uploading ? 'Uploading…' : 'Upload statement'}
+            <input
+              type="file"
+              accept=".csv,.xlsx,.xls"
+              className="hidden"
+              disabled={uploading}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                // Clear the input so re-picking the same file still fires.
+                e.target.value = '';
+                if (file) void uploadStatement(file);
+              }}
+            />
+          </label>
+          <p className="mt-3 text-caption text-ink-400">CSV or Excel, as your bank exports it.</p>
         </div>
         {toast && (
           <div className="fixed bottom-6 right-6 z-50 rounded-md bg-success-bg border border-success-fg px-4 py-3 text-body font-medium text-success-fg shadow-lg">

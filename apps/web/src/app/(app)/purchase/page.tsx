@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
+import { DocumentUploadButton } from '@/components/shell/document-upload-button';
 import { Plus, ChevronRight } from 'lucide-react';
 import { api } from '@/lib/api';
 
@@ -306,13 +307,21 @@ export default function PurchasePage() {
             Bills, vendors, and what you owe.
           </p>
         </div>
-        <Button
-          onClick={() => setShowBillModal(true)}
-          className="flex items-center gap-2"
-        >
-          <Plus size={14} />
-          New bill
-        </Button>
+        <div className="flex items-start gap-2">
+          {/* Two ways in: photograph the document and let the pipeline read it,
+              or type it yourself when there is nothing to scan. */}
+          <DocumentUploadButton
+            label="Upload bill"
+            onUploaded={(msg) => showToast(msg)}
+          />
+          <Button
+            onClick={() => setShowBillModal(true)}
+            className="flex items-center gap-2"
+          >
+            <Plus size={14} />
+            New bill
+          </Button>
+        </div>
       </div>
 
       {/* Summary strip */}
