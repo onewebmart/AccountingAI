@@ -142,3 +142,62 @@ export enum Permission {
   // Platform super-admin only
   PLATFORM_ADMIN = 'platform:admin',
 }
+
+// ── CRM (CA firm practice management) ─────────────────────────────────────────
+
+/**
+ * Legal constitution of a firm's client. Decides which statutory filings apply:
+ * only companies file ROC returns, only individuals file personal ITR, etc.
+ */
+export enum ClientType {
+  INDIVIDUAL = 'INDIVIDUAL',
+  PROPRIETORSHIP = 'PROPRIETORSHIP',
+  PARTNERSHIP = 'PARTNERSHIP',
+  PRIVATE_LIMITED = 'PRIVATE_LIMITED',
+  PUBLIC_LIMITED = 'PUBLIC_LIMITED',
+  LLP = 'LLP',
+}
+
+/**
+ * A service the CA firm provides to a client. Drives which compliance
+ * deadlines are generated and which document checklists are requested.
+ */
+export enum FirmService {
+  GST_FILING = 'GST_FILING',
+  ITR = 'ITR',
+  TDS = 'TDS',
+  ROC_MCA = 'ROC_MCA',
+  AUDIT = 'AUDIT',
+  BOOKKEEPING = 'BOOKKEEPING',
+}
+
+/** How a CRM message reaches the client. */
+export enum MessageChannel {
+  WHATSAPP = 'WHATSAPP',
+  EMAIL = 'EMAIL',
+}
+
+export enum MessageDirection {
+  OUTBOUND = 'OUTBOUND',
+  INBOUND = 'INBOUND',
+}
+
+export enum MessageStatus {
+  /** Accepted onto the queue, not yet handed to a provider. */
+  QUEUED = 'QUEUED',
+  SENT = 'SENT',
+  FAILED = 'FAILED',
+}
+
+/**
+ * What prompted an outbound message. Lets the outbox be filtered by cause and
+ * makes reminder jobs idempotent per (template, entity, client).
+ */
+export enum MessageTemplateKey {
+  DOCUMENT_REMINDER = 'DOCUMENT_REMINDER',
+  COMPLIANCE_DEADLINE = 'COMPLIANCE_DEADLINE',
+  INVOICE_DUE = 'INVOICE_DUE',
+  INVOICE_OVERDUE = 'INVOICE_OVERDUE',
+  LEAD_FOLLOW_UP = 'LEAD_FOLLOW_UP',
+  GENERIC = 'GENERIC',
+}

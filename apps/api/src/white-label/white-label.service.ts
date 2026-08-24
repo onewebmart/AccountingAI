@@ -7,6 +7,7 @@ import { Organization, OrganizationDocument } from '../tenancy/schemas/organizat
 import { ProposedEntry, ProposedEntryDocument } from '../proposals/schemas/proposed-entry.schema';
 import { PurchaseBill, PurchaseBillDocument } from '../purchase/schemas/purchase-bill.schema';
 import { AuditLog, AuditLogDocument } from '../gl/schemas/audit-log.schema';
+import { AddClientDto } from './dto/client.dto';
 
 // ── DTOs ────────────────────────────────────────────────────────────────────────
 
@@ -19,15 +20,9 @@ export interface UpdateWhiteLabelDto {
   tagline?: string | null;
 }
 
-export interface AddClientDto {
-  name: string;
-  gstin?: string;
-  pan?: string;
-  state?: string;
-  financialYearStart?: number;
-  currency?: string;
-  timezone?: string;
-}
+// AddClientDto now lives in ./dto/client.dto.ts as a validated class —
+// re-exported here so existing importers keep working.
+export { AddClientDto } from './dto/client.dto';
 
 export interface ClientSummary {
   orgId: string;

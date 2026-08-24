@@ -22,6 +22,7 @@ import { InsightsModule } from './insights/insights.module';
 import { OrgSettingsModule } from './org-settings/org-settings.module';
 import { PlatformAdminModule } from './platform-admin/platform-admin.module';
 import { WhiteLabelModule } from './white-label/white-label.module';
+import { CrmModule } from './crm/crm.module';
 import { IngestModule } from './ingest/ingest.module';
 
 @Module({
@@ -61,6 +62,7 @@ import { IngestModule } from './ingest/ingest.module';
     PlatformAdminModule,
     WhiteLabelModule,
     IngestModule,
+    CrmModule,
   ],
 })
 export class AppModule implements NestModule {

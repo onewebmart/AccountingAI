@@ -11,7 +11,8 @@ import {
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { FirmAdminGuard } from './white-label.guard';
-import { WhiteLabelService, UpdateWhiteLabelDto, AddClientDto } from './white-label.service';
+import { WhiteLabelService, UpdateWhiteLabelDto } from './white-label.service';
+import { AddClientDto } from './dto/client.dto';
 
 interface AuthRequest {
   user: { orgId: string; sub: string; role: string; firmId?: string };
