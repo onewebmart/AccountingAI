@@ -42,9 +42,11 @@ const navItems: NavItem[] = [
 interface SidebarProps {
   inboxCount?: number;
   reviewCount?: number;
+  /** Set when this org is managed by a CA firm — adds a link to their CRM. */
+  firmName?: string;
 }
 
-export function Sidebar({ inboxCount = 0, reviewCount = 0 }: SidebarProps) {
+export function Sidebar({ inboxCount = 0, reviewCount = 0, firmName }: SidebarProps) {
   const pathname = usePathname();
 
   const itemsWithBadges = navItems.map((item) => ({

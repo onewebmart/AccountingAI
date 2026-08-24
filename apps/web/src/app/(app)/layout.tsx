@@ -5,9 +5,13 @@ import { useRouter } from 'next/navigation';
 import { Sidebar } from '@/components/shell/sidebar';
 import { Topbar } from '@/components/shell/topbar';
 import { useAuth } from '@/lib/auth-context';
+import { useWorkspace } from '@/lib/use-workspace';
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
+  // Badge counts come from the same call that names the org, so the sidebar
+  // can never disagree with the page beside it.
+  const { data: workspace } = useWorkspace();
   const router = useRouter();
 
   useEffect(() => {
@@ -28,8 +32,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-surface-page">
-      <Sidebar inboxCount={3} reviewCount={7} />
-      <Topbar orgName={user.orgId} aiUsagePaise={14230} aiUsageLimitPaise={100000} />
+      <Sidebar
+        inboxCount={workspace?.counts.inbox ?? 0}
+        reviewCount={workspace?.counts.review ?? 0}
+        firmName={workspace?.firm?.name}
+      />
+      <Topbar />
       <main className="ml-[260px] pt-16">
         <div className="mx-auto max-w-content px-6 py-8">{children}</div>
       </main>
