@@ -7,18 +7,19 @@
  * Runs against an in-memory MongoDB RS (same as production requirement).
  */
 import 'reflect-metadata';
-import mongoose from 'mongoose';
+import mongoose, { Model } from 'mongoose';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { ConfigModule } from '@nestjs/config';
-import { MongooseModule } from '@nestjs/mongoose';
+import { MongooseModule, getModelToken } from '@nestjs/mongoose';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import configuration from '../config/configuration';
 import { AuthModule } from './auth.module';
 import { TenancyModule } from '../tenancy/tenancy.module';
+import { Organization, OrganizationDocument } from '../tenancy/schemas/organization.schema';
 
 let replSet: MongoMemoryReplSet;
 let app: INestApplication;
@@ -94,6 +95,64 @@ describe('POST /auth/signup', () => {
       .post('/api/v1/auth/signup')
       .send({ name: 'Test', email: 'bad@test.com', password: '123', businessName: 'X' })
       .expect(400);
+  });
+});
+
+describe('firmId claim in the access token', () => {
+  function decodePayload(token: string): Record<string, unknown> {
+    const [, payloadB64] = token.split('.');
+    return JSON.parse(Buffer.from(payloadB64, 'base64').toString()) as Record<string, unknown>;
+  }
+
+  it('omits firmId for a direct SME signup', async () => {
+    const res = await request(app.getHttpServer())
+      .post('/api/v1/auth/signup')
+      .send({
+        name: 'Solo Trader',
+        email: 'solo@test.com',
+        password: 'SecurePass123!',
+        businessName: 'Solo Traders',
+      })
+      .expect(201);
+
+    const payload = decodePayload(res.body.tokens.accessToken);
+    expect(payload.orgId).toBeTruthy();
+    expect(payload.firmId).toBeUndefined();
+  });
+
+  it('carries firmId when the org belongs to a firm', async () => {
+    // Regression guard: every /api/v1/firm/* route and the whole CRM scope by
+    // req.user.firmId. It used to be declared on JwtPayload but never set, so
+    // those routes silently returned empty sets.
+    const signup = await request(app.getHttpServer())
+      .post('/api/v1/auth/signup')
+      .send({
+        name: 'Managed Client',
+        email: 'managed@test.com',
+        password: 'SecurePass123!',
+        businessName: 'Managed Client Ltd',
+      })
+      .expect(201);
+
+    const firmId = new mongoose.Types.ObjectId();
+    // Use the app's own connection — the spec wires Mongoose through Nest DI,
+    // so the global `mongoose.connection` is not the one holding this data.
+    const orgModel = app.get<Model<OrganizationDocument>>(getModelToken(Organization.name));
+    await orgModel
+      .updateOne(
+        { _id: new mongoose.Types.ObjectId(signup.body.org.id as string) },
+        { $set: { firmId } },
+      )
+      .exec();
+
+    // Re-authenticate so a fresh token is minted against the updated org.
+    const login = await request(app.getHttpServer())
+      .post('/api/v1/auth/login')
+      .send({ email: 'managed@test.com', password: 'SecurePass123!' })
+      .expect(200);
+
+    const payload = decodePayload(login.body.tokens.accessToken);
+    expect(payload.firmId).toBe(firmId.toHexString());
   });
 });
 

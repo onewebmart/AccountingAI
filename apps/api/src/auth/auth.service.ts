@@ -337,10 +337,17 @@ export class AuthService {
     const membership = await this.tenancy.getMembership(user._id.toString(), orgId);
     const role = membership?.role ?? UserRole.EMPLOYEE;
 
+    // A CA-firm user's token must carry firmId — every /firm/* route and the whole
+    // CRM scope by it. Like orgId it is resolved server-side and never read from the
+    // client. Direct SME signups have no firmId, so the claim stays absent for them.
+    const org = await this.tenancy.findOrgById(orgId);
+    const firmId = org?.firmId?.toString();
+
     const accessPayload: JwtPayload & { jti: string } = {
       sub: user._id.toString(),
       email: user.email,
       orgId,
+      ...(firmId ? { firmId } : {}),
       role,
       type: 'access',
       jti: randomUUID(), // ensures each token is unique even within the same second

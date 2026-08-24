@@ -19,6 +19,7 @@
  *  ✓ getClientSummaries: includes gstDueDays for each client
  *  ✓ getClientSummaries: client with no proposals/bills returns 0 counts
  *  ✓ FirmAdminGuard: allows FIRM_ADMIN role
+ *  ✓ FirmAdminGuard: blocks FIRM_ADMIN whose token carries no firmId
  *  ✓ FirmAdminGuard: blocks COMPANY_ADMIN
  *  ✓ FirmAdminGuard: blocks PLATFORM_SUPER_ADMIN
  */
@@ -340,14 +341,29 @@ describe('FirmAdminGuard', () => {
 
   beforeAll(() => { guard = moduleRef.get(FirmAdminGuard); });
 
-  function ctx(role: string): ExecutionContext {
+  const SOME_FIRM_ID = new Types.ObjectId().toString();
+
+  function ctxWith(user: Record<string, unknown> | undefined): ExecutionContext {
     return {
-      switchToHttp: () => ({ getRequest: () => ({ user: { role } }) }),
+      switchToHttp: () => ({ getRequest: () => ({ user }) }),
     } as unknown as ExecutionContext;
+  }
+
+  function ctx(role: string): ExecutionContext {
+    return ctxWith({ role, firmId: SOME_FIRM_ID });
   }
 
   it('allows FIRM_ADMIN', () => {
     expect(guard.canActivate(ctx(UserRole.FIRM_ADMIN))).toBe(true);
+  });
+
+  it('blocks FIRM_ADMIN whose token carries no firmId', () => {
+    // Downstream controllers scope by req.user.firmId. If it were undefined,
+    // `new Types.ObjectId(undefined)` mints a random id and the route returns an
+    // empty set instead of failing — a silent wrong answer. Must be a hard 403.
+    expect(() => guard.canActivate(ctxWith({ role: UserRole.FIRM_ADMIN }))).toThrow(
+      ForbiddenException,
+    );
   });
 
   it('blocks COMPANY_ADMIN', () => {
