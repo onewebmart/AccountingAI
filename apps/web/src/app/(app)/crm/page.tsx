@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   AlertTriangle,
@@ -13,6 +14,10 @@ import {
   Users,
 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useWorkspace } from '@/lib/use-workspace';
+import { useMutation } from '@tanstack/react-query';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { CountUp, FadeIn, HoverLift, Stagger, StaggerItem } from '@/components/motion/primitives';
@@ -107,12 +112,108 @@ function StatTile({
   );
 }
 
+/**
+ * Shown when the org has not turned practice management on yet.
+ *
+ * The CRM is firm-scoped, so without a Firm these screens have nothing to read.
+ * Rather than a dead end, this offers the one action that makes them work.
+ */
+function PracticeSetup() {
+  const { data: workspace } = useWorkspace();
+  const [name, setName] = useState('');
+  const [done, setDone] = useState(false);
+
+  const enable = useMutation({
+    mutationFn: (firmName: string) =>
+      api.post<{ firm: { name: string }; reauthRequired: boolean }>('/workspace/practice', {
+        firmName,
+      }),
+    onSuccess: () => setDone(true),
+  });
+
+  if (done) {
+    return (
+      <div className="rounded-xl border border-line-200 bg-surface-card px-6 py-14 text-center">
+        <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#E6F4EA] text-[#1E7B34]">
+          <Users size={26} />
+        </span>
+        <p className="mt-4 font-heading text-lg font-semibold text-ink-900">Practice created</p>
+        <p className="mx-auto mt-1.5 max-w-md text-sm leading-relaxed text-ink-500">
+          Your access level is part of your sign-in, so you need to sign in again before the
+          practice screens will open.
+        </p>
+        <Button className="mt-6" onClick={() => { window.location.href = '/auth/login'; }}>
+          Sign in again
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-xl border border-line-200 bg-surface-card px-6 py-14 text-center">
+      <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-honey-100 text-saffron-700">
+        <Users size={26} />
+      </span>
+      <p className="mt-4 font-heading text-lg font-semibold text-ink-900">
+        Turn on practice management
+      </p>
+      <p className="mx-auto mt-1.5 max-w-md text-sm leading-relaxed text-ink-500">
+        Track a client book, chase statutory deadlines and documents automatically, qualify
+        enquiries, and bill your fees — alongside the books you already keep here.
+      </p>
+
+      <form
+        className="mx-auto mt-6 flex max-w-sm gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          enable.mutate(name.trim() || (workspace?.org.name ?? ''));
+        }}
+      >
+        <Input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder={workspace?.org.name ?? 'Your practice name'}
+          aria-label="Practice name"
+        />
+        <Button type="submit" disabled={enable.isPending}>
+          {enable.isPending ? 'Setting up…' : 'Set up'}
+        </Button>
+      </form>
+
+      {enable.error ? (
+        <p className="mt-3 text-sm text-[#C92A2A]">{(enable.error as Error).message}</p>
+      ) : null}
+    </div>
+  );
+}
+
 export default function CrmDashboardPage() {
+  const { data: workspace, isLoading: workspaceLoading } = useWorkspace();
   const { data, isLoading, error } = useQuery<DashboardSummary>({
     queryKey: ['crm', 'dashboard'],
     queryFn: () => api.get<DashboardSummary>('/crm/dashboard'),
     refetchInterval: 30_000,
   });
+
+  if (workspaceLoading) {
+    return <Skeleton className="h-64 w-full" />;
+  }
+
+  if (!workspace?.firm) {
+    return (
+      <div>
+        <FadeIn>
+          <div className="mb-6">
+            <h1 className="font-heading text-2xl font-bold text-ink-900">Practice</h1>
+            <p className="mt-1 text-sm text-ink-500">
+              The CA-firm side of the product.
+            </p>
+          </div>
+        </FadeIn>
+        <PracticeSetup />
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (

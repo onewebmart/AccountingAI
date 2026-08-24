@@ -70,7 +70,12 @@ const practiceItems: NavItem[] = [
 interface SidebarProps {
   inboxCount?: number;
   reviewCount?: number;
-  /** Set when this org is managed by a CA firm — adds a link to their CRM. */
+  /**
+   * The practice this org runs, when it has one. The Practice section shows
+   * either way — an org without a firm lands on a short setup step rather than
+   * being shown nothing, since hiding half the product is a worse answer than
+   * offering to switch it on.
+   */
   firmName?: string;
 }
 
@@ -133,13 +138,12 @@ export function Sidebar({ inboxCount = 0, reviewCount = 0, firmName }: SidebarPr
           })}
         </ul>
 
-        {firmName ? (
-          <>
+        <>
             <p className="mt-6 px-6 pb-2 text-[11px] font-semibold uppercase tracking-wide text-ink-500">
-              {firmName}
+              {firmName ?? 'Practice'}
             </p>
             <ul className="space-y-0.5 px-3">
-              {practiceItems.map((item) => {
+              {(firmName ? practiceItems : practiceItems.slice(0, 1)).map((item) => {
                 // '/crm' must not light up for every practice page beneath it.
                 const isActive =
                   item.href === '/crm' ? pathname === '/crm' : pathname.startsWith(item.href);
@@ -162,7 +166,6 @@ export function Sidebar({ inboxCount = 0, reviewCount = 0, firmName }: SidebarPr
               })}
             </ul>
           </>
-        ) : null}
       </nav>
 
       {/* Settings at bottom */}

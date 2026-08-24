@@ -6,7 +6,10 @@ import { User, UserSchema } from '../tenancy/schemas/user.schema';
 import { Document, DocumentSchema } from '../documents/schemas/document.schema';
 import { ProposedEntry, ProposedEntrySchema } from '../proposals/schemas/proposed-entry.schema';
 import { UsageMeter, UsageMeterSchema } from '../ocr/schemas/usage-meter.schema';
+import { OrgMembership, OrgMembershipSchema } from '../tenancy/schemas/org-membership.schema';
+import { AuditLog, AuditLogSchema } from '../gl/schemas/audit-log.schema';
 import { WorkspaceService } from './workspace.service';
+import { PracticeSetupService } from './practice-setup.service';
 import { WorkspaceController } from './workspace.controller';
 
 /** Serves the app shell: org identity, badge counts and the AI meter. */
@@ -19,9 +22,11 @@ import { WorkspaceController } from './workspace.controller';
       { name: Document.name, schema: DocumentSchema },
       { name: ProposedEntry.name, schema: ProposedEntrySchema },
       { name: UsageMeter.name, schema: UsageMeterSchema },
+      { name: OrgMembership.name, schema: OrgMembershipSchema },
+      { name: AuditLog.name, schema: AuditLogSchema },
     ]),
   ],
   controllers: [WorkspaceController],
-  providers: [WorkspaceService],
+  providers: [WorkspaceService, PracticeSetupService],
 })
 export class WorkspaceModule {}

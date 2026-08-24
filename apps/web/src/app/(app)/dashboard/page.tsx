@@ -1,6 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
+import { ReportBarChart } from '@/components/reports/report-chart';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -19,7 +20,20 @@ import Link from 'next/link';
 
 // ── API response types ──────────────────────────────────────────────────────
 
-const FINANCIAL_YEAR = '2025-26';
+/**
+ * The Indian financial year we are currently in — 1 April to 31 March.
+ *
+ * This was pinned to '2025-26', so from April 2026 the dashboard queried a year
+ * with nothing posted in it and every figure read ₹0.00 however much had been
+ * entered.
+ */
+function currentFinancialYear(): string {
+  const now = new Date();
+  const startYear = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+  return `${startYear}-${String((startYear + 1) % 100).padStart(2, '0')}`;
+}
+
+const FINANCIAL_YEAR = currentFinancialYear();
 
 interface DashboardSummary {
   financialYear: string;
@@ -67,6 +81,23 @@ export default function DashboardPage() {
     queryFn: () => api.get<DocumentListResponse | { id: string }[]>('/documents'),
   });
 
+  /**
+   * Overdue receivables and unmatched GST lines — the two rows that used to
+   * claim "2 invoices overdue" and "5 GST mismatches" whatever the books said.
+   */
+  const { data: arAgeing } = useQuery({
+    queryKey: ['sales', 'ar-ageing'],
+    queryFn: () =>
+      api.get<{ days1_30: number; days31_60: number; days61_90: number; over90: number }>(
+        '/sales/ar-ageing',
+      ),
+  });
+
+  const { data: gstReconLines } = useQuery({
+    queryKey: ['gst', 'recon-lines'],
+    queryFn: () => api.get<{ status?: string }[]>('/gst/recon-lines'),
+  });
+
   const { data: insightsData } = useQuery({
     queryKey: ['insights', FINANCIAL_YEAR],
     queryFn: () => api.get<InsightsResponse>(`/insights?financialYear=${FINANCIAL_YEAR}`),
@@ -108,6 +139,36 @@ export default function DashboardPage() {
     return null;
   })();
 
+  /**
+   * GSTR-3B for a month is due on the 20th of the next one. Computed rather
+   * than stated, because a fixed "due in 6 days" is wrong on 364 days a year.
+   */
+  /**
+   * Ageing reports amounts, not counts, so this row states the amount overdue
+   * rather than inventing a number of invoices from it.
+   */
+  const overduePaise =
+    (arAgeing?.days1_30 ?? 0) +
+    (arAgeing?.days31_60 ?? 0) +
+    (arAgeing?.days61_90 ?? 0) +
+    (arAgeing?.over90 ?? 0);
+
+  const gstMismatches = (gstReconLines ?? []).filter(
+    (l) => l.status && l.status !== 'MATCHED',
+  ).length;
+
+  const gstDueLabel = (() => {
+    const now = new Date();
+    const due = new Date(Date.UTC(now.getFullYear(), now.getMonth() + 1, 20));
+    const days = Math.ceil((due.getTime() - now.getTime()) / 86_400_000);
+    const date = due.toLocaleDateString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      timeZone: 'UTC',
+    });
+    return days <= 0 ? date : `${date} (${days} days)`;
+  })();
+
   const attention = [
     {
       label: pendingProposals > 0
@@ -123,8 +184,19 @@ export default function DashboardPage() {
       href: '/inbox',
       icon: <AlertCircle size={14} />,
     },
-    { label: '2 invoices overdue', href: '/sales', icon: <AlertTriangle size={14} /> },
-    { label: '5 GST mismatches', href: '/gst', icon: <ReceiptIndianRupee size={14} /> },
+    {
+      label:
+        overduePaise > 0
+          ? `${formatRupeesCompact(overduePaise)} overdue from customers`
+          : 'Nothing overdue',
+      href: '/sales',
+      icon: <AlertTriangle size={14} />,
+    },
+    {
+      label: `${gstMismatches} GST ${gstMismatches === 1 ? 'mismatch' : 'mismatches'}`,
+      href: '/gst',
+      icon: <ReceiptIndianRupee size={14} />,
+    },
   ];
 
   const hasData = !isLoadingAny || pendingProposals > 0 || uploadedDocs > 0 || !!plData;
@@ -184,9 +256,7 @@ export default function DashboardPage() {
                 <p className="text-h2 font-mono tabular-nums text-ink-900">
                   {plLoading ? '--' : formatRupeesCompact(kpis.incomeMTD)}
                 </p>
-                <p className="text-caption text-[#1E7A47] flex items-center gap-1 mt-1">
-                  <TrendingUp size={12} /> +12% vs last month
-                </p>
+                <p className="text-caption text-ink-500 mt-1">This month to date</p>
               </CardContent>
             </Card>
 
@@ -198,9 +268,7 @@ export default function DashboardPage() {
                 <p className="text-h2 font-mono tabular-nums text-ink-900">
                   {plLoading ? '--' : formatRupeesCompact(kpis.expensesMTD)}
                 </p>
-                <p className="text-caption text-[#C92A2A] flex items-center gap-1 mt-1">
-                  <TrendingUp size={12} /> +18% vs last month
-                </p>
+                <p className="text-caption text-ink-500 mt-1">This month to date</p>
               </CardContent>
             </Card>
 
@@ -226,9 +294,9 @@ export default function DashboardPage() {
                 <p className="text-h2 font-mono tabular-nums text-ink-900">
                   {plLoading ? '--' : formatRupeesCompact(kpis.gstDue)}
                 </p>
-                <Badge variant="pending" className="mt-1 text-[0.7rem]">
-                  Due in 6 days
-                </Badge>
+                <p className="text-caption text-ink-500 mt-1">
+                  GSTR-3B due {gstDueLabel}
+                </p>
               </CardContent>
             </Card>
           </div>
@@ -240,9 +308,15 @@ export default function DashboardPage() {
                 <CardTitle>Cash flow</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="flex items-center justify-center h-40 text-ink-400 text-body">
-                  Chart renders after Phase 13 (Reports)
-                </div>
+                <ReportBarChart
+                  title="This month"
+                  rows={[
+                    { label: 'Income', valuePaise: kpis.incomeMTD },
+                    { label: 'Expenses', valuePaise: kpis.expensesMTD },
+                    { label: 'Cash on hand', valuePaise: kpis.cashOnHand },
+                  ]}
+                  emptyMessage="Approve an entry in Review and it shows up here."
+                />
               </CardContent>
             </Card>
 
@@ -261,12 +335,10 @@ export default function DashboardPage() {
                     <p key={i} className="text-body text-ink-700">• {text}</p>
                   ))
                 ) : (
-                  <>
-                    <p className="text-body text-ink-700">• Expenses up 18% this month</p>
-                    <p className="text-caption text-ink-500">Mostly logistics. See breakdown →</p>
-                    <p className="text-body text-ink-700">• GST due in 6 days</p>
-                    <p className="text-caption text-ink-500">Estimated ₹84,200 payable.</p>
-                  </>
+                  <p className="text-body text-ink-500">
+                    Nothing to flag yet. Observations appear once entries are posted to the
+                    ledger.
+                  </p>
                 )}
               </CardContent>
             </Card>
