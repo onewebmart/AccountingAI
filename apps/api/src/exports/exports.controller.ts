@@ -10,6 +10,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { Response } from 'express';
+import { ExcelExportService } from './excel-export.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionGuard } from '../auth/guards/permission.guard';
 import { RequirePermission } from '../auth/decorators';
@@ -28,6 +29,7 @@ export class ExportsController {
   constructor(
     private readonly exportsService: ExportsService,
     private readonly tallyService: TallyService,
+    private readonly excel: ExcelExportService,
   ) {}
 
   // ── CSV exports ─────────────────────────────────────────────────────────────
@@ -42,6 +44,63 @@ export class ExportsController {
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', `attachment; filename="trial-balance-${financialYear}.csv"`);
     res.send(csv);
+  }
+
+  // ── Excel exports ───────────────────────────────────────────────────────────
+  // Each renders the CSV the corresponding endpoint already produces, so the
+  // two formats can never disagree about a figure.
+
+  @Get('trial-balance.xlsx')
+  async trialBalanceXlsx(
+    @Request() req: AuthRequest,
+    @Query('financialYear') financialYear: string,
+    @Res() res: Response,
+  ) {
+    const csv = await this.exportsService.trialBalanceCsv(req.user.orgId, financialYear);
+    const buffer = await this.excel.fromCsv(csv, 'Trial Balance', `Trial Balance — FY ${financialYear}`);
+    sendXlsx(res, buffer, `trial-balance-${financialYear}.xlsx`);
+  }
+
+  @Get('profit-loss.xlsx')
+  async profitLossXlsx(
+    @Request() req: AuthRequest,
+    @Query('financialYear') financialYear: string,
+    @Query('period') period: string | undefined,
+    @Res() res: Response,
+  ) {
+    const csv = await this.exportsService.profitAndLossCsv(req.user.orgId, financialYear, period);
+    const buffer = await this.excel.fromCsv(csv, 'Profit and Loss', `Profit & Loss — FY ${financialYear}`);
+    sendXlsx(res, buffer, `profit-loss-${financialYear}.xlsx`);
+  }
+
+  @Get('balance-sheet.xlsx')
+  async balanceSheetXlsx(
+    @Request() req: AuthRequest,
+    @Query('financialYear') financialYear: string,
+    @Query('asOf') asOf: string | undefined,
+    @Res() res: Response,
+  ) {
+    const csv = await this.exportsService.balanceSheetCsv(req.user.orgId, financialYear, asOf);
+    const buffer = await this.excel.fromCsv(csv, 'Balance Sheet', `Balance Sheet — FY ${financialYear}`);
+    sendXlsx(res, buffer, `balance-sheet-${financialYear}.xlsx`);
+  }
+
+  @Get('day-book.xlsx')
+  async dayBookXlsx(
+    @Request() req: AuthRequest,
+    @Query('financialYear') financialYear: string,
+    @Query('startDate') startDate: string,
+    @Query('endDate') endDate: string,
+    @Res() res: Response,
+  ) {
+    const csv = await this.exportsService.dayBookCsv(
+      req.user.orgId,
+      financialYear,
+      startDate,
+      endDate,
+    );
+    const buffer = await this.excel.fromCsv(csv, 'Day Book', `Day Book — FY ${financialYear}`);
+    sendXlsx(res, buffer, `day-book-${financialYear}.xlsx`);
   }
 
   @Get('profit-loss.csv')
@@ -143,4 +202,14 @@ export class ExportsController {
   getTallyStatus(@Request() req: AuthRequest) {
     return this.tallyService.getStatus(req.user.orgId);
   }
+}
+
+const XLSX_MIME =
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+
+function sendXlsx(res: Response, buffer: Buffer, filename: string): void {
+  res.setHeader('Content-Type', XLSX_MIME);
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.setHeader('Content-Length', buffer.length);
+  res.end(buffer);
 }

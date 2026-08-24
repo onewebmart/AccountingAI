@@ -202,31 +202,66 @@ function ReportSkeleton() {
   );
 }
 
-// ── CSV download helper ───────────────────────────────────────────────────────
+// ── Download helper ───────────────────────────────────────────────────────────
 
-async function downloadCsv(path: string, filename: string) {
+/**
+ * Fetches an export and hands it to the browser as a file.
+ *
+ * Goes through fetch rather than a plain link because the endpoints are
+ * JWT-guarded and an <a href> cannot carry an Authorization header. Returns
+ * false on failure so the caller can say so instead of silently doing nothing,
+ * which is what the previous version did.
+ */
+async function downloadFile(path: string, filename: string): Promise<boolean> {
   const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
   const apiBase = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api/v1';
-  const res = await fetch(`${apiBase}${path}`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  });
-  if (!res.ok) return;
-  const blob = await res.blob();
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
+
+  try {
+    const res = await fetch(`${apiBase}${path}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) return false;
+
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────────
+
+/** Reports with a CSV/Excel endpoint behind them. */
+const EXPORTABLE = new Set<ReportType>(['pl', 'bs', 'tb', 'daybook', 'ledger']);
+
+function exportPathFor(reportType: ReportType): string {
+  switch (reportType) {
+    case 'pl':
+      return 'profit-loss';
+    case 'bs':
+      return 'balance-sheet';
+    case 'tb':
+      return 'trial-balance';
+    case 'daybook':
+      return 'day-book';
+    default:
+      return reportType;
+  }
+}
 
 export default function ReportsPage() {
   const [reportType, setReportType] = useState<ReportType>('pl');
   const [financialYear, setFinancialYear] = useState('2025-26');
   const [expanded, setExpanded] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+
+  const exportPath = exportPathFor(reportType);
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -424,11 +459,19 @@ export default function ReportsPage() {
       </div>
 
       {/* Export row */}
-      <div className="flex items-center gap-2 border-b border-line-200 pb-4">
+      <div className="flex items-center gap-2 border-b border-line-200 pb-4 print:hidden">
         <Button
           variant="secondary"
           size="sm"
-          onClick={() => showToast('Exported as Excel')}
+          disabled={!EXPORTABLE.has(reportType)}
+          title={EXPORTABLE.has(reportType) ? undefined : 'Not available for this report yet'}
+          onClick={async () => {
+            const ok = await downloadFile(
+              `/exports/${exportPath}.xlsx?financialYear=${financialYear}`,
+              `${exportPath}-${financialYear}.xlsx`,
+            );
+            showToast(ok ? 'Downloaded Excel' : "Couldn't export — try again");
+          }}
           className="flex items-center gap-1.5"
         >
           <Download size={12} /> Excel
@@ -436,10 +479,14 @@ export default function ReportsPage() {
         <Button
           variant="secondary"
           size="sm"
+          disabled={!EXPORTABLE.has(reportType)}
+          title={EXPORTABLE.has(reportType) ? undefined : 'Not available for this report yet'}
           onClick={async () => {
-            const reportPath = reportType === 'pl' ? 'profit-loss' : reportType === 'bs' ? 'balance-sheet' : reportType === 'tb' ? 'trial-balance' : reportType;
-            await downloadCsv(`/exports/${reportPath}.csv`, `${reportPath}-${financialYear}.csv`);
-            showToast('Downloaded CSV');
+            const ok = await downloadFile(
+              `/exports/${exportPath}.csv?financialYear=${financialYear}`,
+              `${exportPath}-${financialYear}.csv`,
+            );
+            showToast(ok ? 'Downloaded CSV' : "Couldn't export — try again");
           }}
           className="flex items-center gap-1.5"
         >
@@ -448,18 +495,13 @@ export default function ReportsPage() {
         <Button
           variant="secondary"
           size="sm"
-          onClick={() => showToast('Exported as PDF')}
+          // The browser's own print-to-PDF, driven by the print stylesheet
+          // below. Real output, and no PDF engine to ship or keep in step with
+          // the on-screen report.
+          onClick={() => window.print()}
           className="flex items-center gap-1.5"
         >
           <FileText size={12} /> PDF
-        </Button>
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={() => showToast('Synced vouchers to Tally')}
-          className="flex items-center gap-1.5"
-        >
-          <Send size={12} /> Send to Tally
         </Button>
       </div>
 

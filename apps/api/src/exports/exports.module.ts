@@ -3,6 +3,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { TallySyncRecord, TallySyncRecordSchema } from './schemas/tally-sync-record.schema';
 import { Journal, JournalSchema } from '../gl/schemas/journal.schema';
 import { TallyService } from './tally.service';
+import { ExcelExportService } from './excel-export.service';
 import { ExportsService } from './exports.service';
 import { ExportsController } from './exports.controller';
 import { ReportsModule } from '../reports/reports.module';
@@ -16,7 +17,8 @@ import { ReportsModule } from '../reports/reports.module';
     ReportsModule,
   ],
   controllers: [ExportsController],
-  providers: [TallyService, ExportsService],
+  providers: [
+    ExcelExportService,TallyService, ExportsService],
   exports: [TallyService, ExportsService],
 })
 export class ExportsModule {}

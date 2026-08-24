@@ -6,6 +6,7 @@ import { Sidebar } from '@/components/shell/sidebar';
 import { Topbar } from '@/components/shell/topbar';
 import { useAuth } from '@/lib/auth-context';
 import { useWorkspace } from '@/lib/use-workspace';
+import { PageTransition } from '@/components/motion/page-transition';
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -39,7 +40,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       />
       <Topbar />
       <main className="ml-[260px] pt-16">
-        <div className="mx-auto max-w-content px-6 py-8">{children}</div>
+        <div className="mx-auto max-w-content px-6 py-8">
+          <PageTransition>{children}</PageTransition>
+        </div>
       </main>
     </div>
   );
