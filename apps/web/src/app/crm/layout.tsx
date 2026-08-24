@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { CrmSidebar } from '@/components/crm/crm-sidebar';
+import { PageTransition } from '@/components/motion/page-transition';
 import { useAuth } from '@/lib/auth-context';
 
 /**
@@ -36,7 +37,9 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen bg-surface-page">
       <CrmSidebar firmName="Your firm" />
       <main className="ml-[260px]">
-        <div className="mx-auto max-w-content px-6 py-8">{children}</div>
+        <div className="mx-auto max-w-content px-6 py-8">
+          <PageTransition>{children}</PageTransition>
+        </div>
       </main>
     </div>
   );

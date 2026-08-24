@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { FadeIn } from '@/components/motion/primitives';
 import {
   Select,
   SelectContent,
@@ -376,12 +377,14 @@ function Delivery() {
 export default function CrmSettingsPage() {
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="font-heading text-2xl font-bold text-ink-900">Settings</h1>
-        <p className="mt-1 text-sm text-ink-500">
-          Messaging templates, delivery adapter and the outbox.
-        </p>
-      </div>
+      <FadeIn>
+        <div className="mb-6">
+          <h1 className="font-heading text-2xl font-bold text-ink-900">Settings</h1>
+          <p className="mt-1 text-sm text-ink-500">
+            Messaging templates, delivery adapter and the outbox.
+          </p>
+        </div>
+      </FadeIn>
 
       <Tabs defaultValue="outbox">
         <TabsList className="mb-5">

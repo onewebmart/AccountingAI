@@ -16,6 +16,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
+import { FadeIn } from '@/components/motion/primitives';
 import {
   Dialog,
   DialogContent,
@@ -344,33 +345,35 @@ export default function DocumentsPage() {
 
   return (
     <div>
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="font-heading text-2xl font-bold text-ink-900">Document hub</h1>
-          <p className="mt-1 text-sm text-ink-500">
-            Track what each client still owes you. Uploads are matched to the checklist
-            automatically — you confirm each one before it counts as verified.
-          </p>
+      <FadeIn>
+        <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h1 className="font-heading text-2xl font-bold text-ink-900">Document hub</h1>
+            <p className="mt-1 text-sm text-ink-500">
+              Track what each client still owes you. Uploads are matched to the checklist
+              automatically — you confirm each one before it counts as verified.
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant="secondary"
+              className="gap-2"
+              onClick={() => {
+                setRemindingId('ALL');
+                remind.mutate(undefined);
+              }}
+              disabled={remind.isPending}
+            >
+              <Send size={16} />
+              {remindingId === 'ALL' && remind.isPending ? 'Queueing…' : 'Remind everyone'}
+            </Button>
+            <Button className="gap-2" onClick={() => setDialogOpen(true)}>
+              <Plus size={16} />
+              Request documents
+            </Button>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <Button
-            variant="secondary"
-            className="gap-2"
-            onClick={() => {
-              setRemindingId('ALL');
-              remind.mutate(undefined);
-            }}
-            disabled={remind.isPending}
-          >
-            <Send size={16} />
-            {remindingId === 'ALL' && remind.isPending ? 'Queueing…' : 'Remind everyone'}
-          </Button>
-          <Button className="gap-2" onClick={() => setDialogOpen(true)}>
-            <Plus size={16} />
-            Request documents
-          </Button>
-        </div>
-      </div>
+      </FadeIn>
 
       {remind.isSuccess ? (
         <p className="mb-4 rounded-lg bg-[#E6F4EA] px-3 py-2 text-sm text-[#1E7B34]">

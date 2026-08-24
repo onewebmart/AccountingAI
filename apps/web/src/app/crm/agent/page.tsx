@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
+import { FadeIn } from '@/components/motion/primitives';
 
 interface Conversation {
   _id: string;
@@ -139,13 +140,15 @@ export default function AgentPage() {
 
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="font-heading text-2xl font-bold text-ink-900">Support agent</h1>
-        <p className="mt-1 text-sm text-ink-500">
-          Client questions answered automatically from their real records. Anything about fees,
-          anything sensitive, and anything the agent is unsure of comes to you instead.
-        </p>
-      </div>
+      <FadeIn>
+        <div className="mb-6">
+          <h1 className="font-heading text-2xl font-bold text-ink-900">Support agent</h1>
+          <p className="mt-1 text-sm text-ink-500">
+            Client questions answered automatically from their real records. Anything about fees,
+            anything sensitive, and anything the agent is unsure of comes to you instead.
+          </p>
+        </div>
+      </FadeIn>
 
       {stats ? <StatsPanel stats={stats} /> : null}
 

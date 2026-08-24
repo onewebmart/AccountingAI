@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
+import { FadeIn } from '@/components/motion/primitives';
 import {
   Dialog,
   DialogContent,
@@ -465,30 +466,32 @@ export default function LeadsPage() {
 
   return (
     <div>
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="font-heading text-2xl font-bold text-ink-900">Leads</h1>
-          <p className="mt-1 text-sm text-ink-500">
-            Enquiries from every channel. The AI scores and summarises them; moving a lead
-            is always your call.
-          </p>
+      <FadeIn>
+        <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h1 className="font-heading text-2xl font-bold text-ink-900">Leads</h1>
+            <p className="mt-1 text-sm text-ink-500">
+              Enquiries from every channel. The AI scores and summarises them; moving a lead
+              is always your call.
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant="secondary"
+              className="gap-2"
+              onClick={() => followUps.mutate()}
+              disabled={followUps.isPending}
+            >
+              <Send size={16} />
+              {followUps.isPending ? 'Queueing…' : 'Run follow-ups'}
+            </Button>
+            <Button className="gap-2" onClick={() => setDialogOpen(true)}>
+              <Plus size={16} />
+              Add lead
+            </Button>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <Button
-            variant="secondary"
-            className="gap-2"
-            onClick={() => followUps.mutate()}
-            disabled={followUps.isPending}
-          >
-            <Send size={16} />
-            {followUps.isPending ? 'Queueing…' : 'Run follow-ups'}
-          </Button>
-          <Button className="gap-2" onClick={() => setDialogOpen(true)}>
-            <Plus size={16} />
-            Add lead
-          </Button>
-        </div>
-      </div>
+      </FadeIn>
 
       {followUps.isSuccess ? (
         <p className="mb-4 rounded-lg bg-[#E6F4EA] px-3 py-2 text-sm text-[#1E7B34]">

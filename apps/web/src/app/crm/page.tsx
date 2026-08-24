@@ -15,6 +15,7 @@ import {
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
+import { CountUp, FadeIn, HoverLift, Stagger, StaggerItem } from '@/components/motion/primitives';
 
 interface DashboardSummary {
   clients: { total: number; addedThisMonth: number };
@@ -86,21 +87,23 @@ function StatTile({
   }[tone];
 
   return (
-    <Link
-      href={href}
-      className="group rounded-xl border border-line-200 bg-surface-card p-4 transition-colors hover:border-saffron-600"
-    >
-      <div className="flex items-center gap-2 text-ink-500">
-        {icon}
-        <span className="text-xs">{label}</span>
-        <ChevronRight
-          size={14}
-          className="ml-auto text-ink-400 opacity-0 transition-opacity group-hover:opacity-100"
-        />
-      </div>
-      <p className={cn('mt-2 font-mono text-2xl font-bold', toneClass)}>{value}</p>
-      {sub ? <p className="mt-0.5 text-xs text-ink-500">{sub}</p> : null}
-    </Link>
+    <HoverLift className="h-full">
+      <Link
+        href={href}
+        className="group block h-full rounded-xl border border-line-200 bg-surface-card p-4 transition-colors hover:border-saffron-600"
+      >
+        <div className="flex items-center gap-2 text-ink-500">
+          {icon}
+          <span className="text-xs">{label}</span>
+          <ChevronRight
+            size={14}
+            className="ml-auto text-ink-400 opacity-0 transition-opacity group-hover:opacity-100"
+          />
+        </div>
+        <p className={cn('mt-2 font-mono text-2xl font-bold', toneClass)}>{value}</p>
+        {sub ? <p className="mt-0.5 text-xs text-ink-500">{sub}</p> : null}
+      </Link>
+    </HoverLift>
   );
 }
 
@@ -135,58 +138,68 @@ export default function CrmDashboardPage() {
 
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="font-heading text-2xl font-bold text-ink-900">Dashboard</h1>
-        <p className="mt-1 text-sm text-ink-500">Where your practice stands today.</p>
-      </div>
+      <FadeIn>
+        <div className="mb-6">
+          <h1 className="font-heading text-2xl font-bold text-ink-900">Dashboard</h1>
+          <p className="mt-1 text-sm text-ink-500">Where your practice stands today.</p>
+        </div>
+      </FadeIn>
 
-      <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <StatTile
-          href="/crm/clients"
-          icon={<Users size={15} />}
-          label="Clients"
-          value={String(data.clients.total)}
-          sub={
-            data.clients.addedThisMonth > 0
-              ? `+${data.clients.addedThisMonth} this month`
-              : 'No new clients this month'
-          }
-        />
-        <StatTile
-          href="/crm/compliance"
-          icon={<Bell size={15} />}
-          label="Pending deadlines"
-          value={String(data.deadlines.pending)}
-          tone={data.deadlines.overdue > 0 ? 'bad' : data.deadlines.urgent > 0 ? 'pending' : 'neutral'}
-          sub={
-            data.deadlines.overdue > 0
-              ? `${data.deadlines.overdue} overdue · ${data.deadlines.urgent} within 7 days`
-              : data.deadlines.urgent > 0
-                ? `${data.deadlines.urgent} within 7 days`
-                : 'Nothing urgent'
-          }
-        />
-        <StatTile
-          href="/crm/invoices"
-          icon={<IndianRupee size={15} />}
-          label="Fees collected"
-          value={formatPaise(data.fees.collectedPaise)}
-          tone="good"
-          sub={`of ${formatPaise(data.fees.billedPaise)} billed`}
-        />
-        <StatTile
-          href="/crm/invoices"
-          icon={<AlertTriangle size={15} />}
-          label="Outstanding"
-          value={formatPaise(data.fees.outstandingPaise)}
-          tone={data.fees.outstandingPaise > 0 ? 'pending' : 'neutral'}
-          sub={
-            data.fees.clientsOverdue > 0
-              ? `${data.fees.clientsOverdue} client(s) overdue`
-              : 'Nothing overdue'
-          }
-        />
-      </div>
+      <Stagger className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <StaggerItem>
+          <StatTile
+            href="/crm/clients"
+            icon={<Users size={15} />}
+            label="Clients"
+            value={String(data.clients.total)}
+            sub={
+              data.clients.addedThisMonth > 0
+                ? `+${data.clients.addedThisMonth} this month`
+                : 'No new clients this month'
+            }
+          />
+        </StaggerItem>
+        <StaggerItem>
+          <StatTile
+            href="/crm/compliance"
+            icon={<Bell size={15} />}
+            label="Pending deadlines"
+            value={String(data.deadlines.pending)}
+            tone={data.deadlines.overdue > 0 ? 'bad' : data.deadlines.urgent > 0 ? 'pending' : 'neutral'}
+            sub={
+              data.deadlines.overdue > 0
+                ? `${data.deadlines.overdue} overdue · ${data.deadlines.urgent} within 7 days`
+                : data.deadlines.urgent > 0
+                  ? `${data.deadlines.urgent} within 7 days`
+                  : 'Nothing urgent'
+            }
+          />
+        </StaggerItem>
+        <StaggerItem>
+          <StatTile
+            href="/crm/invoices"
+            icon={<IndianRupee size={15} />}
+            label="Fees collected"
+            value={formatPaise(data.fees.collectedPaise)}
+            tone="good"
+            sub={`of ${formatPaise(data.fees.billedPaise)} billed`}
+          />
+        </StaggerItem>
+        <StaggerItem>
+          <StatTile
+            href="/crm/invoices"
+            icon={<AlertTriangle size={15} />}
+            label="Outstanding"
+            value={formatPaise(data.fees.outstandingPaise)}
+            tone={data.fees.outstandingPaise > 0 ? 'pending' : 'neutral'}
+            sub={
+              data.fees.clientsOverdue > 0
+                ? `${data.fees.clientsOverdue} client(s) overdue`
+                : 'Nothing overdue'
+            }
+          />
+        </StaggerItem>
+      </Stagger>
 
       <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
         {/* Upcoming deadlines */}

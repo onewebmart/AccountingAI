@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
+import { FadeIn } from '@/components/motion/primitives';
 import { AddClientDialog } from './add-client-dialog';
 import {
   Table,
@@ -70,18 +71,20 @@ export default function ClientsPage() {
   return (
     <div>
       {/* Header */}
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="font-heading text-2xl font-bold text-ink-900">Clients</h1>
-          <p className="mt-1 text-sm text-ink-500">
-            Every client your firm manages, their services and contact details.
-          </p>
+      <FadeIn>
+        <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h1 className="font-heading text-2xl font-bold text-ink-900">Clients</h1>
+            <p className="mt-1 text-sm text-ink-500">
+              Every client your firm manages, their services and contact details.
+            </p>
+          </div>
+          <Button onClick={() => setDialogOpen(true)} className="gap-2">
+            <Plus size={16} />
+            Add client
+          </Button>
         </div>
-        <Button onClick={() => setDialogOpen(true)} className="gap-2">
-          <Plus size={16} />
-          Add client
-        </Button>
-      </div>
+      </FadeIn>
 
       {/* Filters */}
       <div className="mb-4 flex flex-wrap items-center gap-3">

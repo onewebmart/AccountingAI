@@ -5,6 +5,7 @@ import { BarChart3, Clock, TrendingUp } from 'lucide-react';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
+import { FadeIn } from '@/components/motion/primitives';
 
 interface MonthlyPoint {
   month: string;
@@ -105,12 +106,14 @@ export default function CrmReportsPage() {
 
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="font-heading text-2xl font-bold text-ink-900">Reports</h1>
-        <p className="mt-1 text-sm text-ink-500">
-          How the practice is performing over the last six months.
-        </p>
-      </div>
+      <FadeIn>
+        <div className="mb-6">
+          <h1 className="font-heading text-2xl font-bold text-ink-900">Reports</h1>
+          <p className="mt-1 text-sm text-ink-500">
+            How the practice is performing over the last six months.
+          </p>
+        </div>
+      </FadeIn>
 
       <div className="grid gap-4 lg:grid-cols-2">
         {/* Revenue */}

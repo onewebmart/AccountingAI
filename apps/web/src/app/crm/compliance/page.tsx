@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { FadeIn } from '@/components/motion/primitives';
 
 interface DeadlineClient {
   itemId: string;
@@ -244,34 +245,36 @@ export default function CompliancePage() {
 
   return (
     <div>
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="font-heading text-2xl font-bold text-ink-900">Compliance</h1>
-          <p className="mt-1 text-sm text-ink-500">
-            GST, TDS, ITR and ROC deadlines, generated from each client&apos;s services.
-            Clients are reminded 7, 3 and 1 days before.
-          </p>
+      <FadeIn>
+        <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h1 className="font-heading text-2xl font-bold text-ink-900">Compliance</h1>
+            <p className="mt-1 text-sm text-ink-500">
+              GST, TDS, ITR and ROC deadlines, generated from each client&apos;s services.
+              Clients are reminded 7, 3 and 1 days before.
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant="secondary"
+              className="gap-2"
+              onClick={() => generate.mutate()}
+              disabled={generate.isPending}
+            >
+              <RefreshCw size={16} />
+              {generate.isPending ? 'Refreshing…' : 'Refresh calendar'}
+            </Button>
+            <Button
+              className="gap-2"
+              onClick={() => runReminders.mutate()}
+              disabled={runReminders.isPending}
+            >
+              <Send size={16} />
+              {runReminders.isPending ? 'Queueing…' : 'Send due reminders'}
+            </Button>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <Button
-            variant="secondary"
-            className="gap-2"
-            onClick={() => generate.mutate()}
-            disabled={generate.isPending}
-          >
-            <RefreshCw size={16} />
-            {generate.isPending ? 'Refreshing…' : 'Refresh calendar'}
-          </Button>
-          <Button
-            className="gap-2"
-            onClick={() => runReminders.mutate()}
-            disabled={runReminders.isPending}
-          >
-            <Send size={16} />
-            {runReminders.isPending ? 'Queueing…' : 'Send due reminders'}
-          </Button>
-        </div>
-      </div>
+      </FadeIn>
 
       {runReminders.isSuccess ? (
         <p className="mb-4 rounded-lg bg-[#E6F4EA] px-3 py-2 text-sm text-[#1E7B34]">
