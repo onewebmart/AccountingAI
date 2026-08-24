@@ -58,7 +58,7 @@ const SECTIONS: NavSection[] = [
     title: 'Management',
     items: [
       { href: '/crm/clients', label: 'Clients', icon: <Users size={18} />, ready: true },
-      { href: '/crm/tasks', label: 'Tasks', icon: <CheckSquare size={18} /> },
+      { href: '/crm/tasks', label: 'Tasks', icon: <CheckSquare size={18} />, ready: true },
       { href: '/crm/reports', label: 'Reports', icon: <BarChart3 size={18} />, ready: true },
     ],
   },

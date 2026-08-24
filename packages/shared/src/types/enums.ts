@@ -355,3 +355,19 @@ export enum EscalationReason {
   /** A human took the thread over deliberately. */
   MANUAL = 'MANUAL',
 }
+
+// ── Tasks ─────────────────────────────────────────────────────────────────────
+
+export enum TaskStatus {
+  TODO = 'TODO',
+  IN_PROGRESS = 'IN_PROGRESS',
+  BLOCKED = 'BLOCKED',
+  DONE = 'DONE',
+}
+
+export enum TaskPriority {
+  LOW = 'LOW',
+  NORMAL = 'NORMAL',
+  HIGH = 'HIGH',
+  URGENT = 'URGENT',
+}

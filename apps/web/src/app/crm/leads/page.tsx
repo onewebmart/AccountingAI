@@ -17,6 +17,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { FadeIn } from '@/components/motion/primitives';
+import { EmptyState } from '@/components/crm/empty-state';
 import {
   Dialog,
   DialogContent,
@@ -531,13 +532,12 @@ export default function LeadsPage() {
           ))}
         </div>
       ) : activeCount === 0 ? (
-        <div className="rounded-xl border border-line-200 bg-surface-card px-6 py-14 text-center">
-          <TrendingUp size={28} className="mx-auto text-ink-400" />
-          <p className="mt-3 font-heading text-lg font-semibold text-ink-900">No active leads</p>
-          <p className="mx-auto mt-1 max-w-sm text-sm text-ink-500">
-            Add an enquiry and the AI will score it for you.
-          </p>
-        </div>
+        <EmptyState
+          icon={<TrendingUp size={26} />}
+          title="No active leads"
+          body="Paste in an enquiry and the AI reads it, scores the fit and lists what you still need to ask — before you spend an hour on it."
+          action={{ label: 'Add lead', onClick: () => setDialogOpen(true), icon: <Plus size={16} /> }}
+        />
       ) : (
         <div className="grid gap-4 md:grid-cols-3">
           {BOARD_STAGES.map((stage) => {

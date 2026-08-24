@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { FadeIn } from '@/components/motion/primitives';
+import { EmptyState } from '@/components/crm/empty-state';
 import {
   Dialog,
   DialogContent,
@@ -427,17 +428,20 @@ export default function InvoicesPage() {
           ))}
         </div>
       ) : outstanding.length === 0 ? (
-        <div className="rounded-xl border border-line-200 bg-surface-card px-6 py-14 text-center">
-          <IndianRupee size={28} className="mx-auto text-ink-400" />
-          <p className="mt-3 font-heading text-lg font-semibold text-ink-900">
-            {invoices?.length ? 'Everything is settled' : 'No invoices yet'}
-          </p>
-          <p className="mx-auto mt-1 max-w-sm text-sm text-ink-500">
-            {invoices?.length
-              ? 'Nothing outstanding right now.'
-              : 'Raise your first fee invoice — the number is allocated automatically.'}
-          </p>
-        </div>
+        <EmptyState
+          icon={<IndianRupee size={26} />}
+          title={invoices?.length ? 'Everything is settled' : 'No invoices yet'}
+          body={
+            invoices?.length
+              ? 'Nothing outstanding right now. New invoices appear here the moment you issue them.'
+              : 'Raise a fee invoice and the number is allocated for you — gapless, per financial year. Reminders then climb on their own.'
+          }
+          action={
+            invoices?.length
+              ? undefined
+              : { label: 'Raise invoice', onClick: () => setDialogOpen(true), icon: <Plus size={16} /> }
+          }
+        />
       ) : (
         <div className="overflow-hidden rounded-xl border border-line-200 bg-surface-card">
           <Table>

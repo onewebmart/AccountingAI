@@ -17,6 +17,7 @@ import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { FadeIn } from '@/components/motion/primitives';
+import { EmptyState } from '@/components/crm/empty-state';
 import {
   Dialog,
   DialogContent,
@@ -412,17 +413,20 @@ export default function DocumentsPage() {
           ))}
         </div>
       ) : filtered.length === 0 ? (
-        <div className="rounded-xl border border-line-200 bg-surface-card px-6 py-14 text-center">
-          <FileText size={28} className="mx-auto text-ink-400" />
-          <p className="mt-3 font-heading text-lg font-semibold text-ink-900">
-            {requests?.length ? 'Nothing matches that filter' : 'No document requests yet'}
-          </p>
-          <p className="mx-auto mt-1 max-w-sm text-sm text-ink-500">
-            {requests?.length
-              ? 'Try another filter.'
-              : 'Request documents from a client and their uploads will tick the checklist off automatically.'}
-          </p>
-        </div>
+        <EmptyState
+          icon={<FileText size={26} />}
+          title={requests?.length ? 'Nothing matches that filter' : 'No document requests yet'}
+          body={
+            requests?.length
+              ? 'Try another filter — "All clients" shows every open request.'
+              : 'Pick a client and a service, and the checklist builds itself. When they upload, the file is matched to the item it satisfies.'
+          }
+          action={
+            requests?.length
+              ? undefined
+              : { label: 'Request documents', onClick: () => setDialogOpen(true), icon: <Plus size={16} /> }
+          }
+        />
       ) : (
         <ul className="space-y-3">
           {filtered.map((r) => (

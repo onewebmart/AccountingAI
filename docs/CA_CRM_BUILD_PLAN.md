@@ -180,7 +180,7 @@ Built after its inputs exist.
 - Full settings: messaging config, template editor, reminder schedules, team/RBAC management.
 - Design-system audit pass across all 10 views; empty/loading/error states; accessibility.
 
-**Done when:** no view renders prototype placeholder content.
+**Done when:** no view renders prototype placeholder content. — **Shipped.** All ten views from the prototype are built and reading live data; no nav item is marked "Soon". Tasks moves optimistically with rollback, empty states name the action that fills them, and every motion primitive honours prefers-reduced-motion.
 
 ---
 

@@ -11,6 +11,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { FadeIn } from '@/components/motion/primitives';
+import { EmptyState } from '@/components/crm/empty-state';
+import { ListStagger } from '@/components/crm/list-stagger';
 import { AddClientDialog } from './add-client-dialog';
 import {
   Table,
@@ -142,23 +144,20 @@ export default function ClientsPage() {
           </p>
         </div>
       ) : filtered.length === 0 ? (
-        <div className="rounded-xl border border-line-200 bg-surface-card px-6 py-16 text-center">
-          <Users size={32} className="mx-auto text-ink-400" />
-          <p className="mt-3 font-heading text-lg font-semibold text-ink-900">
-            {clients?.length ? 'No clients match those filters' : 'No clients yet'}
-          </p>
-          <p className="mx-auto mt-1 max-w-sm text-sm text-ink-500">
-            {clients?.length
-              ? 'Try a different search term or service filter.'
-              : 'Add your first client to start tracking their deadlines, documents and fees.'}
-          </p>
-          {!clients?.length && (
-            <Button onClick={() => setDialogOpen(true)} className="mt-5 gap-2">
-              <Plus size={16} />
-              Add client
-            </Button>
-          )}
-        </div>
+        <EmptyState
+          icon={<Users size={26} />}
+          title={clients?.length ? 'No clients match those filters' : 'No clients yet'}
+          body={
+            clients?.length
+              ? 'Try a different search term, or clear the service filter to see everyone.'
+              : 'Add a client with the services you handle for them, and their statutory deadlines appear automatically.'
+          }
+          action={
+            clients?.length
+              ? undefined
+              : { label: 'Add client', onClick: () => setDialogOpen(true), icon: <Plus size={16} /> }
+          }
+        />
       ) : (
         <div className="overflow-hidden rounded-xl border border-line-200 bg-surface-card">
           <Table>
