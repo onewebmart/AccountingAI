@@ -12,7 +12,12 @@ module.exports = {
   moduleNameMapper: {
     '^@ai-accounting/shared(.*)$': '<rootDir>/../../../packages/shared/src$1',
   },
-  // Limit parallel workers to 1 for integration tests that share an RS
+  // One in-memory replica set for the whole run, shared by every DB-backed
+  // spec. Starting one per spec raced for ports on Windows and made the suite
+  // fail a different suite most runs.
+  globalSetup: '<rootDir>/../test/global-setup.js',
+  globalTeardown: '<rootDir>/../test/global-teardown.js',
+  // Specs share one mongod, so they must not run concurrently against it.
   maxWorkers: 1,
   // Force exit after tests complete — mongodb-memory-server cleanup is async
   forceExit: true,

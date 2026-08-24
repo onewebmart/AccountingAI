@@ -13,7 +13,7 @@
  */
 import 'reflect-metadata';
 import mongoose from 'mongoose';
-import { MongoMemoryReplSet } from 'mongodb-memory-server';
+import { testMongoUri } from './test-utils/mongo';
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
@@ -27,7 +27,6 @@ import { TenancyModule } from './tenancy/tenancy.module';
 import { JournalsModule } from './journals/journals.module';
 import { UserRole } from '@ai-accounting/shared';
 
-let replSet: MongoMemoryReplSet;
 let app: INestApplication;
 let jwtService: JwtService;
 
@@ -48,8 +47,7 @@ function makeAccessToken(role: UserRole, orgId = 'test-org-id'): string {
 }
 
 beforeAll(async () => {
-  replSet = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
-  const uri = replSet.getUri();
+  const uri = testMongoUri();
 
   const moduleFixture: TestingModule = await Test.createTestingModule({
     imports: [
@@ -83,7 +81,6 @@ beforeAll(async () => {
 afterAll(async () => {
   await app.close();
   await mongoose.disconnect();
-  await replSet.stop();
 });
 
 describe('RBAC — POST /journals (requires journal:post permission)', () => {

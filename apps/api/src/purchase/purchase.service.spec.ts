@@ -13,7 +13,7 @@
  */
 import 'reflect-metadata';
 import mongoose, { Types, Model } from 'mongoose';
-import { MongoMemoryReplSet } from 'mongodb-memory-server';
+import { testMongoUri } from '../test-utils/mongo';
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigModule } from '@nestjs/config';
 import { MongooseModule, getModelToken } from '@nestjs/mongoose';
@@ -31,7 +31,6 @@ import { BillStatus } from '@ai-accounting/shared';
 const ORG_ID = new Types.ObjectId().toString();
 const ACTOR_ID = new Types.ObjectId().toString();
 
-let replSet: MongoMemoryReplSet;
 let moduleRef: TestingModule;
 let vendorsSvc: VendorsService;
 let billsSvc: PurchaseBillsService;
@@ -40,12 +39,11 @@ let vendorModel: Model<VendorDocument>;
 let journalModel: Model<JournalDocument>;
 
 beforeAll(async () => {
-  replSet = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
 
   moduleRef = await Test.createTestingModule({
     imports: [
       ConfigModule.forRoot({ isGlobal: true, load: [configuration] }),
-      MongooseModule.forRoot(replSet.getUri()),
+      MongooseModule.forRoot(testMongoUri()),
       MongooseModule.forFeature([
         { name: Vendor.name, schema: VendorSchema },
         { name: PurchaseBill.name, schema: PurchaseBillSchema },
@@ -67,7 +65,6 @@ beforeAll(async () => {
 afterAll(async () => {
   await moduleRef.close();
   await mongoose.disconnect();
-  await replSet.stop();
 });
 
 // ── Helpers ───────────────────────────────────────────────────────────────

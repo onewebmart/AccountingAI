@@ -15,7 +15,7 @@
  */
 import 'reflect-metadata';
 import mongoose, { Model, Types } from 'mongoose';
-import { MongoMemoryReplSet } from 'mongodb-memory-server';
+import { testMongoUri } from '../../test-utils/mongo';
 import { Test, TestingModule } from '@nestjs/testing';
 import { MongooseModule, getModelToken } from '@nestjs/mongoose';
 import { getQueueToken } from '@nestjs/bullmq';
@@ -47,7 +47,6 @@ import { matchDocumentToItem, templateForService } from './checklist-templates';
 const FIRM_ID = new Types.ObjectId();
 const ACTOR = new Types.ObjectId().toString();
 
-let replSet: MongoMemoryReplSet;
 let moduleRef: TestingModule;
 let service: DocumentRequestService;
 let requestModel: Model<DocumentRequestDocument>;
@@ -80,11 +79,10 @@ async function seedRequest(service_: FirmService = FirmService.ITR, client?: Org
 }
 
 beforeAll(async () => {
-  replSet = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
 
   moduleRef = await Test.createTestingModule({
     imports: [
-      MongooseModule.forRoot(replSet.getUri()),
+      MongooseModule.forRoot(testMongoUri()),
       MongooseModule.forFeature([
         { name: CrmMessage.name, schema: CrmMessageSchema },
         { name: DocumentRequest.name, schema: DocumentRequestSchema },
@@ -119,7 +117,6 @@ beforeEach(async () => {
 afterAll(async () => {
   await moduleRef.close();
   await mongoose.disconnect();
-  await replSet.stop();
 });
 
 describe('matchDocumentToItem', () => {

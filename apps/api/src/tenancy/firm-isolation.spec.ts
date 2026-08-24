@@ -14,7 +14,7 @@
  */
 import 'reflect-metadata';
 import mongoose, { Schema, Model } from 'mongoose';
-import { MongoMemoryReplSet } from 'mongodb-memory-server';
+import { testMongoUri } from '../test-utils/mongo';
 import {
   firmIsolationPlugin,
   tenantIsolationPlugin,
@@ -24,17 +24,14 @@ import {
 } from '../database/tenant.plugin';
 
 // ─── Shared RS instance ───────────────────────────────────────────────────────
-let replSet: MongoMemoryReplSet;
 
 beforeAll(async () => {
-  replSet = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
-  await mongoose.connect(replSet.getUri());
+  await mongoose.connect(testMongoUri());
 }, 60_000);
 
 afterAll(async () => {
   await mongoose.connection.dropDatabase();
   await mongoose.disconnect();
-  await replSet.stop();
 });
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────

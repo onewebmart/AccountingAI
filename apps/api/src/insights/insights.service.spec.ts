@@ -19,7 +19,7 @@
  */
 import 'reflect-metadata';
 import mongoose, { Types, Model } from 'mongoose';
-import { MongoMemoryReplSet } from 'mongodb-memory-server';
+import { testMongoUri } from '../test-utils/mongo';
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigModule } from '@nestjs/config';
 import { MongooseModule, getModelToken } from '@nestjs/mongoose';
@@ -45,7 +45,6 @@ const TODAY = '2025-03-25';
 const CURR_PERIOD = '2025-03';
 const PREV_PERIOD = '2025-02';
 
-let replSet: MongoMemoryReplSet;
 let moduleRef: TestingModule;
 let svc: InsightsService;
 let postingSvc: PostingService;
@@ -99,12 +98,11 @@ async function createOverdueBill(orgId: string, dueDate: string, totalPaise: num
 // ── Setup ─────────────────────────────────────────────────────────────────────
 
 beforeAll(async () => {
-  replSet = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
 
   moduleRef = await Test.createTestingModule({
     imports: [
       ConfigModule.forRoot({ isGlobal: true, load: [configuration] }),
-      MongooseModule.forRoot(replSet.getUri()),
+      MongooseModule.forRoot(testMongoUri()),
       MongooseModule.forFeature([
         { name: LedgerAccount.name, schema: LedgerAccountSchema },
         { name: Journal.name, schema: JournalSchema },
@@ -124,7 +122,6 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await moduleRef.close();
-  await replSet.stop();
 });
 
 afterEach(async () => {

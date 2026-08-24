@@ -11,7 +11,7 @@
  */
 import 'reflect-metadata';
 import mongoose, { Model, Types } from 'mongoose';
-import { MongoMemoryReplSet } from 'mongodb-memory-server';
+import { testMongoUri } from '../../test-utils/mongo';
 import { Test, TestingModule } from '@nestjs/testing';
 import { MongooseModule, getModelToken } from '@nestjs/mongoose';
 import { getQueueToken } from '@nestjs/bullmq';
@@ -50,7 +50,6 @@ const FIRM_ID = new Types.ObjectId();
 const ACTOR = new Types.ObjectId().toString();
 const CLIENT_WA = '9876543210';
 
-let replSet: MongoMemoryReplSet;
 let moduleRef: TestingModule;
 let conversations: ConversationsService;
 let processor: AgentProcessor;
@@ -94,11 +93,10 @@ async function runReplyJob(conversationId: string, messageId: string) {
 }
 
 beforeAll(async () => {
-  replSet = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
 
   moduleRef = await Test.createTestingModule({
     imports: [
-      MongooseModule.forRoot(replSet.getUri()),
+      MongooseModule.forRoot(testMongoUri()),
       MongooseModule.forFeature([
         { name: CrmMessage.name, schema: CrmMessageSchema },
         { name: Conversation.name, schema: ConversationSchema },
@@ -155,7 +153,6 @@ beforeEach(async () => {
 afterAll(async () => {
   await moduleRef.close();
   await mongoose.disconnect();
-  await replSet.stop();
 });
 
 describe('inbound threading', () => {

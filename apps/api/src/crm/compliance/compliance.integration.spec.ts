@@ -15,7 +15,7 @@
  */
 import 'reflect-metadata';
 import mongoose, { Model, Types } from 'mongoose';
-import { MongoMemoryReplSet } from 'mongodb-memory-server';
+import { testMongoUri } from '../../test-utils/mongo';
 import { Test, TestingModule } from '@nestjs/testing';
 import { MongooseModule, getModelToken } from '@nestjs/mongoose';
 import { getQueueToken } from '@nestjs/bullmq';
@@ -49,7 +49,6 @@ const ACTOR = new Types.ObjectId().toString();
 // Fixed clock so due-date arithmetic is deterministic.
 const TODAY = '2026-08-01';
 
-let replSet: MongoMemoryReplSet;
 let moduleRef: TestingModule;
 let compliance: ComplianceService;
 let itemModel: Model<ComplianceItemDocument>;
@@ -71,11 +70,10 @@ async function seedClient(over: Partial<Record<string, unknown>> = {}) {
 }
 
 beforeAll(async () => {
-  replSet = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
 
   moduleRef = await Test.createTestingModule({
     imports: [
-      MongooseModule.forRoot(replSet.getUri()),
+      MongooseModule.forRoot(testMongoUri()),
       MongooseModule.forFeature([
         { name: CrmMessage.name, schema: CrmMessageSchema },
         { name: ComplianceItem.name, schema: ComplianceItemSchema },
@@ -114,7 +112,6 @@ beforeEach(async () => {
 afterAll(async () => {
   await moduleRef.close();
   await mongoose.disconnect();
-  await replSet.stop();
 });
 
 describe('generateForFirm', () => {

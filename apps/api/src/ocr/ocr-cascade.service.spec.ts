@@ -13,7 +13,7 @@
  */
 import 'reflect-metadata';
 import mongoose, { Types } from 'mongoose';
-import { MongoMemoryReplSet } from 'mongodb-memory-server';
+import { testMongoUri } from '../test-utils/mongo';
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigModule } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
@@ -32,7 +32,6 @@ import { OCR_PROVIDER, OcrProvider } from './providers/ocr.provider.interface';
 const ORG_ID = new Types.ObjectId().toString();
 const DOC_ID = new Types.ObjectId().toString();
 
-let replSet: MongoMemoryReplSet;
 let moduleRef: TestingModule;
 let ocrCascade: OcrCascadeService;
 let usageMeter: UsageMeterService;
@@ -55,8 +54,7 @@ const fakePdfExtractor = {
 };
 
 beforeAll(async () => {
-  replSet = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
-  const uri = replSet.getUri();
+  const uri = testMongoUri();
 
   moduleRef = await Test.createTestingModule({
     imports: [
@@ -90,7 +88,6 @@ beforeEach(() => {
 afterAll(async () => {
   await moduleRef.close();
   await mongoose.disconnect();
-  await replSet.stop();
 });
 
 // ── Tests ─────────────────────────────────────────────────────────────────

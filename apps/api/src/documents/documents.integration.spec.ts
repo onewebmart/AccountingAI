@@ -14,7 +14,7 @@
 import 'reflect-metadata';
 import mongoose, { Types } from 'mongoose';
 import { createHash } from 'crypto';
-import { MongoMemoryReplSet } from 'mongodb-memory-server';
+import { testMongoUri } from '../test-utils/mongo';
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
@@ -51,7 +51,6 @@ class FakeStorageService {
 // ── Fake Queue (no Redis needed) ─────────────────────────────────────────
 const fakeQueue = { add: jest.fn().mockResolvedValue({ id: 'fake-job-id' }) };
 
-let replSet: MongoMemoryReplSet;
 let app: INestApplication;
 let jwtService: JwtService;
 let documentModel: Model<DocumentDocument>;
@@ -71,8 +70,7 @@ function makeToken(role: UserRole, orgId: string) {
 }
 
 beforeAll(async () => {
-  replSet = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
-  const uri = replSet.getUri();
+  const uri = testMongoUri();
 
   // Build a minimal module without the @Processor (which requires real Redis).
   // DocumentsModule is NOT imported — instead we register exactly what the tests need.
@@ -120,7 +118,6 @@ beforeAll(async () => {
 afterAll(async () => {
   await app.close();
   await mongoose.disconnect();
-  await replSet.stop();
 });
 
 // ── Tests ─────────────────────────────────────────────────────────────────

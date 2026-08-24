@@ -25,7 +25,7 @@
  */
 import 'reflect-metadata';
 import mongoose, { Types, Model } from 'mongoose';
-import { MongoMemoryReplSet } from 'mongodb-memory-server';
+import { testMongoUri } from '../test-utils/mongo';
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigModule } from '@nestjs/config';
 import { MongooseModule, getModelToken } from '@nestjs/mongoose';
@@ -43,7 +43,6 @@ import { BillStatus, ProposedEntryStatus, UserRole, VoucherType } from '@ai-acco
 const ACTOR_ID = new Types.ObjectId().toString();
 const TODAY = '2025-03-25';
 
-let replSet: MongoMemoryReplSet;
 let moduleRef: TestingModule;
 let svc: WhiteLabelService;
 let firmModel: Model<FirmDocument>;
@@ -55,12 +54,11 @@ let auditLogModel: Model<AuditLogDocument>;
 // ── Setup ─────────────────────────────────────────────────────────────────────
 
 beforeAll(async () => {
-  replSet = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
 
   moduleRef = await Test.createTestingModule({
     imports: [
       ConfigModule.forRoot({ isGlobal: true, load: [configuration] }),
-      MongooseModule.forRoot(replSet.getUri()),
+      MongooseModule.forRoot(testMongoUri()),
       MongooseModule.forFeature([
         { name: Firm.name, schema: FirmSchema },
         { name: Organization.name, schema: OrganizationSchema },
@@ -82,7 +80,6 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await moduleRef.close();
-  await replSet.stop();
 });
 
 afterEach(async () => {

@@ -14,7 +14,7 @@
  */
 import 'reflect-metadata';
 import mongoose, { Model, Types } from 'mongoose';
-import { MongoMemoryReplSet } from 'mongodb-memory-server';
+import { testMongoUri } from '../../test-utils/mongo';
 import { Test, TestingModule } from '@nestjs/testing';
 import { MongooseModule, getModelToken } from '@nestjs/mongoose';
 import { getQueueToken } from '@nestjs/bullmq';
@@ -34,7 +34,6 @@ import { MESSAGING_PROVIDER } from './messaging.provider.interface';
 const FIRM_A = new Types.ObjectId().toString();
 const FIRM_B = new Types.ObjectId().toString();
 
-let replSet: MongoMemoryReplSet;
 let moduleRef: TestingModule;
 let service: MessagingService;
 let processor: MessagingProcessor;
@@ -57,11 +56,10 @@ function jobFor(messageId: string, firmId: string): Job<SendMessageJob> {
 }
 
 beforeAll(async () => {
-  replSet = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
 
   moduleRef = await Test.createTestingModule({
     imports: [
-      MongooseModule.forRoot(replSet.getUri()),
+      MongooseModule.forRoot(testMongoUri()),
       MongooseModule.forFeature([
         { name: CrmMessage.name, schema: CrmMessageSchema },
         { name: AuditLog.name, schema: AuditLogSchema },
@@ -89,7 +87,6 @@ beforeEach(() => {
 afterAll(async () => {
   await moduleRef.close();
   await mongoose.disconnect();
-  await replSet.stop();
 });
 
 describe('enqueue', () => {

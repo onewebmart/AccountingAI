@@ -13,7 +13,7 @@
  */
 import 'reflect-metadata';
 import mongoose, { Types } from 'mongoose';
-import { MongoMemoryReplSet } from 'mongodb-memory-server';
+import { testMongoUri } from '../test-utils/mongo';
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigModule } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
@@ -66,7 +66,6 @@ const fakeGroq = {
   extract: jest.fn(),
 };
 
-let replSet: MongoMemoryReplSet;
 let moduleRef: TestingModule;
 let svc: ExtractionService;
 let usageMeter: UsageMeterService;
@@ -74,12 +73,11 @@ let extractedModel: Model<ExtractedDocumentDocument>;
 let usageMeterModel: Model<UsageMeterDocument>;
 
 beforeAll(async () => {
-  replSet = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
 
   moduleRef = await Test.createTestingModule({
     imports: [
       ConfigModule.forRoot({ isGlobal: true, load: [configuration] }),
-      MongooseModule.forRoot(replSet.getUri()),
+      MongooseModule.forRoot(testMongoUri()),
       MongooseModule.forFeature([
         { name: ExtractedDocument.name, schema: ExtractedDocumentSchema },
         { name: UsageMeter.name, schema: UsageMeterSchema },
@@ -104,7 +102,6 @@ beforeEach(() => jest.clearAllMocks());
 afterAll(async () => {
   await moduleRef.close();
   await mongoose.disconnect();
-  await replSet.stop();
 });
 
 // ── Tests ─────────────────────────────────────────────────────────────────

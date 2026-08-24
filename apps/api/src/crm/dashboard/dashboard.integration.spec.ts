@@ -9,7 +9,7 @@
  */
 import 'reflect-metadata';
 import mongoose, { Model, Types } from 'mongoose';
-import { MongoMemoryReplSet } from 'mongodb-memory-server';
+import { testMongoUri } from '../../test-utils/mongo';
 import { Test, TestingModule } from '@nestjs/testing';
 import { MongooseModule, getModelToken } from '@nestjs/mongoose';
 import {
@@ -41,7 +41,6 @@ const FIRM_ID = new Types.ObjectId();
 const OTHER_FIRM = new Types.ObjectId();
 const TODAY = '2026-08-20';
 
-let replSet: MongoMemoryReplSet;
 let moduleRef: TestingModule;
 let dashboard: DashboardService;
 let reports: CrmReportsService;
@@ -56,11 +55,10 @@ let messageModel: Model<CrmMessageDocument>;
 const summary = () => withFirm(FIRM_ID.toString(), () => dashboard.summary(FIRM_ID.toString(), TODAY));
 
 beforeAll(async () => {
-  replSet = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
 
   moduleRef = await Test.createTestingModule({
     imports: [
-      MongooseModule.forRoot(replSet.getUri()),
+      MongooseModule.forRoot(testMongoUri()),
       MongooseModule.forFeature([
         { name: Organization.name, schema: OrganizationSchema },
         { name: ComplianceItem.name, schema: ComplianceItemSchema },
@@ -100,7 +98,6 @@ beforeEach(async () => {
 afterAll(async () => {
   await moduleRef.close();
   await mongoose.disconnect();
-  await replSet.stop();
 });
 
 async function seedClient(name = 'Mehta Textiles') {

@@ -8,7 +8,7 @@
  */
 import 'reflect-metadata';
 import mongoose, { Model } from 'mongoose';
-import { MongoMemoryReplSet } from 'mongodb-memory-server';
+import { testMongoUri } from '../test-utils/mongo';
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
@@ -21,12 +21,10 @@ import { AuthModule } from './auth.module';
 import { TenancyModule } from '../tenancy/tenancy.module';
 import { Organization, OrganizationDocument } from '../tenancy/schemas/organization.schema';
 
-let replSet: MongoMemoryReplSet;
 let app: INestApplication;
 
 beforeAll(async () => {
-  replSet = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
-  const uri = replSet.getUri();
+  const uri = testMongoUri();
 
   const moduleFixture: TestingModule = await Test.createTestingModule({
     imports: [
@@ -49,7 +47,6 @@ beforeAll(async () => {
 afterAll(async () => {
   await app.close();
   await mongoose.disconnect();
-  await replSet.stop();
 });
 
 describe('POST /auth/signup', () => {

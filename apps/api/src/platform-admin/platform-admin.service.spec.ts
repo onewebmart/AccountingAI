@@ -21,7 +21,7 @@
  */
 import 'reflect-metadata';
 import { Types, Model } from 'mongoose';
-import { MongoMemoryReplSet } from 'mongodb-memory-server';
+import { testMongoUri } from '../test-utils/mongo';
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigModule } from '@nestjs/config';
 import { MongooseModule, getModelToken } from '@nestjs/mongoose';
@@ -41,7 +41,6 @@ const ORG_B = new Types.ObjectId().toString();
 const PLATFORM_ADMIN_ID = new Types.ObjectId().toString();
 const PERIOD = '2025-03';
 
-let replSet: MongoMemoryReplSet;
 let moduleRef: TestingModule;
 let svc: PlatformAdminService;
 let usageMeterModel: Model<UsageMeterDocument>;
@@ -53,12 +52,11 @@ let orgModel: Model<OrganizationDocument>;
 // ── Setup ─────────────────────────────────────────────────────────────────────
 
 beforeAll(async () => {
-  replSet = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
 
   moduleRef = await Test.createTestingModule({
     imports: [
       ConfigModule.forRoot({ isGlobal: true, load: [configuration] }),
-      MongooseModule.forRoot(replSet.getUri()),
+      MongooseModule.forRoot(testMongoUri()),
       MongooseModule.forFeature([
         { name: Organization.name, schema: OrganizationSchema },
         { name: UsageMeter.name, schema: UsageMeterSchema },
@@ -80,7 +78,6 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await moduleRef.close();
-  await replSet.stop();
 });
 
 afterEach(async () => {

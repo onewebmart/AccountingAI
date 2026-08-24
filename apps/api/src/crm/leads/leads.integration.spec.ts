@@ -9,7 +9,7 @@
  */
 import 'reflect-metadata';
 import mongoose, { Model, Types } from 'mongoose';
-import { MongoMemoryReplSet } from 'mongodb-memory-server';
+import { testMongoUri } from '../../test-utils/mongo';
 import { Test, TestingModule } from '@nestjs/testing';
 import { MongooseModule, getModelToken } from '@nestjs/mongoose';
 import { getQueueToken } from '@nestjs/bullmq';
@@ -36,7 +36,6 @@ const FIRM_ID = new Types.ObjectId();
 const OTHER_FIRM = new Types.ObjectId();
 const ACTOR = new Types.ObjectId().toString();
 
-let replSet: MongoMemoryReplSet;
 let moduleRef: TestingModule;
 let leads: LeadsService;
 let processor: LeadsProcessor;
@@ -77,11 +76,10 @@ async function seedLead(over: Partial<Record<string, unknown>> = {}) {
 }
 
 beforeAll(async () => {
-  replSet = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
 
   moduleRef = await Test.createTestingModule({
     imports: [
-      MongooseModule.forRoot(replSet.getUri()),
+      MongooseModule.forRoot(testMongoUri()),
       MongooseModule.forFeature([
         { name: CrmMessage.name, schema: CrmMessageSchema },
         { name: Lead.name, schema: LeadSchema },
@@ -121,7 +119,6 @@ beforeEach(async () => {
 afterAll(async () => {
   await moduleRef.close();
   await mongoose.disconnect();
-  await replSet.stop();
 });
 
 describe('create', () => {

@@ -19,7 +19,7 @@
  */
 import 'reflect-metadata';
 import { Types, Model } from 'mongoose';
-import { MongoMemoryReplSet } from 'mongodb-memory-server';
+import { testMongoUri } from '../test-utils/mongo';
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigModule } from '@nestjs/config';
 import { MongooseModule, getModelToken } from '@nestjs/mongoose';
@@ -39,7 +39,6 @@ const ORG_ID = new Types.ObjectId().toString();
 const ACTOR_ID = new Types.ObjectId().toString();
 const FY = '2025-26';
 
-let replSet: MongoMemoryReplSet;
 let moduleRef: TestingModule;
 let tallySvc: TallyService;
 let exportsSvc: ExportsService;
@@ -70,12 +69,11 @@ async function postJournal(
 }
 
 beforeAll(async () => {
-  replSet = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
 
   moduleRef = await Test.createTestingModule({
     imports: [
       ConfigModule.forRoot({ isGlobal: true, load: [configuration] }),
-      MongooseModule.forRoot(replSet.getUri()),
+      MongooseModule.forRoot(testMongoUri()),
       MongooseModule.forFeature([
         { name: LedgerAccount.name, schema: LedgerAccountSchema },
         { name: TallySyncRecord.name, schema: TallySyncRecordSchema },
@@ -96,7 +94,6 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await moduleRef.close();
-  await replSet.stop();
 });
 
 afterEach(async () => {

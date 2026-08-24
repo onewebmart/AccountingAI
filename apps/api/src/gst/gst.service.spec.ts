@@ -16,7 +16,7 @@
  */
 import 'reflect-metadata';
 import mongoose, { Types, Model } from 'mongoose';
-import { MongoMemoryReplSet } from 'mongodb-memory-server';
+import { testMongoUri } from '../test-utils/mongo';
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigModule } from '@nestjs/config';
 import { MongooseModule, getModelToken } from '@nestjs/mongoose';
@@ -36,7 +36,6 @@ const ORG_ID = new Types.ObjectId().toString();
 /** Maharashtra state code. Suppliers with GSTIN starting with '27' are intra-state. */
 const BUYER_STATE = '27';
 
-let replSet: MongoMemoryReplSet;
 let moduleRef: TestingModule;
 let svc: GstService;
 let vendorModel: Model<VendorDocument>;
@@ -111,12 +110,11 @@ async function createPostedInvoice(
 // ─────────────────────────────────────────────────────────────────────────────
 
 beforeAll(async () => {
-  replSet = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
 
   moduleRef = await Test.createTestingModule({
     imports: [
       ConfigModule.forRoot({ isGlobal: true, load: [configuration] }),
-      MongooseModule.forRoot(replSet.getUri()),
+      MongooseModule.forRoot(testMongoUri()),
       MongooseModule.forFeature([
         { name: Gstr2bLine.name, schema: Gstr2bLineSchema },
         { name: PurchaseBill.name, schema: PurchaseBillSchema },
@@ -142,7 +140,6 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await moduleRef.close();
-  await replSet.stop();
 });
 
 afterEach(async () => {

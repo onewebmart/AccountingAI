@@ -12,7 +12,7 @@
  */
 import 'reflect-metadata';
 import mongoose, { Types } from 'mongoose';
-import { MongoMemoryReplSet } from 'mongodb-memory-server';
+import { testMongoUri } from '../test-utils/mongo';
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigModule } from '@nestjs/config';
 import { MongooseModule, getModelToken } from '@nestjs/mongoose';
@@ -31,18 +31,16 @@ const redisMock = {
   set: jest.fn().mockResolvedValue('OK'),
 };
 
-let replSet: MongoMemoryReplSet;
 let moduleRef: TestingModule;
 let svc: LearningService;
 let mapModel: Model<VendorLedgerMapDocument>;
 
 beforeAll(async () => {
-  replSet = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
 
   moduleRef = await Test.createTestingModule({
     imports: [
       ConfigModule.forRoot({ isGlobal: true, load: [configuration] }),
-      MongooseModule.forRoot(replSet.getUri()),
+      MongooseModule.forRoot(testMongoUri()),
       MongooseModule.forFeature([
         { name: VendorLedgerMap.name, schema: VendorLedgerMapSchema },
       ]),
@@ -60,7 +58,6 @@ beforeAll(async () => {
 afterAll(async () => {
   await moduleRef.close();
   await mongoose.disconnect();
-  await replSet.stop();
 });
 
 beforeEach(() => {

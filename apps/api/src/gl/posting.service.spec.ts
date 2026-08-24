@@ -11,7 +11,7 @@
  */
 import 'reflect-metadata';
 import mongoose, { Types } from 'mongoose';
-import { MongoMemoryReplSet } from 'mongodb-memory-server';
+import { testMongoUri } from '../test-utils/mongo';
 import { Test, TestingModule } from '@nestjs/testing';
 import { MongooseModule } from '@nestjs/mongoose';
 import { ConfigModule } from '@nestjs/config';
@@ -24,7 +24,6 @@ import { getModelToken } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { JournalDocument } from './schemas/journal.schema';
 
-let replSet: MongoMemoryReplSet;
 let moduleRef: TestingModule;
 let postingService: PostingService;
 let journalModel: Model<JournalDocument>;
@@ -51,8 +50,7 @@ function balancedInput(debitAccountId = ACCOUNT_CASH, creditAccountId = ACCOUNT_
 }
 
 beforeAll(async () => {
-  replSet = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
-  const uri = replSet.getUri();
+  const uri = testMongoUri();
 
   moduleRef = await Test.createTestingModule({
     imports: [
@@ -69,7 +67,6 @@ beforeAll(async () => {
 afterAll(async () => {
   await moduleRef.close();
   await mongoose.disconnect();
-  await replSet.stop();
 });
 
 // ── Test 1 ────────────────────────────────────────────────────────────────
