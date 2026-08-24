@@ -42,7 +42,7 @@ interface NavSection {
 const SECTIONS: NavSection[] = [
   {
     title: 'Overview',
-    items: [{ href: '/crm', label: 'Dashboard', icon: <LayoutDashboard size={18} /> }],
+    items: [{ href: '/crm', label: 'Dashboard', icon: <LayoutDashboard size={18} />, ready: true }],
   },
   {
     title: 'AI modules',
@@ -59,7 +59,7 @@ const SECTIONS: NavSection[] = [
     items: [
       { href: '/crm/clients', label: 'Clients', icon: <Users size={18} />, ready: true },
       { href: '/crm/tasks', label: 'Tasks', icon: <CheckSquare size={18} /> },
-      { href: '/crm/reports', label: 'Reports', icon: <BarChart3 size={18} /> },
+      { href: '/crm/reports', label: 'Reports', icon: <BarChart3 size={18} />, ready: true },
     ],
   },
   {

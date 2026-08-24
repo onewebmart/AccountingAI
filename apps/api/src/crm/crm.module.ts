@@ -38,6 +38,9 @@ import { AgentController } from './agent/agent.controller';
 import { AgentProcessor } from './agent/agent.processor';
 import { SupportAgentService } from './agent/support-agent.service';
 import { ClientContextService } from './agent/client-context.service';
+import { DashboardService } from './dashboard/dashboard.service';
+import { CrmReportsService } from './dashboard/crm-reports.service';
+import { DashboardController } from './dashboard/dashboard.controller';
 
 /**
  * CA firm practice management (CRM). Firm-scoped, unlike the accounting modules
@@ -75,6 +78,7 @@ import { ClientContextService } from './agent/client-context.service';
     LeadsController,
     PracticeInvoiceController,
     AgentController,
+    DashboardController,
   ],
   providers: [
     MessagingService,
@@ -90,6 +94,8 @@ import { ClientContextService } from './agent/client-context.service';
     AgentProcessor,
     SupportAgentService,
     ClientContextService,
+    DashboardService,
+    CrmReportsService,
     { provide: MESSAGING_PROVIDER, useClass: MockMessagingProvider },
   ],
   exports: [

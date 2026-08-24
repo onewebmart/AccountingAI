@@ -172,7 +172,7 @@ Built after its inputs exist.
 - Aggregate read model: client count, pending deadlines, collected/outstanding paise, AI activity, lead pipeline value, recent activity.
 - Reports: revenue trend, client growth, compliance completion rate, AI time saved.
 
-**Done when:** every dashboard tile reads live data, with zero hardcoded numbers.
+**Done when:** every dashboard tile reads live data, with zero hardcoded numbers. — **Shipped.** Verified live against the data seven phases had accumulated: 4 clients, 20 pending deadlines (2 urgent), ₹1,44,000 billed / ₹38,000 collected / ₹1,06,000 outstanding, 9 documents outstanding, 2 leads worth ₹70,000, and a 50% agent auto-resolve rate over 11 messages sent. Every figure traces to a record an earlier phase wrote.
 
 ### Phase 9 — Tasks, Settings, polish
 
