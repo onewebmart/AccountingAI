@@ -101,8 +101,9 @@ export class DocumentProcessingProcessor extends WorkerHost {
         : null;
       await this.tickChecklist(documentId, orgId, originalName, extractedType);
     } catch (err) {
-      this.logger.error(`Document ${documentId} pipeline failed: ${String(err)}`);
-      await this.docs.updateStatus(documentId, DocumentStatus.FAILED);
+      const reason = err instanceof Error ? err.message : String(err);
+      this.logger.error(`Document ${documentId} pipeline failed: ${reason}`);
+      await this.docs.updateStatus(documentId, DocumentStatus.FAILED, reason);
       throw err; // re-throw so BullMQ retries per job config
     }
   }

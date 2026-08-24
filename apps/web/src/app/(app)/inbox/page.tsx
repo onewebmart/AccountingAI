@@ -12,8 +12,7 @@ import {
   AlertCircle,
   Copy,
   ChevronRight,
-  X,
-} from 'lucide-react';
+  X, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -31,6 +30,8 @@ interface InboxDoc {
   confidence: number | null;
   status: DocStatus;
   duplicateOf?: string;
+  /** Why the pipeline gave up, when it did. */
+  failureReason?: string;
 }
 
 // ── API response shape ────────────────────────────────────────────────────────
@@ -58,6 +59,8 @@ interface ApiDocument {
   uploadedAt: string;
   duplicateOf?: string;
   duplicateOfName?: string;
+  /** Why the pipeline gave up, when it did. */
+  failureReason?: string;
 }
 
 // ── Status mapping ────────────────────────────────────────────────────────────
@@ -94,6 +97,7 @@ function mapApiDoc(doc: ApiDocument): InboxDoc {
     confidence: doc.confidence ?? null,
     status: mapApiStatus(doc.status),
     duplicateOf: doc.duplicateOfName ?? doc.duplicateOf,
+    failureReason: doc.failureReason,
   };
 }
 
@@ -251,6 +255,20 @@ export default function InboxPage() {
   ];
 
   // ── Upload mutation ───────────────────────────────────────────────────────
+  /**
+   * A failed document is often only transiently failed — a model blip that
+   * outlasted the three automatic attempts. Retrying re-runs the pipeline on
+   * the file already stored, so nobody has to upload it again and live with a
+   * duplicate.
+   */
+  const retryMutation = useMutation({
+    mutationFn: (id: string) => api.post(`/documents/${id}/retry`),
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: ['documents'] });
+      void queryClient.invalidateQueries({ queryKey: ['workspace'] });
+    },
+  });
+
   const uploadMutation = useMutation({
     mutationFn: (file: File) => {
       const form = new FormData();
@@ -424,8 +442,29 @@ export default function InboxPage() {
                           <X size={13} /> Skip
                         </button>
                       )}
+                      {doc.status === 'failed' && (
+                        <button
+                          onClick={() => retryMutation.mutate(doc.id)}
+                          disabled={retryMutation.isPending}
+                          className="inline-flex items-center gap-1 text-caption text-saffron-700 transition-colors hover:underline disabled:opacity-50"
+                        >
+                          <RefreshCw size={13} />
+                          {retryMutation.isPending ? 'Retrying…' : 'Try again'}
+                        </button>
+                      )}
                     </td>
                   </tr>
+                  {doc.status === 'failed' && (
+                    <tr key={`${doc.id}-err`} className="border-b border-line-100 bg-error-bg/10">
+                      <td colSpan={8} className="px-4 py-2">
+                        <p className="text-caption text-error-fg">
+                          {doc.failureReason
+                            ? doc.failureReason
+                            : 'The pipeline could not finish this one. Try again, or re-scan the document more clearly.'}
+                        </p>
+                      </td>
+                    </tr>
+                  )}
                   {doc.status === 'duplicate' && doc.duplicateOf && (
                     <tr key={`${doc.id}-dup`} className="border-b border-line-100 bg-error-bg/10">
                       <td colSpan={8} className="px-4 py-2">

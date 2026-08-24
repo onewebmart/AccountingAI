@@ -115,6 +115,14 @@ export class DocumentsController {
     };
   }
 
+  /** Re-run the pipeline on a document that failed. */
+  @Post(':id/retry')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermission(Permission.UPLOAD_DOCUMENT)
+  retry(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.docs.retryProcessing(id, user.orgId);
+  }
+
   /**
    * Streams a locally-stored file for a signed, time-limited link. Public by
    * necessity — a browser cannot attach an Authorization header to an <img> or

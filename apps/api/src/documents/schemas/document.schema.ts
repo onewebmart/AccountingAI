@@ -54,6 +54,14 @@ export class Document {
    * What an uploaded spreadsheet produced: which sheets were recognised, how many
    * rows became bank lines or proposals, and any per-row warnings.
    */
+  /**
+   * Why the pipeline gave up, in words a person can act on. Without this the
+   * Inbox can only say "Couldn't read", which tells nobody whether to retry,
+   * re-scan, or give up.
+   */
+  @Prop()
+  failureReason?: string;
+
   @Prop({ type: MongooseSchema.Types.Mixed, default: null })
   importSummary?: Record<string, unknown> | null;
 }

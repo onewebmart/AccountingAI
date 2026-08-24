@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Model, Types } from 'mongoose';
@@ -41,6 +41,8 @@ export interface DocumentListItem {
   duplicateOf?: string;
   duplicateOfName?: string;
   jobId?: string;
+  /** Present only on failed documents — why the pipeline gave up. */
+  failureReason?: string;
   uploadedAt: Date;
   createdAt: Date;
 }
@@ -172,6 +174,8 @@ export class DocumentsService {
           ? originalNames.get(d.duplicateOf.toString())
           : undefined,
         jobId: d.jobId,
+        // Carried to the Inbox so a failed row can say what went wrong.
+        failureReason: d.failureReason,
         uploadedAt: createdAt,
         createdAt,
       };
@@ -190,10 +194,66 @@ export class DocumentsService {
     return this.storage.presignedUrl(doc.s3Key);
   }
 
-  async updateStatus(documentId: string, status: DocumentStatus): Promise<void> {
+  /**
+   * Re-runs the pipeline on a document that failed.
+   *
+   * The three automatic attempts cover a blip; this covers everything they do
+   * not — a model outage that outlasted the backoff, a quota that has since
+   * reset. Without it a transient failure is permanent, and the only recourse
+   * is uploading the same file again and living with a duplicate.
+   */
+  async retryProcessing(documentId: string, orgId: string): Promise<{ jobId: string }> {
+    const doc = await this.documentModel.findOne({ _id: documentId, orgId }).exec();
+    if (!doc) throw new NotFoundException('Document not found');
+
+    if (doc.status !== DocumentStatus.FAILED) {
+      throw new BadRequestException(
+        `Only a failed document can be retried — this one is ${doc.status}.`,
+      );
+    }
+
+    await this.updateStatus(documentId, DocumentStatus.UPLOADED);
+
+    const job = await this.processingQueue.add(
+      'process-document',
+      {
+        documentId,
+        orgId,
+        s3Key: doc.s3Key,
+        mimeType: doc.mimeType,
+        // A retry is a deliberate act — process it properly rather than
+        // parking it as a duplicate again.
+        isDuplicate: false,
+        originalName: doc.originalName,
+      },
+      {
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 5000 },
+        removeOnComplete: { count: 1000 },
+        removeOnFail: false,
+      },
+    );
+
     await this.documentModel
-      .findByIdAndUpdate(documentId, { $set: { status } })
+      .findByIdAndUpdate(documentId, { $set: { jobId: job.id } })
       .exec();
+
+    return { jobId: String(job.id) };
+  }
+
+  async updateStatus(
+    documentId: string,
+    status: DocumentStatus,
+    failureReason?: string,
+  ): Promise<void> {
+    // A reason is only meaningful alongside a failure — clear it on any other
+    // move, so a retried document does not keep showing the old error.
+    const update =
+      status === DocumentStatus.FAILED && failureReason
+        ? { $set: { status, failureReason } }
+        : { $set: { status }, $unset: { failureReason: '' } };
+
+    await this.documentModel.findByIdAndUpdate(documentId, update).exec();
   }
 
   /** Record what an imported spreadsheet produced, so the Inbox can explain itself. */

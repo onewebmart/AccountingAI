@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { AccountType as SharedAccountType } from '@ai-accounting/shared';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ChevronRight, ChevronDown, Plus, BookOpen, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -8,7 +9,10 @@ import { api } from '@/lib/api';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type AccountType = 'ASSET' | 'LIABILITY' | 'INCOME' | 'EXPENSE' | 'CAPITAL';
+// Imported, not re-declared. This page previously defined its own union with
+// 'ASSET' and 'LIABILITY' while the API stores 'ASSETS' and 'LIABILITIES', so
+// those two sections silently rendered empty however many accounts existed.
+type AccountType = SharedAccountType;
 
 interface Account {
   _id: string;
@@ -28,11 +32,11 @@ interface NewAccountForm {
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const ACCOUNT_TYPES: { type: AccountType; label: string }[] = [
-  { type: 'ASSET', label: 'Assets' },
-  { type: 'LIABILITY', label: 'Liabilities' },
-  { type: 'INCOME', label: 'Income' },
-  { type: 'EXPENSE', label: 'Expenses' },
-  { type: 'CAPITAL', label: 'Capital' },
+  { type: SharedAccountType.ASSETS, label: 'Assets' },
+  { type: SharedAccountType.LIABILITIES, label: 'Liabilities' },
+  { type: SharedAccountType.INCOME, label: 'Income' },
+  { type: SharedAccountType.EXPENSE, label: 'Expenses' },
+  { type: SharedAccountType.CAPITAL, label: 'Capital' },
 ];
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -157,7 +161,7 @@ function AddAccountModal({
 }) {
   const [form, setForm] = useState<NewAccountForm>({
     name: '',
-    type: defaultType ?? 'ASSET',
+    type: defaultType ?? SharedAccountType.ASSETS,
     parentId: defaultParentId,
   });
 
