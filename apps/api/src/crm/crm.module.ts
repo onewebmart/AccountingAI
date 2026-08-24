@@ -4,6 +4,7 @@ import { BullModule, InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { CrmMessage, CrmMessageSchema } from './schemas/crm-message.schema';
 import { ComplianceItem, ComplianceItemSchema } from './schemas/compliance-item.schema';
+import { DocumentRequest, DocumentRequestSchema } from './schemas/document-request.schema';
 import { AuditLog, AuditLogSchema } from '../gl/schemas/audit-log.schema';
 import { Organization, OrganizationSchema } from '../tenancy/schemas/organization.schema';
 import { Firm, FirmSchema } from '../tenancy/schemas/firm.schema';
@@ -19,6 +20,8 @@ import {
   CRM_COMPLIANCE_QUEUE,
   DAILY_SWEEP_JOB,
 } from './compliance/compliance.processor';
+import { DocumentRequestService } from './documents/document-request.service';
+import { DocumentRequestController } from './documents/document-request.controller';
 
 /**
  * CA firm practice management (CRM). Firm-scoped, unlike the accounting modules
@@ -33,6 +36,7 @@ import {
     MongooseModule.forFeature([
       { name: CrmMessage.name, schema: CrmMessageSchema },
       { name: ComplianceItem.name, schema: ComplianceItemSchema },
+      { name: DocumentRequest.name, schema: DocumentRequestSchema },
       { name: AuditLog.name, schema: AuditLogSchema },
       { name: Organization.name, schema: OrganizationSchema },
       { name: Firm.name, schema: FirmSchema },
@@ -40,15 +44,16 @@ import {
     BullModule.registerQueue({ name: CRM_MESSAGING_QUEUE }),
     BullModule.registerQueue({ name: CRM_COMPLIANCE_QUEUE }),
   ],
-  controllers: [MessagingController, ComplianceController],
+  controllers: [MessagingController, ComplianceController, DocumentRequestController],
   providers: [
     MessagingService,
     MessagingProcessor,
     ComplianceService,
     ComplianceProcessor,
+    DocumentRequestService,
     { provide: MESSAGING_PROVIDER, useClass: MockMessagingProvider },
   ],
-  exports: [MessagingService, ComplianceService],
+  exports: [MessagingService, ComplianceService, DocumentRequestService],
 })
 export class CrmModule implements OnModuleInit {
   private readonly logger = new Logger(CrmModule.name);

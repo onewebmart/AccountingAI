@@ -1,7 +1,7 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
-import { DocumentStatus } from '@ai-accounting/shared';
+import { DocumentStatus, DocumentType } from '@ai-accounting/shared';
 import { DOCUMENT_PROCESSING_QUEUE } from './documents.service';
 import { DocumentsService } from './documents.service';
 import { StorageService } from './storage.service';
@@ -10,6 +10,7 @@ import { ExtractionService } from '../extraction/extraction.service';
 import { ProposalsService } from '../proposals/proposals.service';
 import { SpreadsheetIngestService } from '../ingest/spreadsheet-ingest.service';
 import { isSpreadsheet } from '../ingest/spreadsheet-parser.service';
+import { DocumentRequestService } from '../crm/documents/document-request.service';
 
 export interface DocumentProcessingJob {
   documentId: string;
@@ -31,6 +32,7 @@ export class DocumentProcessingProcessor extends WorkerHost {
     private extraction: ExtractionService,
     private proposals: ProposalsService,
     private spreadsheets: SpreadsheetIngestService,
+    private documentRequests: DocumentRequestService,
   ) {
     super();
   }
@@ -86,10 +88,51 @@ export class DocumentProcessingProcessor extends WorkerHost {
       this.logger.log(
         `Document ${documentId}: proposal created (extraction status=${extracted.status}, confidence=${extracted.confidenceOverall.toFixed(2)})`,
       );
+
+      // Step 4: tick off a CRM document checklist, if this upload satisfies one.
+      // Best-effort — the accounting pipeline has already succeeded by this point
+      // and must not be failed by a practice-management side effect.
+      // documentType is persisted as a plain string; narrow it back to the enum
+      // the matcher expects, treating anything unrecognised as "no type".
+      const extractedType = Object.values(DocumentType).includes(
+        extracted.documentType as DocumentType,
+      )
+        ? (extracted.documentType as DocumentType)
+        : null;
+      await this.tickChecklist(documentId, orgId, originalName, extractedType);
     } catch (err) {
       this.logger.error(`Document ${documentId} pipeline failed: ${String(err)}`);
       await this.docs.updateStatus(documentId, DocumentStatus.FAILED);
       throw err; // re-throw so BullMQ retries per job config
+    }
+  }
+
+  /**
+   * Offers the finished upload to the CRM's document checklists. A match moves
+   * the item to RECEIVED, never VERIFIED — a person still confirms it.
+   */
+  private async tickChecklist(
+    documentId: string,
+    orgId: string,
+    originalName: string | undefined,
+    documentType?: DocumentType | null,
+  ): Promise<void> {
+    try {
+      const result = await this.documentRequests.tryAutoMatch(
+        orgId,
+        documentId,
+        originalName ?? '',
+        documentType,
+      );
+      if (result.matched) {
+        this.logger.log(
+          `Document ${documentId}: satisfied checklist item "${result.itemKey}" on request ${result.requestId}`,
+        );
+      }
+    } catch (err) {
+      this.logger.warn(
+        `Document ${documentId}: checklist match failed (${err instanceof Error ? err.message : String(err)})`,
+      );
     }
   }
 

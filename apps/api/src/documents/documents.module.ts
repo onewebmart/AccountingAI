@@ -10,6 +10,7 @@ import { OcrModule } from '../ocr/ocr.module';
 import { ExtractionModule } from '../extraction/extraction.module';
 import { ProposalsModule } from '../proposals/proposals.module';
 import { IngestModule } from '../ingest/ingest.module';
+import { CrmModule } from '../crm/crm.module';
 import { ProposedEntry, ProposedEntrySchema } from '../proposals/schemas/proposed-entry.schema';
 
 @Module({
@@ -23,6 +24,7 @@ import { ProposedEntry, ProposedEntrySchema } from '../proposals/schemas/propose
     ExtractionModule,
     ProposalsModule,
     IngestModule,
+    CrmModule,
   ],
   controllers: [DocumentsController],
   providers: [DocumentsService, StorageService, DocumentProcessingProcessor],

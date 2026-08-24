@@ -136,7 +136,7 @@ No UI. Fix the substrate.
 - Bridge to the existing [documents module](../apps/api/src/documents) so an uploaded doc satisfies its checklist item.
 - UI: client cards, filter tabs, per-item pills, bulk reminder.
 
-**Done when:** uploading a client document flips its checklist item and moves the progress bar.
+**Done when:** uploading a client document flips its checklist item and moves the progress bar. — **Shipped.** Verified live: a client uploaded `Form16_Ramesh.txt`, the pipeline auto-matched it to the Form 16 item on that client's ITR request (RECEIVED, not VERIFIED), the bar moved 0% → 20%, and the follow-up chase listed only the four documents still outstanding. Other clients' checklists were untouched.
 
 ### Phase 5 — Lead pipeline + AI qualification
 

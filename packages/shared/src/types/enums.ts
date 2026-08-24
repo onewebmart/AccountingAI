@@ -237,3 +237,23 @@ export enum ComplianceAuthority {
   INCOME_TAX = 'Income Tax Department',
   MCA = 'Ministry of Corporate Affairs',
 }
+
+// ── Document collection ───────────────────────────────────────────────────────
+
+/**
+ * State of one required document on a client's checklist.
+ *
+ * RECEIVED vs VERIFIED is the Invariant 4 shape applied to document collection:
+ * an automatic match can move an item to RECEIVED, but only a human moves it to
+ * VERIFIED. Amber until then, green after — per the design system.
+ */
+export enum ChecklistItemStatus {
+  PENDING = 'PENDING',
+  RECEIVED = 'RECEIVED',
+  VERIFIED = 'VERIFIED',
+}
+
+export enum DocumentRequestStatus {
+  OPEN = 'OPEN',
+  COMPLETE = 'COMPLETE',
+}
