@@ -12,8 +12,11 @@ export class OcrResult {
   @Prop({ type: Types.ObjectId, required: true, ref: 'Document', index: true })
   documentId: Types.ObjectId;
 
-  /** 1 = native PDF text, 2 = OCR provider, 3 = vision LLM */
-  @Prop({ required: true, min: 1, max: 3 })
+  /**
+   * 0 = native document text (.docx/.txt/.md/.rtf — no OCR at all)
+   * 1 = native PDF text, 2 = OCR provider, 3 = vision LLM
+   */
+  @Prop({ required: true, min: 0, max: 3 })
   tier: number;
 
   @Prop({ required: true })

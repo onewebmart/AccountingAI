@@ -32,10 +32,16 @@ const ALLOWED_MIME_TYPES = new Set([
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   'text/csv',
   'application/csv',
+  // Word + plain text — read natively at Tier 0, never sent to OCR.
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'text/plain',
+  'text/markdown',
+  'text/rtf',
+  'application/rtf',
 ]);
 
-/** Some browsers send text/plain or an empty type for .csv — trust the extension too. */
-const ALLOWED_EXTENSIONS = /\.(pdf|jpe?g|png|webp|tiff?|heic|heif|xlsx?|csv)$/i;
+/** Some browsers send text/plain or an empty type for .csv/.docx — trust the extension too. */
+const ALLOWED_EXTENSIONS = /\.(pdf|jpe?g|png|webp|tiff?|heic|heif|xlsx?|csv|docx|txt|md|rtf)$/i;
 
 const CONTENT_TYPES: Record<string, string> = {
   pdf: 'application/pdf',
@@ -48,6 +54,10 @@ const CONTENT_TYPES: Record<string, string> = {
   csv: 'text/csv',
   xls: 'application/vnd.ms-excel',
   xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  txt: 'text/plain',
+  md: 'text/markdown',
+  rtf: 'application/rtf',
 };
 
 function mimeTypeForKey(key: string): string {

@@ -56,12 +56,15 @@ export class DocumentProcessingProcessor extends WorkerHost {
         return;
       }
 
-      // Step 1: OCR cascade
+      // Step 1: OCR cascade. Word/plain-text files short-circuit to Tier 0
+      // inside the cascade, which needs the filename because browsers often
+      // send text/plain (or nothing) for .docx.
       const { tier, ocrResult } = await this.ocrCascade.process({
         documentId,
         orgId,
         buffer,
         mimeType,
+        fileName: originalName ?? '',
       });
       this.logger.log(
         `Document ${documentId}: OCR tier ${tier}, confidence ${ocrResult.confidence.toFixed(2)}`,

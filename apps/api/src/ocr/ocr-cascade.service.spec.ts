@@ -24,6 +24,7 @@ import { OcrCascadeService } from './ocr-cascade.service';
 import { UsageMeterService } from './usage-meter.service';
 import { GeminiVisionService } from './gemini-vision.service';
 import { PdfTextExtractorService } from './pdf-text-extractor.service';
+import { DocumentTextExtractorService } from './document-text-extractor.service';
 import { OcrResult, OcrResultSchema, OcrResultDocument } from './schemas/ocr-result.schema';
 import { UsageMeter, UsageMeterSchema, UsageMeterDocument } from './schemas/usage-meter.schema';
 import { OCR_PROVIDER, OcrProvider } from './providers/ocr.provider.interface';
@@ -72,6 +73,7 @@ beforeAll(async () => {
       { provide: OCR_PROVIDER, useValue: fakeOcrProvider },
       { provide: GeminiVisionService, useValue: fakeGroqVision },
       { provide: PdfTextExtractorService, useValue: fakePdfExtractor },
+      DocumentTextExtractorService,
     ],
   }).compile();
 
@@ -92,6 +94,45 @@ afterAll(async () => {
 });
 
 // ── Tests ─────────────────────────────────────────────────────────────────
+
+describe('Tier 0 — files that already contain text', () => {
+  it('reads a .txt upload without calling OCR or the vision model', async () => {
+    const { ocrResult, tier } = await ocrCascade.process({
+      documentId: DOC_ID,
+      orgId: ORG_ID,
+      buffer: Buffer.from('TAX INVOICE\nVendor: Gupta Hardware\nTotal: 11800.00\n', 'utf8'),
+      mimeType: 'text/plain',
+      fileName: 'bill.txt',
+    });
+
+    expect(tier).toBe(0);
+    expect(ocrResult.rawText).toContain('Gupta Hardware');
+    expect(ocrResult.confidence).toBe(1);
+    expect(fakeOcrProvider.recognize).not.toHaveBeenCalled();
+    expect(fakeGroqVision.extractText).not.toHaveBeenCalled();
+  });
+
+  it('detects .docx by extension even when the browser sends a generic mime type', async () => {
+    // Browsers frequently send text/plain or an empty type for .docx uploads.
+    const isNative = (await import('./document-text-extractor.service'))
+      .DocumentTextExtractorService.isNativeText('application/octet-stream', 'invoice.docx');
+    expect(isNative).toBe(true);
+  });
+
+  it('does not meter Tier 0 as an OCR page — it costs nothing', async () => {
+    await ocrCascade.process({
+      documentId: DOC_ID,
+      orgId: ORG_ID,
+      buffer: Buffer.from('Some readable invoice text for the meter check.', 'utf8'),
+      mimeType: 'text/plain',
+      fileName: 'note.txt',
+    });
+
+    const meter = await usageMeterModel.findOne({ orgId: ORG_ID }).lean().exec();
+    // Either no meter row at all, or one with no tier-0 bucket written.
+    expect((meter as Record<string, unknown> | null)?.['ocrPagesTier0']).toBeUndefined();
+  });
+});
 
 describe('Tier 1 — native-text PDF', () => {
   it('extracts text via pdf-parse and does NOT call the OCR provider', async () => {

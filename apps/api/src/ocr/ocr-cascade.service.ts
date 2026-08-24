@@ -6,12 +6,18 @@ import { OCR_PROVIDER, OcrProvider, OcrProviderResult } from './providers/ocr.pr
 import { GeminiVisionService } from './gemini-vision.service';
 import { UsageMeterService } from './usage-meter.service';
 import { PdfTextExtractorService } from './pdf-text-extractor.service';
+import { DocumentTextExtractorService } from './document-text-extractor.service';
 
 export interface CascadeInput {
   documentId: string;
   orgId: string;
   buffer: Buffer;
   mimeType: string;
+  /**
+   * Original upload name. Browsers frequently send text/plain or an empty type
+   * for .docx/.txt, so the extension is the more reliable signal for Tier 0.
+   */
+  fileName?: string;
 }
 
 export interface CascadeOutput {
@@ -35,10 +41,11 @@ export class OcrCascadeService {
     private geminiVision: GeminiVisionService,
     private usageMeter: UsageMeterService,
     private pdfExtractor: PdfTextExtractorService,
+    private textExtractor: DocumentTextExtractorService,
   ) {}
 
   async process(input: CascadeInput): Promise<CascadeOutput> {
-    const { documentId, orgId, buffer, mimeType } = input;
+    const { documentId, orgId, buffer, mimeType, fileName = '' } = input;
     const start = Date.now();
 
     let tier: number;
@@ -47,7 +54,19 @@ export class OcrCascadeService {
     let confidence: number;
     let pageCount = 1;
 
-    if (mimeType === 'application/pdf') {
+    if (DocumentTextExtractorService.isNativeText(mimeType, fileName)) {
+      // ── Tier 0: the file already contains text (.docx, .txt, .md, .rtf) ──
+      // No OCR: running a vision model over bytes that already spell out the
+      // words costs tokens and loses fidelity.
+      const extracted = await this.textExtractor.extract(buffer, mimeType, fileName);
+      tier = 0;
+      rawText = extracted.text;
+      layoutJson = { source: extracted.source };
+      confidence = 1;
+      this.logger.log(
+        `Document ${documentId}: Tier 0 (${extracted.source}, ${rawText.length} chars)`,
+      );
+    } else if (mimeType === 'application/pdf') {
       // ── Tier 1: native-text PDF ────────────────────────────────────────
       let extractedText = '';
       let pdfPageCount = 1;
@@ -124,7 +143,11 @@ export class OcrCascadeService {
       processingMs,
     });
 
-    await this.usageMeter.recordOcrPages(orgId, tier, pageCount);
+    // Tier 0 read the text straight out of the file: no OCR provider call, no
+    // vision tokens, nothing to bill. The meter only tracks tiers 1–3.
+    if (tier > 0) {
+      await this.usageMeter.recordOcrPages(orgId, tier, pageCount);
+    }
 
     this.logger.log(
       `Document ${documentId}: OcrResult saved (tier=${tier}, confidence=${confidence.toFixed(2)}, ${processingMs}ms)`,

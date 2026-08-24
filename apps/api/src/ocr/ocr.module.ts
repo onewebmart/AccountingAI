@@ -10,6 +10,7 @@ import { OcrCascadeService } from './ocr-cascade.service';
 import { GeminiVisionService } from './gemini-vision.service';
 import { UsageMeterService } from './usage-meter.service';
 import { PdfTextExtractorService } from './pdf-text-extractor.service';
+import { DocumentTextExtractorService } from './document-text-extractor.service';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { PdfTextExtractorService } from './pdf-text-extractor.service';
     GeminiVisionService,
     UsageMeterService,
     PdfTextExtractorService,
+    DocumentTextExtractorService,
     GeminiOcrProvider,
     MockOcrProvider,
     {
