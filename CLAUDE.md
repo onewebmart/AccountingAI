@@ -5,8 +5,8 @@ You are building an AI accounting platform for Indian SMEs and CA firms.
 **Stack:** Next.js 14 App Router + TS + Tailwind + shadcn/ui (web) · NestJS + TS (api) · MongoDB + Mongoose as a **replica set** · BullMQ + Redis · S3-compatible storage · Groq for AI.
 
 **Companion files** (read before every session):
-- `AI_ACCOUNTING_PLATFORM_BUILD_SPEC.md` — architecture, data model, pipeline
-- `AI_ACCOUNTING_DESIGN_SYSTEM.md` — every UI decision: colors, typography, copy, page specs
+- `docs/AI_ACCOUNTING_PLATFORM_BUILD_SPEC.md` — architecture, data model, pipeline
+- `docs/AI_ACCOUNTING_DESIGN_SYSTEM.md` — every UI decision: colors, typography, copy, page specs
 
 ---
 

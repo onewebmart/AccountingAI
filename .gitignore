@@ -17,3 +17,10 @@ uploads/
 # Local-disk document storage (STORAGE_DRIVER=local) — holds uploaded bills
 .storage/
 *.tsbuildinfo
+
+# Local Windows workaround artifacts — this is a pnpm workspace, so npm
+# lockfiles and the packed @ai-accounting/shared tarball are never real inputs.
+# They appear when directory symlinks are unavailable and pnpm/npm workspace
+# linking has to be bypassed. See CA_CRM_BUILD_PLAN.md.
+package-lock.json
+packages/shared/*.tgz

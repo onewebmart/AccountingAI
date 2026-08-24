@@ -1,0 +1,1490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CA Firm CRM – Intelligent Practice Management</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy: #0F1A2E;
+    --navy-light: #162236;
+    --teal: #0EA5C9;
+    --teal-light: #E0F2FE;
+    --amber: #F59E0B;
+    --amber-light: #FEF3C7;
+    --emerald: #10B981;
+    --emerald-light: #D1FAE5;
+    --rose: #F43F5E;
+    --rose-light: #FFE4E6;
+    --violet: #8B5CF6;
+    --violet-light: #EDE9FE;
+    --slate: #64748B;
+    --slate-light: #F1F5F9;
+    --surface: #F8FAFC;
+    --white: #FFFFFF;
+    --border: #E2E8F0;
+    --text-primary: #0F172A;
+    --text-secondary: #475569;
+    --text-muted: #94A3B8;
+    --sidebar-w: 240px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Inter', sans-serif; background: var(--surface); color: var(--text-primary); display: flex; height: 100vh; overflow: hidden; }
+
+  /* ── SIDEBAR ── */
+  .sidebar {
+    width: var(--sidebar-w);
+    background: var(--navy);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    overflow-y: auto;
+  }
+
+  .sidebar-brand {
+    padding: 20px 20px 16px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+  .brand-logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .brand-icon {
+    width: 36px; height: 36px;
+    background: linear-gradient(135deg, var(--teal), #0369A1);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; font-weight: 700; color: white;
+    font-family: 'Space Grotesk', sans-serif;
+  }
+  .brand-text { color: white; }
+  .brand-name { font-family: 'Space Grotesk', sans-serif; font-size: 15px; font-weight: 700; line-height: 1.1; }
+  .brand-sub { font-size: 10px; color: rgba(255,255,255,0.45); letter-spacing: 0.5px; }
+
+  .sidebar-section { padding: 16px 12px 4px; }
+  .sidebar-section-label { font-size: 10px; font-weight: 600; color: rgba(255,255,255,0.3); letter-spacing: 1.2px; text-transform: uppercase; padding: 0 8px; margin-bottom: 6px; }
+
+  .nav-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.18s;
+    margin-bottom: 2px;
+    color: rgba(255,255,255,0.55);
+    font-size: 13.5px; font-weight: 500;
+    position: relative;
+  }
+  .nav-item:hover { background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.9); }
+  .nav-item.active { background: rgba(14,165,201,0.18); color: var(--teal); }
+  .nav-item.active::before { content:''; position:absolute; left:0; top:50%; transform:translateY(-50%); width:3px; height:60%; background:var(--teal); border-radius:0 3px 3px 0; }
+  .nav-icon { font-size: 16px; width: 20px; text-align: center; }
+  .nav-badge { margin-left: auto; background: var(--rose); color: white; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 999px; }
+  .nav-badge.amber { background: var(--amber); color: #78350F; }
+  .nav-badge.teal { background: var(--teal); color: white; }
+
+  .sidebar-footer {
+    margin-top: auto;
+    padding: 16px;
+    border-top: 1px solid rgba(255,255,255,0.08);
+  }
+  .user-card { display: flex; align-items: center; gap: 10px; }
+  .user-avatar { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, #7C3AED, #A78BFA); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; color: white; }
+  .user-info { flex: 1; min-width: 0; }
+  .user-name { font-size: 12.5px; font-weight: 600; color: white; }
+  .user-role { font-size: 10.5px; color: rgba(255,255,255,0.4); }
+
+  /* ── MAIN ── */
+  .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+  /* TOPBAR */
+  .topbar {
+    background: white;
+    border-bottom: 1px solid var(--border);
+    padding: 0 28px;
+    height: 60px;
+    display: flex; align-items: center; gap: 16px;
+    flex-shrink: 0;
+  }
+  .topbar-title { font-family: 'Space Grotesk', sans-serif; font-size: 17px; font-weight: 700; color: var(--text-primary); }
+  .topbar-subtitle { font-size: 12.5px; color: var(--text-muted); margin-left: 4px; }
+  .topbar-actions { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+  .search-box { display: flex; align-items: center; gap: 8px; background: var(--slate-light); border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; }
+  .search-box input { border: none; background: transparent; font-size: 13px; color: var(--text-primary); outline: none; width: 180px; }
+  .search-box input::placeholder { color: var(--text-muted); }
+  .btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 7px; font-size: 13px; font-weight: 500; cursor: pointer; border: none; transition: all 0.15s; }
+  .btn-primary { background: var(--teal); color: white; }
+  .btn-primary:hover { background: #0284C7; }
+  .btn-outline { background: white; color: var(--text-secondary); border: 1px solid var(--border); }
+  .btn-outline:hover { background: var(--slate-light); }
+  .notif-btn { width: 36px; height: 36px; border-radius: 8px; background: var(--slate-light); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; cursor: pointer; position: relative; font-size: 15px; }
+  .notif-dot { position: absolute; top: 7px; right: 7px; width: 7px; height: 7px; background: var(--rose); border-radius: 50%; border: 1.5px solid white; }
+
+  /* CONTENT */
+  .content { flex: 1; overflow-y: auto; padding: 24px 28px; }
+
+  /* ── VIEWS ── */
+  .view { display: none; }
+  .view.active { display: block; }
+
+  /* DASHBOARD */
+  .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+  .stat-card {
+    background: white; border-radius: 12px; padding: 18px 20px;
+    border: 1px solid var(--border);
+    position: relative; overflow: hidden;
+  }
+  .stat-card::after { content:''; position:absolute; top:0;right:0; width:80px; height:100%; opacity: 0.06; border-radius: 0 12px 12px 0; }
+  .stat-card.teal::after { background: var(--teal); }
+  .stat-card.amber::after { background: var(--amber); }
+  .stat-card.emerald::after { background: var(--emerald); }
+  .stat-card.rose::after { background: var(--rose); }
+  .stat-label { font-size: 11.5px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+  .stat-value { font-family: 'Space Grotesk', sans-serif; font-size: 28px; font-weight: 700; color: var(--text-primary); line-height: 1; }
+  .stat-change { font-size: 11.5px; margin-top: 6px; }
+  .stat-change.up { color: var(--emerald); }
+  .stat-change.down { color: var(--rose); }
+  .stat-icon { position: absolute; top: 18px; right: 20px; font-size: 22px; }
+
+  .dash-grid { display: grid; grid-template-columns: 1.6fr 1fr; gap: 16px; }
+  .card { background: white; border-radius: 12px; border: 1px solid var(--border); }
+  .card-header { padding: 16px 20px 14px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; }
+  .card-title { font-family: 'Space Grotesk', sans-serif; font-size: 14.5px; font-weight: 600; }
+  .card-action { margin-left: auto; font-size: 12px; color: var(--teal); cursor: pointer; font-weight: 500; }
+  .card-body { padding: 16px 20px; }
+
+  /* TABLE */
+  table { width: 100%; border-collapse: collapse; }
+  th { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; padding: 0 12px 10px; text-align: left; }
+  td { padding: 10px 12px; font-size: 13px; border-bottom: 1px solid var(--slate-light); vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--surface); }
+
+  /* BADGES */
+  .badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+  .badge-emerald { background: var(--emerald-light); color: #065F46; }
+  .badge-amber { background: var(--amber-light); color: #92400E; }
+  .badge-rose { background: var(--rose-light); color: #9F1239; }
+  .badge-teal { background: var(--teal-light); color: #0C4A6E; }
+  .badge-violet { background: var(--violet-light); color: #4C1D95; }
+  .badge-slate { background: var(--slate-light); color: var(--slate); }
+
+  /* DEADLINE ITEMS */
+  .deadline-item { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--slate-light); }
+  .deadline-item:last-child { border-bottom: none; }
+  .deadline-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .deadline-info { flex: 1; }
+  .deadline-name { font-size: 13px; font-weight: 500; }
+  .deadline-client { font-size: 11.5px; color: var(--text-muted); }
+  .deadline-date { font-size: 12px; font-weight: 600; text-align: right; }
+  .deadline-date.urgent { color: var(--rose); }
+  .deadline-date.soon { color: var(--amber); }
+  .deadline-date.ok { color: var(--emerald); }
+
+  /* ── AI SUPPORT AGENT ── */
+  .agent-layout { display: grid; grid-template-columns: 1fr 1.2fr; gap: 20px; }
+  .chat-container { background: white; border-radius: 12px; border: 1px solid var(--border); display: flex; flex-direction: column; height: 520px; }
+  .chat-header { padding: 14px 18px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; }
+  .ai-indicator { width: 8px; height: 8px; background: var(--emerald); border-radius: 50%; animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.4;} }
+  .chat-messages { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+  .msg { max-width: 80%; }
+  .msg-client { align-self: flex-end; }
+  .msg-ai { align-self: flex-start; }
+  .msg-bubble { padding: 10px 14px; border-radius: 12px; font-size: 13px; line-height: 1.55; }
+  .msg-client .msg-bubble { background: var(--teal); color: white; border-bottom-right-radius: 3px; }
+  .msg-ai .msg-bubble { background: var(--slate-light); color: var(--text-primary); border-bottom-left-radius: 3px; }
+  .msg-meta { font-size: 10.5px; color: var(--text-muted); margin-top: 4px; }
+  .msg-client .msg-meta { text-align: right; }
+  .chat-input-area { padding: 12px 16px; border-top: 1px solid var(--border); display: flex; gap: 8px; }
+  .chat-input { flex: 1; border: 1px solid var(--border); border-radius: 8px; padding: 9px 13px; font-size: 13px; font-family: inherit; outline: none; resize: none; }
+  .chat-input:focus { border-color: var(--teal); }
+  .send-btn { background: var(--teal); color: white; border: none; border-radius: 8px; padding: 0 16px; cursor: pointer; font-size: 16px; }
+
+  .agent-stats-col { display: flex; flex-direction: column; gap: 16px; }
+  .mini-stat { background: white; border: 1px solid var(--border); border-radius: 10px; padding: 16px; display: flex; align-items: center; gap: 14px; }
+  .mini-stat-icon { width: 40px; height: 40px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+  .mini-stat-info .value { font-family: 'Space Grotesk', sans-serif; font-size: 22px; font-weight: 700; }
+  .mini-stat-info .label { font-size: 12px; color: var(--text-muted); }
+
+  .faq-list { background: white; border: 1px solid var(--border); border-radius: 12px; }
+  .faq-item { padding: 12px 16px; border-bottom: 1px solid var(--slate-light); display: flex; align-items: center; gap: 10px; cursor: pointer; transition: background 0.15s; }
+  .faq-item:last-child { border-bottom: none; }
+  .faq-item:hover { background: var(--surface); }
+  .faq-q { font-size: 13px; flex: 1; }
+  .faq-count { font-size: 11.5px; color: var(--text-muted); font-weight: 600; }
+
+  /* ── DOCUMENTS ── */
+  .doc-filters { display: flex; gap: 8px; margin-bottom: 18px; flex-wrap: wrap; }
+  .filter-tab { padding: 6px 14px; border-radius: 20px; font-size: 12.5px; font-weight: 500; cursor: pointer; border: 1.5px solid var(--border); background: white; color: var(--text-secondary); transition: all 0.15s; }
+  .filter-tab.active { border-color: var(--teal); background: var(--teal-light); color: #0C4A6E; }
+
+  .client-doc-card { background: white; border: 1px solid var(--border); border-radius: 12px; margin-bottom: 14px; overflow: hidden; }
+  .client-doc-header { padding: 14px 18px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--slate-light); }
+  .client-avatar { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; color: white; flex-shrink: 0; }
+  .client-info .name { font-size: 14px; font-weight: 600; }
+  .client-info .meta { font-size: 11.5px; color: var(--text-muted); }
+  .client-doc-body { padding: 14px 18px; }
+  .doc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; }
+  .doc-item { border: 1.5px solid var(--border); border-radius: 8px; padding: 10px; text-align: center; position: relative; }
+  .doc-item.received { border-color: var(--emerald); background: var(--emerald-light); }
+  .doc-item.missing { border-color: var(--rose); background: var(--rose-light); border-style: dashed; }
+  .doc-item.pending { border-color: var(--amber); background: var(--amber-light); }
+  .doc-icon { font-size: 22px; margin-bottom: 4px; }
+  .doc-name { font-size: 11px; font-weight: 500; line-height: 1.3; }
+  .doc-status-icon { position: absolute; top: 5px; right: 5px; font-size: 13px; }
+  .progress-bar { height: 5px; background: var(--slate-light); border-radius: 99px; margin-top: 10px; overflow: hidden; }
+  .progress-fill { height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--teal), var(--emerald)); transition: width 0.5s; }
+
+  /* ── COMPLIANCE ── */
+  .timeline-container { position: relative; }
+  .month-header { font-family: 'Space Grotesk', sans-serif; font-size: 13px; font-weight: 700; color: var(--text-muted); padding: 10px 0 8px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--border); margin-bottom: 12px; }
+  .compliance-item { background: white; border: 1px solid var(--border); border-radius: 10px; padding: 14px 18px; margin-bottom: 10px; display: flex; align-items: center; gap: 14px; }
+  .compliance-item.urgent { border-left: 4px solid var(--rose); }
+  .compliance-item.warning { border-left: 4px solid var(--amber); }
+  .compliance-item.ok { border-left: 4px solid var(--emerald); }
+  .compliance-item.done { border-left: 4px solid var(--slate); opacity: 0.65; }
+  .comp-type-icon { width: 38px; height: 38px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+  .comp-info { flex: 1; }
+  .comp-title { font-size: 13.5px; font-weight: 600; }
+  .comp-meta { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+  .comp-due { text-align: right; }
+  .comp-due-date { font-size: 13px; font-weight: 700; }
+  .comp-due-label { font-size: 11px; color: var(--text-muted); }
+  .comp-actions { display: flex; gap: 6px; }
+  .icon-btn { width: 30px; height: 30px; border-radius: 6px; border: 1px solid var(--border); background: white; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 13px; transition: all 0.15s; }
+  .icon-btn:hover { background: var(--slate-light); }
+
+  /* ── LEADS ── */
+  .kanban { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; height: calc(100vh - 200px); }
+  .kanban-col { background: var(--slate-light); border-radius: 12px; padding: 14px; overflow-y: auto; }
+  .kanban-col-header { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+  .kanban-col-title { font-size: 13px; font-weight: 600; }
+  .kanban-count { font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 20px; }
+  .lead-card { background: white; border: 1px solid var(--border); border-radius: 9px; padding: 13px; margin-bottom: 10px; cursor: pointer; transition: all 0.15s; }
+  .lead-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.08); transform: translateY(-1px); }
+  .lead-name { font-size: 13.5px; font-weight: 600; margin-bottom: 4px; }
+  .lead-service { font-size: 11.5px; color: var(--text-muted); }
+  .lead-footer { display: flex; align-items: center; gap: 6px; margin-top: 10px; }
+  .lead-value { font-size: 12px; font-weight: 700; color: var(--emerald); margin-left: auto; }
+  .lead-source { font-size: 10.5px; padding: 2px 7px; border-radius: 20px; background: var(--slate-light); color: var(--text-muted); font-weight: 500; }
+  .lead-avatar { width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; color: white; }
+  .score-bar { height: 3px; background: var(--slate-light); border-radius: 99px; margin-top: 8px; overflow: hidden; }
+  .score-fill { height: 100%; border-radius: 99px; }
+
+  /* ── INVOICES ── */
+  .invoice-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px; }
+  .inv-stat { background: white; border: 1px solid var(--border); border-radius: 12px; padding: 18px; text-align: center; }
+  .inv-stat .amount { font-family: 'Space Grotesk', sans-serif; font-size: 26px; font-weight: 700; }
+  .inv-stat .inv-label { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+  .action-row { display: flex; gap: 8px; align-items: center; }
+  .reminder-btn { display: inline-flex; align-items: center; gap: 4px; padding: 5px 10px; border-radius: 6px; font-size: 12px; font-weight: 500; cursor: pointer; border: none; }
+  .reminder-btn.wa { background: #25D366; color: white; }
+  .reminder-btn.email { background: var(--teal-light); color: #0C4A6E; }
+  .reminder-btn.call { background: var(--amber-light); color: #92400E; }
+
+  /* UTILITY */
+  .flex { display: flex; }
+  .items-center { align-items: center; }
+  .gap-2 { gap: 8px; }
+  .gap-3 { gap: 12px; }
+  .mt-2 { margin-top: 8px; }
+  .mt-4 { margin-top: 16px; }
+  .mb-4 { margin-bottom: 16px; }
+  .text-sm { font-size: 13px; }
+  .text-xs { font-size: 11.5px; }
+  .font-medium { font-weight: 500; }
+  .font-semibold { font-weight: 600; }
+  .text-muted { color: var(--text-muted); }
+
+  .section-title { font-family: 'Space Grotesk', sans-serif; font-size: 18px; font-weight: 700; margin-bottom: 6px; }
+  .section-desc { font-size: 13px; color: var(--text-muted); margin-bottom: 20px; }
+
+  /* EMPTY / TOOLTIP */
+  .tooltip-tag { display: inline-flex; align-items: center; gap: 4px; font-size: 10.5px; color: var(--text-muted); background: var(--slate-light); padding: 2px 8px; border-radius: 20px; }
+  .ai-tag { background: linear-gradient(90deg, #0EA5C9, #8B5CF6); color: white; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
+
+  /* Modal */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(15,26,46,0.5); z-index: 1000; display: none; align-items: center; justify-content: center; backdrop-filter: blur(3px); }
+  .modal-overlay.open { display: flex; }
+  .modal { background: white; border-radius: 16px; padding: 28px; width: 460px; box-shadow: 0 24px 60px rgba(0,0,0,0.15); }
+  .modal-title { font-family: 'Space Grotesk', sans-serif; font-size: 18px; font-weight: 700; margin-bottom: 16px; }
+  .form-group { margin-bottom: 14px; }
+  .form-label { font-size: 12.5px; font-weight: 500; color: var(--text-secondary); margin-bottom: 5px; display: block; }
+  .form-input { width: 100%; border: 1.5px solid var(--border); border-radius: 8px; padding: 9px 12px; font-size: 13.5px; font-family: inherit; outline: none; }
+  .form-input:focus { border-color: var(--teal); }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .modal-footer { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+
+  .ai-badge { display: inline-flex; align-items: center; gap: 4px; background: linear-gradient(90deg, #0EA5C9, #8B5CF6); color: white; font-size: 10.5px; font-weight: 600; padding: 2px 8px; border-radius: 20px; }
+
+  .typing-indicator { display: flex; gap: 4px; align-items: center; padding: 12px 14px; }
+  .typing-dot { width: 7px; height: 7px; background: var(--slate); border-radius: 50%; animation: typing 1.2s infinite; }
+  .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+  .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes typing { 0%,100%{transform:translateY(0);opacity:0.4;} 50%{transform:translateY(-4px);opacity:1;} }
+</style>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<aside class="sidebar">
+  <div class="sidebar-brand">
+    <div class="brand-logo">
+      <div class="brand-icon">CA</div>
+      <div class="brand-text">
+        <div class="brand-name">Sharma & Associates</div>
+        <div class="brand-sub">CHARTERED ACCOUNTANTS</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-section-label">Overview</div>
+    <div class="nav-item active" onclick="switchView('dashboard', this)">
+      <span class="nav-icon">📊</span> Dashboard
+    </div>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-section-label">AI Modules</div>
+    <div class="nav-item" onclick="switchView('agent', this)">
+      <span class="nav-icon">🤖</span> AI Support Agent
+      <span class="nav-badge">8</span>
+    </div>
+    <div class="nav-item" onclick="switchView('documents', this)">
+      <span class="nav-icon">📄</span> Document Hub
+      <span class="nav-badge amber">5</span>
+    </div>
+    <div class="nav-item" onclick="switchView('compliance', this)">
+      <span class="nav-icon">🔔</span> Compliance
+      <span class="nav-badge">3</span>
+    </div>
+    <div class="nav-item" onclick="switchView('leads', this)">
+      <span class="nav-icon">📊</span> Lead Pipeline
+      <span class="nav-badge teal">12</span>
+    </div>
+    <div class="nav-item" onclick="switchView('invoices', this)">
+      <span class="nav-icon">🧾</span> Invoice & Fees
+      <span class="nav-badge">4</span>
+    </div>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-section-label">Management</div>
+    <div class="nav-item" onclick="switchView('clients', this)">
+      <span class="nav-icon">👥</span> Clients
+    </div>
+    <div class="nav-item" onclick="switchView('tasks', this)">
+      <span class="nav-icon">✅</span> Tasks
+    </div>
+    <div class="nav-item" onclick="switchView('reports', this)">
+      <span class="nav-icon">📈</span> Reports
+    </div>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-section-label">Settings</div>
+    <div class="nav-item" onclick="switchView('settings', this)">
+      <span class="nav-icon">⚙️</span> Settings
+    </div>
+  </div>
+
+  <div class="sidebar-footer">
+    <div class="user-card">
+      <div class="user-avatar">RS</div>
+      <div class="user-info">
+        <div class="user-name">CA Rajesh Sharma</div>
+        <div class="user-role">Partner, Admin</div>
+      </div>
+      <span style="color:rgba(255,255,255,0.3);cursor:pointer;font-size:14px;">⋯</span>
+    </div>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<div class="main">
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div>
+      <span class="topbar-title" id="topbar-title">Dashboard</span>
+      <span class="topbar-subtitle" id="topbar-subtitle">— Aaj ka overview</span>
+    </div>
+    <div class="topbar-actions">
+      <div class="search-box">
+        <span>🔍</span>
+        <input type="text" placeholder="Client, invoice, task search karein…">
+      </div>
+      <button class="btn btn-primary" onclick="openModal()">+ New Client</button>
+      <div class="notif-btn">🔔<div class="notif-dot"></div></div>
+    </div>
+  </div>
+
+  <!-- CONTENT AREA -->
+  <div class="content">
+
+    <!-- ══ DASHBOARD VIEW ══ -->
+    <div class="view active" id="view-dashboard">
+      <div class="stats-grid">
+        <div class="stat-card teal">
+          <div class="stat-icon">👥</div>
+          <div class="stat-label">Total Clients</div>
+          <div class="stat-value">247</div>
+          <div class="stat-change up">↑ 12 this month</div>
+        </div>
+        <div class="stat-card amber">
+          <div class="stat-icon">⏰</div>
+          <div class="stat-label">Pending Deadlines</div>
+          <div class="stat-value">18</div>
+          <div class="stat-change down">3 urgent (7 days)</div>
+        </div>
+        <div class="stat-card emerald">
+          <div class="stat-icon">💰</div>
+          <div class="stat-label">Fees Collected</div>
+          <div class="stat-value">₹8.4L</div>
+          <div class="stat-change up">↑ 23% vs last month</div>
+        </div>
+        <div class="stat-card rose">
+          <div class="stat-icon">📬</div>
+          <div class="stat-label">Pending Fees</div>
+          <div class="stat-value">₹2.1L</div>
+          <div class="stat-change down">4 clients overdue</div>
+        </div>
+      </div>
+
+      <div class="dash-grid">
+        <div class="card">
+          <div class="card-header">
+            <span>🔥</span>
+            <span class="card-title">Upcoming Compliance Deadlines</span>
+            <span class="card-action" onclick="switchView('compliance', document.querySelector('[onclick*=compliance]'))">View All →</span>
+          </div>
+          <div class="card-body">
+            <div class="deadline-item">
+              <div class="deadline-dot" style="background:var(--rose)"></div>
+              <div class="deadline-info">
+                <div class="deadline-name">GSTR-3B Filing</div>
+                <div class="deadline-client">14 clients pending</div>
+              </div>
+              <div class="deadline-date urgent">20 Aug</div>
+            </div>
+            <div class="deadline-item">
+              <div class="deadline-dot" style="background:var(--rose)"></div>
+              <div class="deadline-info">
+                <div class="deadline-name">TDS Return Q1</div>
+                <div class="deadline-client">8 clients pending</div>
+              </div>
+              <div class="deadline-date urgent">31 Aug</div>
+            </div>
+            <div class="deadline-item">
+              <div class="deadline-dot" style="background:var(--amber)"></div>
+              <div class="deadline-info">
+                <div class="deadline-name">ITR Filing (Individuals)</div>
+                <div class="deadline-client">31 clients pending</div>
+              </div>
+              <div class="deadline-date soon">31 Aug</div>
+            </div>
+            <div class="deadline-item">
+              <div class="deadline-dot" style="background:var(--amber)"></div>
+              <div class="deadline-info">
+                <div class="deadline-name">GSTR-1 Monthly</div>
+                <div class="deadline-client">22 clients pending</div>
+              </div>
+              <div class="deadline-date soon">11 Sep</div>
+            </div>
+            <div class="deadline-item">
+              <div class="deadline-dot" style="background:var(--emerald)"></div>
+              <div class="deadline-info">
+                <div class="deadline-name">ROC Annual Return</div>
+                <div class="deadline-client">5 companies pending</div>
+              </div>
+              <div class="deadline-date ok">30 Sep</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:16px;">
+          <div class="card">
+            <div class="card-header">
+              <span>🤖</span>
+              <span class="card-title">AI Agent Activity</span>
+              <span class="ai-badge">Live</span>
+            </div>
+            <div class="card-body">
+              <div style="display:flex;flex-direction:column;gap:10px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                  <span class="text-sm">Queries Handled Today</span>
+                  <span class="font-semibold" style="color:var(--teal)">34</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                  <span class="text-sm">Reminders Sent</span>
+                  <span class="font-semibold" style="color:var(--amber)">87</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                  <span class="text-sm">Docs Auto-Verified</span>
+                  <span class="font-semibold" style="color:var(--emerald)">12</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                  <span class="text-sm">Leads Qualified</span>
+                  <span class="font-semibold" style="color:var(--violet)">7</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                  <span class="text-sm">Fees Collected (AI Follow-up)</span>
+                  <span class="font-semibold" style="color:var(--emerald)">₹45,000</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <span>📊</span>
+              <span class="card-title">Lead Pipeline</span>
+              <span class="card-action" onclick="switchView('leads', document.querySelector('[onclick*=leads]'))">View →</span>
+            </div>
+            <div class="card-body">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div style="text-align:center;padding:10px;background:var(--surface);border-radius:8px;">
+                  <div style="font-family:'Space Grotesk',sans-serif;font-size:22px;font-weight:700;color:var(--teal)">12</div>
+                  <div class="text-xs text-muted">Active Leads</div>
+                </div>
+                <div style="text-align:center;padding:10px;background:var(--surface);border-radius:8px;">
+                  <div style="font-family:'Space Grotesk',sans-serif;font-size:22px;font-weight:700;color:var(--emerald)">₹3.8L</div>
+                  <div class="text-xs text-muted">Pipeline Value</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Recent clients table -->
+      <div class="card mt-4" style="margin-top:16px;">
+        <div class="card-header">
+          <span>👥</span>
+          <span class="card-title">Recent Client Activity</span>
+          <span class="card-action">View All Clients →</span>
+        </div>
+        <div class="card-body" style="padding:0;">
+          <table>
+            <thead><tr>
+              <th>Client Name</th>
+              <th>Services</th>
+              <th>Last Activity</th>
+              <th>Pending Doc</th>
+              <th>Status</th>
+              <th>Action</th>
+            </tr></thead>
+            <tbody>
+              <tr>
+                <td><div style="font-weight:600">Mehta Textiles Pvt Ltd</div><div class="text-xs text-muted">GST: 23AABCM1234F1Z5</div></td>
+                <td><span class="badge badge-teal">GST</span> <span class="badge badge-violet">TDS</span></td>
+                <td class="text-sm text-muted">2 hours ago</td>
+                <td><span class="badge badge-amber">Bank Stmt</span></td>
+                <td><span class="badge badge-emerald">✓ Active</span></td>
+                <td><button class="btn btn-outline" style="padding:4px 10px;font-size:12px;">View</button></td>
+              </tr>
+              <tr>
+                <td><div style="font-weight:600">Priya Sharma (Individual)</div><div class="text-xs text-muted">PAN: ABCPS1234D</div></td>
+                <td><span class="badge badge-teal">ITR</span></td>
+                <td class="text-sm text-muted">Yesterday</td>
+                <td><span class="badge badge-rose">Form 16</span></td>
+                <td><span class="badge badge-amber">⚠ Doc Pending</span></td>
+                <td><button class="btn btn-outline" style="padding:4px 10px;font-size:12px;">Remind</button></td>
+              </tr>
+              <tr>
+                <td><div style="font-weight:600">Gupta Hardware Store</div><div class="text-xs text-muted">GST: 23AACPG5678K1Z2</div></td>
+                <td><span class="badge badge-teal">GST</span> <span class="badge badge-slate">Bookkeeping</span></td>
+                <td class="text-sm text-muted">3 days ago</td>
+                <td>—</td>
+                <td><span class="badge badge-emerald">✓ Active</span></td>
+                <td><button class="btn btn-outline" style="padding:4px 10px;font-size:12px;">View</button></td>
+              </tr>
+              <tr>
+                <td><div style="font-weight:600">Kumar Constructions</div><div class="text-xs text-muted">GST: 23AACKC9012J1Z8</div></td>
+                <td><span class="badge badge-teal">GST</span> <span class="badge badge-violet">ROC</span> <span class="badge badge-slate">Audit</span></td>
+                <td class="text-sm text-muted">1 week ago</td>
+                <td><span class="badge badge-rose">P&L Statement</span></td>
+                <td><span class="badge badge-rose">🚨 Overdue</span></td>
+                <td><button class="btn btn-primary" style="padding:4px 10px;font-size:12px;">⚡ Chase</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ AI SUPPORT AGENT VIEW ══ -->
+    <div class="view" id="view-agent">
+      <div class="section-title">🤖 AI Client Support Agent</div>
+      <div class="section-desc">WhatsApp/Email se aane wale client queries ka AI automatically reply karta hai. CA ka time bachata hai.</div>
+
+      <div class="agent-layout">
+        <div>
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+            <span style="font-size:13px;font-weight:600;">Live Chat Preview</span>
+            <span class="ai-badge">🤖 AI Powered</span>
+            <select style="margin-left:auto;font-size:12px;border:1px solid var(--border);border-radius:6px;padding:4px 8px;">
+              <option>Mehta Textiles</option>
+              <option>Priya Sharma</option>
+              <option>Gupta Hardware</option>
+            </select>
+          </div>
+          <div class="chat-container">
+            <div class="chat-header">
+              <span style="font-size:20px;">💬</span>
+              <div>
+                <div style="font-size:13.5px;font-weight:600;">Ramesh Mehta</div>
+                <div style="font-size:11px;color:var(--text-muted);">Mehta Textiles • WhatsApp</div>
+              </div>
+              <div class="ai-indicator" style="margin-left:auto;"></div>
+              <span style="font-size:11px;color:var(--emerald);font-weight:600;">AI Active</span>
+            </div>
+            <div class="chat-messages" id="chat-messages">
+              <div class="msg msg-client">
+                <div class="msg-bubble">Namaste! Mujhe GSTR-3B ke baare mein poochna tha, kab tak bharna hai August ka?</div>
+                <div class="msg-meta">Ramesh Mehta • 10:24 AM</div>
+              </div>
+              <div class="msg msg-ai">
+                <div class="msg-bubble">🙏 Namaste Ramesh ji! August 2026 ka GSTR-3B filing ki last date <strong>20 August 2026</strong> hai. Aapka GSTIN 23AABCM1234F1Z5 hai na? Main check kar raha hoon ki aapka data ready hai ya nahi…<br><br>⚠️ Aapka Bank Statement abhi pending hai. Kripya jald se upload karein taaki hum time par file kar sakein.</div>
+                <div class="msg-meta">🤖 AI Agent • 10:24 AM • Auto-replied</div>
+              </div>
+              <div class="msg msg-client">
+                <div class="msg-bubble">Haan wahi hai mera. Bank statement kahan bhejun?</div>
+                <div class="msg-meta">Ramesh Mehta • 10:26 AM</div>
+              </div>
+              <div class="msg msg-ai">
+                <div class="msg-bubble">Bilkul! Aap document 3 tarike se de sakte hain:<br><br>📲 <strong>WhatsApp:</strong> Is number par hi bhej dein<br>📧 <strong>Email:</strong> docs@sharmaassociates.in<br>🔗 <strong>Portal:</strong> client.sharmaassociates.in/upload<br><br>Document receive hone par aapko confirmation milega. Koi aur sawaal?</div>
+                <div class="msg-meta">🤖 AI Agent • 10:26 AM • Auto-replied</div>
+              </div>
+              <div class="msg msg-client">
+                <div class="msg-bubble">Fees kitni hogi GSTR-3B ki?</div>
+                <div class="msg-meta">Ramesh Mehta • 10:28 AM</div>
+              </div>
+              <div class="msg msg-ai">
+                <div class="msg-bubble">Ramesh ji, fees ke baare mein CA sahab se baat karein — main unhe notify kar raha hoon. Woh aapko aaj dopahar tak reply karenge. 🙏</div>
+                <div class="msg-meta">🤖 AI Agent • 10:28 AM • Escalated to CA</div>
+              </div>
+            </div>
+            <div class="chat-input-area">
+              <textarea class="chat-input" rows="1" placeholder="Client ki taraf se message likhein (demo)…" id="chat-input"></textarea>
+              <button class="send-btn" onclick="sendTestMessage()">➤</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="agent-stats-col">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div class="mini-stat">
+              <div class="mini-stat-icon" style="background:var(--teal-light);">🤖</div>
+              <div class="mini-stat-info">
+                <div class="value" style="color:var(--teal)">94%</div>
+                <div class="label">Auto-resolve rate</div>
+              </div>
+            </div>
+            <div class="mini-stat">
+              <div class="mini-stat-icon" style="background:var(--emerald-light);">⚡</div>
+              <div class="mini-stat-info">
+                <div class="value" style="color:var(--emerald)">18s</div>
+                <div class="label">Avg response time</div>
+              </div>
+            </div>
+            <div class="mini-stat">
+              <div class="mini-stat-icon" style="background:var(--amber-light);">📬</div>
+              <div class="mini-stat-info">
+                <div class="value" style="color:var(--amber)">247</div>
+                <div class="label">Queries this month</div>
+              </div>
+            </div>
+            <div class="mini-stat">
+              <div class="mini-stat-icon" style="background:var(--violet-light);">👨‍💼</div>
+              <div class="mini-stat-info">
+                <div class="value" style="color:var(--violet)">16</div>
+                <div class="label">Escalated to CA</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <span>❓</span>
+              <span class="card-title">Top Frequently Asked Questions</span>
+            </div>
+            <div class="faq-list">
+              <div class="faq-item">
+                <span style="font-size:14px;">📅</span>
+                <span class="faq-q">GSTR-3B ki deadline kab hai?</span>
+                <span class="faq-count">48 asks</span>
+              </div>
+              <div class="faq-item">
+                <span style="font-size:14px;">📄</span>
+                <span class="faq-q">ITR file karne ke liye kaun se documents chahiye?</span>
+                <span class="faq-count">41 asks</span>
+              </div>
+              <div class="faq-item">
+                <span style="font-size:14px;">💰</span>
+                <span class="faq-q">GST registration ke liye fees kitni hai?</span>
+                <span class="faq-count">33 asks</span>
+              </div>
+              <div class="faq-item">
+                <span style="font-size:14px;">🏢</span>
+                <span class="faq-q">Pvt Ltd company kaise banate hain?</span>
+                <span class="faq-count">27 asks</span>
+              </div>
+              <div class="faq-item">
+                <span style="font-size:14px;">⚠️</span>
+                <span class="faq-q">Late filing penalty kya hogi?</span>
+                <span class="faq-count">22 asks</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ DOCUMENTS VIEW ══ -->
+    <div class="view" id="view-documents">
+      <div class="section-title">📄 Document Collection Hub</div>
+      <div class="section-desc">Client se required documents track karein. Missing documents ka automatic WhatsApp/Email reminder bhejein.</div>
+
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <div class="doc-filters">
+          <div class="filter-tab active">All Clients</div>
+          <div class="filter-tab">Missing Docs</div>
+          <div class="filter-tab">Pending Verify</div>
+          <div class="filter-tab">Complete</div>
+          <div class="filter-tab">ITR Season</div>
+        </div>
+        <button class="btn btn-primary" style="font-size:12px;">📤 Send Bulk Reminder</button>
+      </div>
+
+      <!-- Client 1 -->
+      <div class="client-doc-card">
+        <div class="client-doc-header">
+          <div class="client-avatar" style="background:linear-gradient(135deg,#0EA5C9,#0369A1)">MT</div>
+          <div class="client-info">
+            <div class="name">Mehta Textiles Pvt Ltd</div>
+            <div class="meta">ITR Filing • Due: 31 Aug 2026 • 3 docs missing</div>
+          </div>
+          <div style="margin-left:auto;display:flex;gap:8px;align-items:center;">
+            <button class="reminder-btn wa">📱 WhatsApp Remind</button>
+            <button class="reminder-btn email">📧 Email</button>
+          </div>
+        </div>
+        <div class="client-doc-body">
+          <div class="doc-grid">
+            <div class="doc-item received"><div class="doc-icon">📊</div><div class="doc-name">Balance Sheet</div><div class="doc-status-icon">✅</div></div>
+            <div class="doc-item received"><div class="doc-icon">💼</div><div class="doc-name">P&L Statement</div><div class="doc-status-icon">✅</div></div>
+            <div class="doc-item missing"><div class="doc-icon">🏦</div><div class="doc-name">Bank Statement</div><div class="doc-status-icon">❌</div></div>
+            <div class="doc-item missing"><div class="doc-icon">📋</div><div class="doc-name">GST Returns</div><div class="doc-status-icon">❌</div></div>
+            <div class="doc-item pending"><div class="doc-icon">🧾</div><div class="doc-name">Purchase Bills</div><div class="doc-status-icon">⏳</div></div>
+            <div class="doc-item received"><div class="doc-icon">📄</div><div class="doc-name">PAN Card</div><div class="doc-status-icon">✅</div></div>
+          </div>
+          <div class="progress-bar"><div class="progress-fill" style="width:50%"></div></div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">3/6 documents received (50%)</div>
+        </div>
+      </div>
+
+      <!-- Client 2 -->
+      <div class="client-doc-card">
+        <div class="client-doc-header">
+          <div class="client-avatar" style="background:linear-gradient(135deg,#8B5CF6,#6D28D9)">PS</div>
+          <div class="client-info">
+            <div class="name">Priya Sharma</div>
+            <div class="meta">ITR (Individual) • Due: 31 Aug 2026 • 1 doc missing</div>
+          </div>
+          <div style="margin-left:auto;display:flex;gap:8px;align-items:center;">
+            <button class="reminder-btn wa">📱 WhatsApp Remind</button>
+          </div>
+        </div>
+        <div class="client-doc-body">
+          <div class="doc-grid">
+            <div class="doc-item missing"><div class="doc-icon">📃</div><div class="doc-name">Form 16</div><div class="doc-status-icon">❌</div></div>
+            <div class="doc-item received"><div class="doc-icon">💳</div><div class="doc-name">PAN Card</div><div class="doc-status-icon">✅</div></div>
+            <div class="doc-item received"><div class="doc-icon">🏠</div><div class="doc-name">Aadhaar</div><div class="doc-status-icon">✅</div></div>
+            <div class="doc-item received"><div class="doc-icon">🏦</div><div class="doc-name">Bank Statement</div><div class="doc-status-icon">✅</div></div>
+          </div>
+          <div class="progress-bar"><div class="progress-fill" style="width:75%"></div></div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">3/4 documents received (75%)</div>
+        </div>
+      </div>
+
+      <!-- Client 3 -->
+      <div class="client-doc-card">
+        <div class="client-doc-header">
+          <div class="client-avatar" style="background:linear-gradient(135deg,#10B981,#059669)">GH</div>
+          <div class="client-info">
+            <div class="name">Gupta Hardware Store</div>
+            <div class="meta">GST Filing • Due: 11 Sep 2026 • All docs received ✓</div>
+          </div>
+          <div style="margin-left:auto;"><span class="badge badge-emerald">✓ Complete</span></div>
+        </div>
+        <div class="client-doc-body">
+          <div class="doc-grid">
+            <div class="doc-item received"><div class="doc-icon">📊</div><div class="doc-name">Sales Register</div><div class="doc-status-icon">✅</div></div>
+            <div class="doc-item received"><div class="doc-icon">🧾</div><div class="doc-name">Purchase Bills</div><div class="doc-status-icon">✅</div></div>
+            <div class="doc-item received"><div class="doc-icon">🏦</div><div class="doc-name">Bank Statement</div><div class="doc-status-icon">✅</div></div>
+          </div>
+          <div class="progress-bar"><div class="progress-fill" style="width:100%"></div></div>
+          <div style="font-size:11px;color:var(--emerald);margin-top:4px;">All documents received ✓</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ COMPLIANCE VIEW ══ -->
+    <div class="view" id="view-compliance">
+      <div class="section-title">🔔 Compliance Deadline Tracker</div>
+      <div class="section-desc">GST, ITR, TDS, ROC deadlines auto-track hoti hain. Clients ko automatic reminders milte hain 7, 3, 1 din pehle.</div>
+
+      <div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap;">
+        <div style="background:white;border:1px solid var(--border);border-radius:10px;padding:12px 20px;text-align:center;min-width:100px;">
+          <div style="font-family:'Space Grotesk',sans-serif;font-size:24px;font-weight:700;color:var(--rose)">3</div>
+          <div style="font-size:11px;color:var(--text-muted)">🚨 Urgent (&lt;7 days)</div>
+        </div>
+        <div style="background:white;border:1px solid var(--border);border-radius:10px;padding:12px 20px;text-align:center;min-width:100px;">
+          <div style="font-family:'Space Grotesk',sans-serif;font-size:24px;font-weight:700;color:var(--amber)">8</div>
+          <div style="font-size:11px;color:var(--text-muted)">⚠️ Upcoming (30 days)</div>
+        </div>
+        <div style="background:white;border:1px solid var(--border);border-radius:10px;padding:12px 20px;text-align:center;min-width:100px;">
+          <div style="font-family:'Space Grotesk',sans-serif;font-size:24px;font-weight:700;color:var(--emerald)">12</div>
+          <div style="font-size:11px;color:var(--text-muted)">✅ Filed This Month</div>
+        </div>
+        <div style="background:white;border:1px solid var(--border);border-radius:10px;padding:12px 20px;text-align:center;min-width:100px;">
+          <div style="font-family:'Space Grotesk',sans-serif;font-size:24px;font-weight:700;color:var(--teal)">156</div>
+          <div style="font-size:11px;color:var(--text-muted)">📬 Reminders Sent</div>
+        </div>
+        <button class="btn btn-primary" style="margin-left:auto;">📤 Send All Reminders</button>
+      </div>
+
+      <div class="month-header">August 2026 — Urgent</div>
+
+      <div class="compliance-item urgent">
+        <div class="comp-type-icon" style="background:var(--teal-light)">📋</div>
+        <div class="comp-info">
+          <div class="comp-title">GSTR-3B — Monthly Return</div>
+          <div class="comp-meta">14 clients pending • GST Department</div>
+          <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;">
+            <span class="badge badge-rose">Mehta Textiles</span>
+            <span class="badge badge-rose">Kumar Constructions</span>
+            <span class="badge badge-rose">+12 more</span>
+          </div>
+        </div>
+        <div class="comp-due">
+          <div class="comp-due-date" style="color:var(--rose)">20 Aug 2026</div>
+          <div class="comp-due-label" style="color:var(--rose)">2 days left!</div>
+        </div>
+        <div class="comp-actions">
+          <div class="icon-btn" title="Send WhatsApp Reminder">📱</div>
+          <div class="icon-btn" title="Send Email">📧</div>
+          <div class="icon-btn" title="Mark Done">✅</div>
+        </div>
+      </div>
+
+      <div class="compliance-item urgent">
+        <div class="comp-type-icon" style="background:var(--amber-light)">💼</div>
+        <div class="comp-info">
+          <div class="comp-title">TDS Return — Q1 (Apr-Jun 2026)</div>
+          <div class="comp-meta">8 clients pending • Income Tax Dept</div>
+          <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;">
+            <span class="badge badge-amber">Mehta Textiles</span>
+            <span class="badge badge-amber">+7 more</span>
+          </div>
+        </div>
+        <div class="comp-due">
+          <div class="comp-due-date" style="color:var(--rose)">31 Aug 2026</div>
+          <div class="comp-due-label" style="color:var(--rose)">13 days left</div>
+        </div>
+        <div class="comp-actions">
+          <div class="icon-btn">📱</div>
+          <div class="icon-btn">📧</div>
+          <div class="icon-btn">✅</div>
+        </div>
+      </div>
+
+      <div class="compliance-item urgent">
+        <div class="comp-type-icon" style="background:var(--violet-light)">📊</div>
+        <div class="comp-info">
+          <div class="comp-title">ITR Filing — Individuals & Proprietors</div>
+          <div class="comp-meta">31 clients pending • Income Tax Dept</div>
+          <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;">
+            <span class="badge badge-violet">Priya Sharma</span>
+            <span class="badge badge-violet">Anil Verma</span>
+            <span class="badge badge-violet">+29 more</span>
+          </div>
+        </div>
+        <div class="comp-due">
+          <div class="comp-due-date" style="color:var(--rose)">31 Aug 2026</div>
+          <div class="comp-due-label" style="color:var(--rose)">13 days left</div>
+        </div>
+        <div class="comp-actions">
+          <div class="icon-btn">📱</div>
+          <div class="icon-btn">📧</div>
+          <div class="icon-btn">✅</div>
+        </div>
+      </div>
+
+      <div class="month-header" style="margin-top:24px;">September 2026</div>
+
+      <div class="compliance-item warning">
+        <div class="comp-type-icon" style="background:var(--teal-light)">📋</div>
+        <div class="comp-info">
+          <div class="comp-title">GSTR-1 — Monthly Outward Supplies</div>
+          <div class="comp-meta">22 clients • GST Department</div>
+        </div>
+        <div class="comp-due">
+          <div class="comp-due-date" style="color:var(--amber)">11 Sep 2026</div>
+          <div class="comp-due-label">24 days left</div>
+        </div>
+        <div class="comp-actions">
+          <div class="icon-btn">📱</div>
+          <div class="icon-btn">📧</div>
+          <div class="icon-btn">✅</div>
+        </div>
+      </div>
+
+      <div class="compliance-item ok">
+        <div class="comp-type-icon" style="background:var(--emerald-light)">🏢</div>
+        <div class="comp-info">
+          <div class="comp-title">ROC Annual Return (MGT-7)</div>
+          <div class="comp-meta">5 companies • Ministry of Corporate Affairs</div>
+          <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;">
+            <span class="badge badge-slate">Kumar Constructions</span>
+            <span class="badge badge-slate">+4 more</span>
+          </div>
+        </div>
+        <div class="comp-due">
+          <div class="comp-due-date" style="color:var(--emerald)">30 Sep 2026</div>
+          <div class="comp-due-label">43 days left</div>
+        </div>
+        <div class="comp-actions">
+          <div class="icon-btn">📱</div>
+          <div class="icon-btn">📧</div>
+          <div class="icon-btn">✅</div>
+        </div>
+      </div>
+
+      <div class="compliance-item done">
+        <div class="comp-type-icon" style="background:var(--slate-light)">✅</div>
+        <div class="comp-info">
+          <div class="comp-title">GSTR-3B — July 2026</div>
+          <div class="comp-meta">All 22 clients filed • Completed on 19 Jul 2026</div>
+        </div>
+        <div class="comp-due">
+          <div class="comp-due-date" style="color:var(--text-muted)">20 Jul 2026</div>
+          <div class="comp-due-label" style="color:var(--emerald)">Completed ✓</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ LEADS VIEW ══ -->
+    <div class="view" id="view-leads">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+        <div>
+          <div class="section-title">📊 Lead Qualification Pipeline</div>
+          <div class="section-desc" style="margin-bottom:0">Website/WhatsApp enquiries → AI qualify → Auto follow-up</div>
+        </div>
+        <button class="btn btn-primary" onclick="openModal()">+ Add Lead</button>
+      </div>
+
+      <div class="kanban">
+        <!-- New Enquiry -->
+        <div class="kanban-col">
+          <div class="kanban-col-header">
+            <div class="kanban-count" style="background:#E2E8F0;color:var(--slate)">4</div>
+            <span class="kanban-col-title">🆕 New Enquiry</span>
+          </div>
+          <div class="lead-card">
+            <div class="lead-name">Sunita Agarwal</div>
+            <div class="lead-service">GST Registration + ITR</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">📱 WhatsApp • 2 hours ago</div>
+            <div class="score-bar"><div class="score-fill" style="width:30%;background:var(--amber)"></div></div>
+            <div class="lead-footer">
+              <span class="lead-source">WhatsApp</span>
+              <span class="lead-value">₹15,000</span>
+            </div>
+          </div>
+          <div class="lead-card">
+            <div class="lead-name">Ratan Steel Works</div>
+            <div class="lead-service">Company Incorporation</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">🌐 Website • 5 hours ago</div>
+            <div class="score-bar"><div class="score-fill" style="width:20%;background:var(--rose)"></div></div>
+            <div class="lead-footer">
+              <span class="lead-source">Website</span>
+              <span class="lead-value">₹25,000</span>
+            </div>
+          </div>
+          <div class="lead-card">
+            <div class="lead-name">Dr. Pooja Mishra</div>
+            <div class="lead-service">Professional ITR Filing</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">📱 WhatsApp • Yesterday</div>
+            <div class="score-bar"><div class="score-fill" style="width:45%;background:var(--amber)"></div></div>
+            <div class="lead-footer">
+              <span class="lead-source">Referral</span>
+              <span class="lead-value">₹8,000</span>
+            </div>
+          </div>
+          <div class="lead-card">
+            <div class="lead-name">Verma Transport Co.</div>
+            <div class="lead-service">GST + TDS</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">📱 WhatsApp • Yesterday</div>
+            <div class="score-bar"><div class="score-fill" style="width:25%;background:var(--amber)"></div></div>
+            <div class="lead-footer">
+              <span class="lead-source">WhatsApp</span>
+              <span class="lead-value">₹20,000</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- AI Qualifying -->
+        <div class="kanban-col">
+          <div class="kanban-col-header">
+            <div class="kanban-count" style="background:var(--teal-light);color:#0C4A6E">3</div>
+            <span class="kanban-col-title">🤖 AI Qualifying</span>
+          </div>
+          <div class="lead-card">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+              <div class="lead-name" style="margin-bottom:0">Kapoor Pharma</div>
+              <span class="ai-badge" style="font-size:9px;">AI Active</span>
+            </div>
+            <div class="lead-service">Audit + ROC + GST</div>
+            <div style="font-size:11px;color:var(--teal);margin-top:4px;font-weight:500;">🤖 AI asking 3/5 questions…</div>
+            <div class="score-bar"><div class="score-fill" style="width:65%;background:var(--teal)"></div></div>
+            <div class="lead-footer">
+              <span class="lead-source">Website</span>
+              <span class="lead-value">₹60,000</span>
+            </div>
+          </div>
+          <div class="lead-card">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+              <div class="lead-name" style="margin-bottom:0">Shreya Fashion</div>
+              <span class="ai-badge" style="font-size:9px;">AI Active</span>
+            </div>
+            <div class="lead-service">GST Registration</div>
+            <div style="font-size:11px;color:var(--teal);margin-top:4px;font-weight:500;">🤖 Qualification 80% done</div>
+            <div class="score-bar"><div class="score-fill" style="width:80%;background:var(--emerald)"></div></div>
+            <div class="lead-footer">
+              <span class="lead-source">Referral</span>
+              <span class="lead-value">₹12,000</span>
+            </div>
+          </div>
+          <div class="lead-card">
+            <div class="lead-name">Anand Electronics</div>
+            <div class="lead-service">Bookkeeping + ITR</div>
+            <div style="font-size:11px;color:var(--amber);margin-top:4px;font-weight:500;">⚠️ Low budget concern</div>
+            <div class="score-bar"><div class="score-fill" style="width:40%;background:var(--amber)"></div></div>
+            <div class="lead-footer">
+              <span class="lead-source">WhatsApp</span>
+              <span class="lead-value">₹10,000</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Proposal Sent -->
+        <div class="kanban-col">
+          <div class="kanban-col-header">
+            <div class="kanban-count" style="background:var(--violet-light);color:#4C1D95">3</div>
+            <span class="kanban-col-title">📤 Proposal Sent</span>
+          </div>
+          <div class="lead-card">
+            <div class="lead-name">Bharat Logistics</div>
+            <div class="lead-service">Full Compliance + Audit</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">Proposal sent 3 days ago</div>
+            <div style="font-size:11px;color:var(--amber);margin-top:2px;font-weight:500;">⏰ Follow-up due today</div>
+            <div class="score-bar"><div class="score-fill" style="width:75%;background:var(--violet)"></div></div>
+            <div class="lead-footer">
+              <span class="lead-source">Referral</span>
+              <span class="lead-value">₹85,000</span>
+            </div>
+          </div>
+          <div class="lead-card">
+            <div class="lead-name">S.K. Builders</div>
+            <div class="lead-service">GST + ROC + TDS</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">Proposal sent 1 week ago</div>
+            <div style="font-size:11px;color:var(--rose);margin-top:2px;font-weight:500;">🚨 No response — escalate</div>
+            <div class="score-bar"><div class="score-fill" style="width:55%;background:var(--amber)"></div></div>
+            <div class="lead-footer">
+              <span class="lead-source">Website</span>
+              <span class="lead-value">₹45,000</span>
+            </div>
+          </div>
+          <div class="lead-card">
+            <div class="lead-name">Rani Jewellers</div>
+            <div class="lead-service">ITR + GST + Bookkeeping</div>
+            <div style="font-size:11px;color:var(--emerald);margin-top:4px;font-weight:500;">✅ Client replied positively</div>
+            <div class="score-bar"><div class="score-fill" style="width:90%;background:var(--emerald)"></div></div>
+            <div class="lead-footer">
+              <span class="lead-source">Referral</span>
+              <span class="lead-value">₹35,000</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Won / Onboarded -->
+        <div class="kanban-col">
+          <div class="kanban-col-header">
+            <div class="kanban-count" style="background:var(--emerald-light);color:#065F46">2</div>
+            <span class="kanban-col-title">🎉 Won — Onboarding</span>
+          </div>
+          <div class="lead-card" style="border-color:var(--emerald);">
+            <div class="lead-name">Patel Agro Foods</div>
+            <div class="lead-service">Annual Compliance Package</div>
+            <div style="font-size:11px;color:var(--emerald);margin-top:4px;font-weight:600;">🎉 Converted! Agreement signed</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">Onboarding in progress</div>
+            <div class="lead-footer">
+              <span class="lead-source">WhatsApp</span>
+              <span class="lead-value">₹72,000/yr</span>
+            </div>
+          </div>
+          <div class="lead-card" style="border-color:var(--emerald);">
+            <div class="lead-name">Joshi Medical Store</div>
+            <div class="lead-service">GST + ITR</div>
+            <div style="font-size:11px;color:var(--emerald);margin-top:4px;font-weight:600;">🎉 Converted! Payment received</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">Docs collection started</div>
+            <div class="lead-footer">
+              <span class="lead-source">Referral</span>
+              <span class="lead-value">₹18,000</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ INVOICES VIEW ══ -->
+    <div class="view" id="view-invoices">
+      <div class="section-title">🧾 Invoice & Fee Management</div>
+      <div class="section-desc">Pending fees identify karein, automatic WhatsApp/Email reminders bhejein, payment status track karein.</div>
+
+      <div class="invoice-summary">
+        <div class="inv-stat">
+          <div class="amount" style="color:var(--text-primary)">₹10,54,500</div>
+          <div class="inv-label">Total Billed (Aug 2026)</div>
+        </div>
+        <div class="inv-stat">
+          <div class="amount" style="color:var(--emerald)">₹8,41,500</div>
+          <div class="inv-label">✅ Collected</div>
+        </div>
+        <div class="inv-stat">
+          <div class="amount" style="color:var(--rose)">₹2,13,000</div>
+          <div class="inv-label">⏰ Outstanding</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span>💸</span>
+          <span class="card-title">Outstanding Invoices</span>
+          <button class="btn btn-primary" style="margin-left:auto;font-size:12px;">📤 Send All Reminders</button>
+        </div>
+        <div style="padding:0;">
+          <table>
+            <thead><tr>
+              <th>Client</th>
+              <th>Invoice #</th>
+              <th>Service</th>
+              <th>Amount</th>
+              <th>Due Date</th>
+              <th>Overdue</th>
+              <th>Status</th>
+              <th>Action</th>
+            </tr></thead>
+            <tbody>
+              <tr>
+                <td>
+                  <div style="font-weight:600">Kumar Constructions</div>
+                  <div class="text-xs text-muted">📱 9876543210</div>
+                </td>
+                <td class="text-sm text-muted">INV-2026-089</td>
+                <td><span class="badge badge-teal">GST Filing</span> <span class="badge badge-violet">ROC</span></td>
+                <td style="font-weight:700;color:var(--rose)">₹75,000</td>
+                <td class="text-sm">01 Aug 2026</td>
+                <td><span style="font-weight:700;color:var(--rose)">17 days</span></td>
+                <td><span class="badge badge-rose">🚨 Overdue</span></td>
+                <td>
+                  <div class="action-row">
+                    <button class="reminder-btn wa">📱 WA</button>
+                    <button class="reminder-btn email">📧</button>
+                    <button class="reminder-btn call">📞</button>
+                  </div>
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  <div style="font-weight:600">Mehta Textiles</div>
+                  <div class="text-xs text-muted">📱 9012345678</div>
+                </td>
+                <td class="text-sm text-muted">INV-2026-091</td>
+                <td><span class="badge badge-teal">GSTR-3B</span> <span class="badge badge-amber">TDS</span></td>
+                <td style="font-weight:700;color:var(--amber)">₹48,000</td>
+                <td class="text-sm">10 Aug 2026</td>
+                <td><span style="font-weight:700;color:var(--amber)">8 days</span></td>
+                <td><span class="badge badge-amber">⚠️ Due Soon</span></td>
+                <td>
+                  <div class="action-row">
+                    <button class="reminder-btn wa">📱 WA</button>
+                    <button class="reminder-btn email">📧</button>
+                  </div>
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  <div style="font-weight:600">Priya Sharma</div>
+                  <div class="text-xs text-muted">📱 9345678901</div>
+                </td>
+                <td class="text-sm text-muted">INV-2026-094</td>
+                <td><span class="badge badge-violet">ITR Filing</span></td>
+                <td style="font-weight:700;color:var(--amber)">₹12,000</td>
+                <td class="text-sm">20 Aug 2026</td>
+                <td><span style="font-weight:600;color:var(--text-muted)">—</span></td>
+                <td><span class="badge badge-teal">📨 Reminder Sent</span></td>
+                <td>
+                  <div class="action-row">
+                    <button class="reminder-btn wa">📱 WA</button>
+                  </div>
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  <div style="font-weight:600">Verma Transport Co.</div>
+                  <div class="text-xs text-muted">📱 9456789012</div>
+                </td>
+                <td class="text-sm text-muted">INV-2026-082</td>
+                <td><span class="badge badge-teal">GST</span> <span class="badge badge-amber">TDS Q4</span></td>
+                <td style="font-weight:700;color:var(--rose)">₹78,000</td>
+                <td class="text-sm">15 Jul 2026</td>
+                <td><span style="font-weight:700;color:var(--rose)">34 days</span></td>
+                <td><span class="badge badge-rose">🚨 Legal Notice</span></td>
+                <td>
+                  <div class="action-row">
+                    <button class="reminder-btn call">📞 Call</button>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div style="margin-top:16px;background:white;border:1px solid var(--border);border-radius:12px;padding:18px;">
+        <div style="font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;margin-bottom:12px;">🤖 AI Auto-Reminder Schedule</div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
+          <div style="border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center;">
+            <div style="font-size:20px;margin-bottom:6px;">7⃣</div>
+            <div style="font-size:12.5px;font-weight:600;">7 Days Before</div>
+            <div style="font-size:11.5px;color:var(--text-muted);margin-top:3px;">Polite WhatsApp reminder</div>
+          </div>
+          <div style="border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center;">
+            <div style="font-size:20px;margin-bottom:6px;">3⃣</div>
+            <div style="font-size:12.5px;font-weight:600;">3 Days Before</div>
+            <div style="font-size:11.5px;color:var(--text-muted);margin-top:3px;">WA + Email follow-up</div>
+          </div>
+          <div style="border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center;background:var(--rose-light);">
+            <div style="font-size:20px;margin-bottom:6px;">🚨</div>
+            <div style="font-size:12.5px;font-weight:600;">Overdue</div>
+            <div style="font-size:11.5px;color:var(--rose);margin-top:3px;">Escalate to CA partner</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ PLACEHOLDER VIEWS ══ -->
+    <div class="view" id="view-clients">
+      <div class="section-title">👥 Client Management</div>
+      <div class="section-desc">Aapke sare clients, unki services, documents aur history ek jagah.</div>
+      <div style="background:white;border:1px solid var(--border);border-radius:12px;padding:40px;text-align:center;color:var(--text-muted);">
+        <div style="font-size:48px;margin-bottom:12px">👥</div>
+        <div style="font-size:16px;font-weight:600;color:var(--text-primary)">247 Active Clients</div>
+        <div style="font-size:13px;margin-top:6px;">Complete client directory with search, filters, and service history.</div>
+      </div>
+    </div>
+    <div class="view" id="view-tasks">
+      <div class="section-title">✅ Task Management</div>
+      <div class="section-desc">Team ke sare tasks, assignments aur deadlines track karein.</div>
+      <div style="background:white;border:1px solid var(--border);border-radius:12px;padding:40px;text-align:center;color:var(--text-muted);">
+        <div style="font-size:48px;margin-bottom:12px">✅</div>
+        <div style="font-size:16px;font-weight:600;color:var(--text-primary)">38 Open Tasks</div>
+        <div style="font-size:13px;margin-top:6px;">Assign tasks to team members, set priorities, and track completion.</div>
+      </div>
+    </div>
+    <div class="view" id="view-reports">
+      <div class="section-title">📈 Reports & Analytics</div>
+      <div class="section-desc">Practice performance, revenue trends, and compliance rates.</div>
+      <div style="background:white;border:1px solid var(--border);border-radius:12px;padding:40px;text-align:center;color:var(--text-muted);">
+        <div style="font-size:48px;margin-bottom:12px">📈</div>
+        <div style="font-size:16px;font-weight:600;color:var(--text-primary)">Business Intelligence Dashboard</div>
+        <div style="font-size:13px;margin-top:6px;">Revenue trends, client growth, compliance completion rates, and AI savings.</div>
+      </div>
+    </div>
+    <div class="view" id="view-settings">
+      <div class="section-title">⚙️ Settings</div>
+      <div class="section-desc">WhatsApp integration, email templates, reminder schedules configure karein.</div>
+      <div style="background:white;border:1px solid var(--border);border-radius:12px;padding:40px;text-align:center;color:var(--text-muted);">
+        <div style="font-size:48px;margin-bottom:12px">⚙️</div>
+        <div style="font-size:16px;font-weight:600;color:var(--text-primary)">CRM Settings</div>
+        <div style="font-size:13px;margin-top:6px;">WhatsApp API, email SMTP, AI agent prompts, reminder schedules, user management.</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- NEW CLIENT MODAL -->
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <div class="modal-title">+ Naya Client Add Karein</div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Client / Firm Name *</label>
+        <input class="form-input" type="text" placeholder="Mehta Textiles Pvt Ltd">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Client Type *</label>
+        <select class="form-input">
+          <option>Individual</option>
+          <option>Proprietorship</option>
+          <option>Partnership</option>
+          <option>Private Limited</option>
+          <option>Public Limited</option>
+          <option>LLP</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">PAN Number</label>
+        <input class="form-input" type="text" placeholder="AABCM1234F">
+      </div>
+      <div class="form-group">
+        <label class="form-label">GSTIN</label>
+        <input class="form-input" type="text" placeholder="23AABCM1234F1Z5">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">WhatsApp Number *</label>
+        <input class="form-input" type="text" placeholder="+91 98765 43210">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Email</label>
+        <input class="form-input" type="email" placeholder="client@example.com">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Services Required</label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;">
+        <label style="display:flex;align-items:center;gap:5px;font-size:12.5px;cursor:pointer;"><input type="checkbox" checked> GST Filing</label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:12.5px;cursor:pointer;"><input type="checkbox"> ITR</label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:12.5px;cursor:pointer;"><input type="checkbox"> TDS</label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:12.5px;cursor:pointer;"><input type="checkbox"> ROC / MCA</label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:12.5px;cursor:pointer;"><input type="checkbox"> Audit</label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:12.5px;cursor:pointer;"><input type="checkbox"> Bookkeeping</label>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="closeModal()">✓ Client Add Karein</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const topbarTitles = {
+    dashboard: ['Dashboard', '— Aaj ka overview'],
+    agent: ['🤖 AI Support Agent', '— WhatsApp & Email automation'],
+    documents: ['📄 Document Hub', '— Client documents track karein'],
+    compliance: ['🔔 Compliance Tracker', '— GST, ITR, TDS, ROC deadlines'],
+    leads: ['📊 Lead Pipeline', '— AI-powered lead qualification'],
+    invoices: ['🧾 Invoice & Fees', '— Outstanding collections'],
+    clients: ['👥 Client Management', '— All clients'],
+    tasks: ['✅ Tasks', '— Team assignments'],
+    reports: ['📈 Reports', '— Analytics'],
+    settings: ['⚙️ Settings', '— Configuration'],
+  };
+
+  function switchView(viewId, el) {
+    // Update views
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    const target = document.getElementById('view-' + viewId);
+    if (target) target.classList.add('active');
+
+    // Update nav
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    if (el) el.classList.add('active');
+
+    // Update topbar
+    const t = topbarTitles[viewId] || [viewId, ''];
+    document.getElementById('topbar-title').textContent = t[0];
+    document.getElementById('topbar-subtitle').textContent = t[1];
+  }
+
+  function openModal() {
+    document.getElementById('modal').classList.add('open');
+  }
+  function closeModal() {
+    document.getElementById('modal').classList.remove('open');
+  }
+  document.getElementById('modal').addEventListener('click', function(e) {
+    if (e.target === this) closeModal();
+  });
+
+  // Demo chat
+  const aiReplies = [
+    "Main aapki query samajh gaya. Kripya thoda wait karein, CA sahab se confirm karke aapko reply karta hoon. 🙏",
+    "Ye information hamari system mein update ho gayi hai. Koi aur sawaal?",
+    "Bilkul! GSTR-1 aur GSTR-3B dono ki deadline track ki ja rahi hai aapke liye. 📅",
+    "Aapka document receive ho gaya. Verification ke baad confirmation message aayega. ✅",
+  ];
+  let replyIdx = 0;
+
+  function sendTestMessage() {
+    const input = document.getElementById('chat-input');
+    const messages = document.getElementById('chat-messages');
+    const text = input.value.trim();
+    if (!text) return;
+
+    // User message
+    const userMsg = document.createElement('div');
+    userMsg.className = 'msg msg-client';
+    userMsg.innerHTML = `<div class="msg-bubble">${text}</div><div class="msg-meta">Client • Just now</div>`;
+    messages.appendChild(userMsg);
+    input.value = '';
+
+    // Typing
+    const typing = document.createElement('div');
+    typing.className = 'msg msg-ai';
+    typing.innerHTML = `<div class="msg-bubble" style="padding:8px 14px;"><div class="typing-indicator"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div></div>`;
+    messages.appendChild(typing);
+    messages.scrollTop = messages.scrollHeight;
+
+    setTimeout(() => {
+      typing.remove();
+      const aiMsg = document.createElement('div');
+      aiMsg.className = 'msg msg-ai';
+      aiMsg.innerHTML = `<div class="msg-bubble">${aiReplies[replyIdx % aiReplies.length]}</div><div class="msg-meta">🤖 AI Agent • Just now • Auto-replied</div>`;
+      messages.appendChild(aiMsg);
+      messages.scrollTop = messages.scrollHeight;
+      replyIdx++;
+    }, 1500);
+  }
+
+  document.getElementById('chat-input').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendTestMessage(); }
+  });
+
+  // Filter tabs
+  document.querySelectorAll('.filter-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      tab.closest('.doc-filters').querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+    });
+  });
+</script>
+</body>
+</html>
