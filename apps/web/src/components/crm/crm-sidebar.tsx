@@ -49,7 +49,7 @@ const SECTIONS: NavSection[] = [
     items: [
       { href: '/crm/agent', label: 'Support agent', icon: <Bot size={18} /> },
       { href: '/crm/documents', label: 'Document hub', icon: <FileText size={18} /> },
-      { href: '/crm/compliance', label: 'Compliance', icon: <Bell size={18} /> },
+      { href: '/crm/compliance', label: 'Compliance', icon: <Bell size={18} />, ready: true },
       { href: '/crm/leads', label: 'Leads', icon: <TrendingUp size={18} /> },
       { href: '/crm/invoices', label: 'Invoices', icon: <ReceiptIndianRupee size={18} /> },
     ],

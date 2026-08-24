@@ -127,7 +127,7 @@ No UI. Fix the substrate.
 - Repeatable BullMQ job firing reminders at 7 / 3 / 1 days.
 - UI: urgent / upcoming / filed tabs, per-deadline client lists, bulk reminder action.
 
-**Done when:** a deadline auto-appears for the right clients and a dated reminder lands in the outbox.
+**Done when:** a deadline auto-appears for the right clients and a dated reminder lands in the outbox. — **Shipped.** Verified live: generating for a real firm produced 20 obligations across 3 clients, with ROC filings appearing only for the client that is both incorporated and subscribed to ROC; regeneration was a clean no-op; and reminders fired at exactly the 7- and 3-day marks, rendering readable Hinglish into the outbox. A daily sweep runs at 07:00 IST.
 
 ### Phase 4 — Document collection hub
 

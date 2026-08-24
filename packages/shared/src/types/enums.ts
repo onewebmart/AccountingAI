@@ -201,3 +201,39 @@ export enum MessageTemplateKey {
   LEAD_FOLLOW_UP = 'LEAD_FOLLOW_UP',
   GENERIC = 'GENERIC',
 }
+
+// ── Compliance calendar ───────────────────────────────────────────────────────
+
+/**
+ * Statutory obligations the firm tracks for its clients. Each maps to a
+ * recurring due date and to the services that make it applicable.
+ */
+export enum ComplianceType {
+  /** Monthly outward-supply return, due the 11th of the following month. */
+  GSTR_1 = 'GSTR_1',
+  /** Monthly summary return + payment, due the 20th of the following month. */
+  GSTR_3B = 'GSTR_3B',
+  /** Quarterly TDS return (24Q/26Q). */
+  TDS_RETURN = 'TDS_RETURN',
+  /** Annual income-tax return for non-audit assessees. */
+  ITR = 'ITR',
+  /** ROC annual return — companies only. */
+  ROC_MGT_7 = 'ROC_MGT_7',
+  /** ROC financial statements — companies only. */
+  ROC_AOC_4 = 'ROC_AOC_4',
+}
+
+export enum ComplianceStatus {
+  PENDING = 'PENDING',
+  FILED = 'FILED',
+  /** Explicitly ruled out for this client — kept rather than deleted, so the
+   *  calendar generator does not silently recreate it next run. */
+  NOT_APPLICABLE = 'NOT_APPLICABLE',
+}
+
+/** Who the filing goes to. Shown on the deadline card. */
+export enum ComplianceAuthority {
+  GST = 'GST Department',
+  INCOME_TAX = 'Income Tax Department',
+  MCA = 'Ministry of Corporate Affairs',
+}
