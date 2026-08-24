@@ -5,6 +5,7 @@ import { Queue } from 'bullmq';
 import { CrmMessage, CrmMessageSchema } from './schemas/crm-message.schema';
 import { ComplianceItem, ComplianceItemSchema } from './schemas/compliance-item.schema';
 import { DocumentRequest, DocumentRequestSchema } from './schemas/document-request.schema';
+import { Lead, LeadSchema } from './schemas/lead.schema';
 import { AuditLog, AuditLogSchema } from '../gl/schemas/audit-log.schema';
 import { Organization, OrganizationSchema } from '../tenancy/schemas/organization.schema';
 import { Firm, FirmSchema } from '../tenancy/schemas/firm.schema';
@@ -22,6 +23,11 @@ import {
 } from './compliance/compliance.processor';
 import { DocumentRequestService } from './documents/document-request.service';
 import { DocumentRequestController } from './documents/document-request.controller';
+import { LeadsService, CRM_LEADS_QUEUE } from './leads/leads.service';
+import { LeadsController } from './leads/leads.controller';
+import { LeadsProcessor } from './leads/leads.processor';
+import { LeadQualifierService } from './leads/lead-qualifier.service';
+import { OcrModule } from '../ocr/ocr.module';
 
 /**
  * CA firm practice management (CRM). Firm-scoped, unlike the accounting modules
@@ -37,23 +43,35 @@ import { DocumentRequestController } from './documents/document-request.controll
       { name: CrmMessage.name, schema: CrmMessageSchema },
       { name: ComplianceItem.name, schema: ComplianceItemSchema },
       { name: DocumentRequest.name, schema: DocumentRequestSchema },
+      { name: Lead.name, schema: LeadSchema },
       { name: AuditLog.name, schema: AuditLogSchema },
       { name: Organization.name, schema: OrganizationSchema },
       { name: Firm.name, schema: FirmSchema },
     ]),
     BullModule.registerQueue({ name: CRM_MESSAGING_QUEUE }),
     BullModule.registerQueue({ name: CRM_COMPLIANCE_QUEUE }),
+    BullModule.registerQueue({ name: CRM_LEADS_QUEUE }),
+    // UsageMeterService — AI spend on lead qualification is billed like any other.
+    OcrModule,
   ],
-  controllers: [MessagingController, ComplianceController, DocumentRequestController],
+  controllers: [
+    MessagingController,
+    ComplianceController,
+    DocumentRequestController,
+    LeadsController,
+  ],
   providers: [
     MessagingService,
     MessagingProcessor,
     ComplianceService,
     ComplianceProcessor,
     DocumentRequestService,
+    LeadsService,
+    LeadsProcessor,
+    LeadQualifierService,
     { provide: MESSAGING_PROVIDER, useClass: MockMessagingProvider },
   ],
-  exports: [MessagingService, ComplianceService, DocumentRequestService],
+  exports: [MessagingService, ComplianceService, DocumentRequestService, LeadsService],
 })
 export class CrmModule implements OnModuleInit {
   private readonly logger = new Logger(CrmModule.name);

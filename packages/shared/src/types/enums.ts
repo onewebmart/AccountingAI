@@ -257,3 +257,38 @@ export enum DocumentRequestStatus {
   OPEN = 'OPEN',
   COMPLETE = 'COMPLETE',
 }
+
+// ── Lead pipeline ─────────────────────────────────────────────────────────────
+
+/**
+ * Where a prospective client came from. Drives the pipeline's source pills and
+ * lets a firm see which channel actually converts.
+ */
+export enum LeadSource {
+  WHATSAPP = 'WHATSAPP',
+  WEBSITE = 'WEBSITE',
+  REFERRAL = 'REFERRAL',
+  WALK_IN = 'WALK_IN',
+  OTHER = 'OTHER',
+}
+
+/**
+ * Stages a lead moves through. Only a human moves a lead between stages —
+ * the AI qualifier attaches a score and a recommendation, never a stage change
+ * (Invariant 4).
+ */
+export enum LeadStage {
+  NEW = 'NEW',
+  QUALIFYING = 'QUALIFYING',
+  PROPOSAL_SENT = 'PROPOSAL_SENT',
+  WON = 'WON',
+  LOST = 'LOST',
+}
+
+/** State of the AI qualification pass on a lead. */
+export enum LeadQualificationStatus {
+  NOT_STARTED = 'NOT_STARTED',
+  QUEUED = 'QUEUED',
+  DONE = 'DONE',
+  FAILED = 'FAILED',
+}

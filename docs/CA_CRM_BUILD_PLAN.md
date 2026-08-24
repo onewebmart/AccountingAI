@@ -145,7 +145,7 @@ No UI. Fix the substrate.
 - Follow-up scheduling and no-response escalation.
 - UI: 3-column pipeline, add-lead, AI-progress indicators in amber per the design system.
 
-**Done when:** a lead can be created, qualified by AI, and moved through stages by a human.
+**Done when:** a lead can be created, qualified by AI, and moved through stages by a human. — **Shipped.** Verified live against real Gemini: a detailed pharma enquiry scored 95/100 with eight concrete signals and a PROPOSAL_SENT recommendation, a bare "kitna charge karte ho" message scored 20/100 and recommended only QUALIFYING — and both stayed at NEW until a human moved one. NEW → WON was refused as a nonsensical jump.
 
 ### Phase 6 — Practice invoices & collections
 
