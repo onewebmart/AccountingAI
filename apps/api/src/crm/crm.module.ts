@@ -6,6 +6,8 @@ import { CrmMessage, CrmMessageSchema } from './schemas/crm-message.schema';
 import { ComplianceItem, ComplianceItemSchema } from './schemas/compliance-item.schema';
 import { DocumentRequest, DocumentRequestSchema } from './schemas/document-request.schema';
 import { Lead, LeadSchema } from './schemas/lead.schema';
+import { PracticeInvoice, PracticeInvoiceSchema } from './schemas/practice-invoice.schema';
+import { Counter, CounterSchema } from '../gl/schemas/counter.schema';
 import { AuditLog, AuditLogSchema } from '../gl/schemas/audit-log.schema';
 import { Organization, OrganizationSchema } from '../tenancy/schemas/organization.schema';
 import { Firm, FirmSchema } from '../tenancy/schemas/firm.schema';
@@ -28,6 +30,8 @@ import { LeadsController } from './leads/leads.controller';
 import { LeadsProcessor } from './leads/leads.processor';
 import { LeadQualifierService } from './leads/lead-qualifier.service';
 import { OcrModule } from '../ocr/ocr.module';
+import { PracticeInvoiceService } from './invoices/practice-invoice.service';
+import { PracticeInvoiceController } from './invoices/practice-invoice.controller';
 
 /**
  * CA firm practice management (CRM). Firm-scoped, unlike the accounting modules
@@ -44,6 +48,8 @@ import { OcrModule } from '../ocr/ocr.module';
       { name: ComplianceItem.name, schema: ComplianceItemSchema },
       { name: DocumentRequest.name, schema: DocumentRequestSchema },
       { name: Lead.name, schema: LeadSchema },
+      { name: PracticeInvoice.name, schema: PracticeInvoiceSchema },
+      { name: Counter.name, schema: CounterSchema },
       { name: AuditLog.name, schema: AuditLogSchema },
       { name: Organization.name, schema: OrganizationSchema },
       { name: Firm.name, schema: FirmSchema },
@@ -59,6 +65,7 @@ import { OcrModule } from '../ocr/ocr.module';
     ComplianceController,
     DocumentRequestController,
     LeadsController,
+    PracticeInvoiceController,
   ],
   providers: [
     MessagingService,
@@ -69,9 +76,16 @@ import { OcrModule } from '../ocr/ocr.module';
     LeadsService,
     LeadsProcessor,
     LeadQualifierService,
+    PracticeInvoiceService,
     { provide: MESSAGING_PROVIDER, useClass: MockMessagingProvider },
   ],
-  exports: [MessagingService, ComplianceService, DocumentRequestService, LeadsService],
+  exports: [
+    MessagingService,
+    ComplianceService,
+    DocumentRequestService,
+    LeadsService,
+    PracticeInvoiceService,
+  ],
 })
 export class CrmModule implements OnModuleInit {
   private readonly logger = new Logger(CrmModule.name);

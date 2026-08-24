@@ -3,6 +3,7 @@ import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { withFirm } from '../../database/tenant.plugin';
 import { ComplianceService } from './compliance.service';
+import { PracticeInvoiceService } from '../invoices/practice-invoice.service';
 
 export const CRM_COMPLIANCE_QUEUE = 'crm-compliance';
 
@@ -25,16 +26,26 @@ export interface ComplianceSweepJob {
 export class ComplianceProcessor extends WorkerHost {
   private readonly logger = new Logger(ComplianceProcessor.name);
 
-  constructor(private readonly compliance: ComplianceService) {
+  constructor(
+    private readonly compliance: ComplianceService,
+    private readonly invoices: PracticeInvoiceService,
+  ) {
     super();
   }
 
   async process(job: Job<ComplianceSweepJob>): Promise<void> {
     const today = job.data?.today;
 
-    const firmIds = await this.compliance.firmIdsWithItems();
+    // One sweep drives every recurring chase: statutory deadlines and unpaid
+    // fees alike. A firm with invoices but no deadlines must still be swept.
+    const firmIds = [
+      ...new Set([
+        ...(await this.compliance.firmIdsWithItems()),
+        ...(await this.invoices.firmIdsWithInvoices()),
+      ]),
+    ];
     if (firmIds.length === 0) {
-      this.logger.log('Compliance sweep: no firms with obligations yet');
+      this.logger.log('CRM sweep: no firms with obligations or invoices yet');
       return;
     }
 
@@ -43,15 +54,16 @@ export class ComplianceProcessor extends WorkerHost {
         await withFirm(firmId, async () => {
           await this.compliance.generateForFirm(firmId, today);
           await this.compliance.runDueReminders(firmId, today);
+          await this.invoices.runCollections(firmId, today);
         });
       } catch (err) {
         // One firm's bad data must not stop the sweep for everyone else.
         this.logger.error(
-          `Compliance sweep failed for firm ${firmId}: ${err instanceof Error ? err.message : String(err)}`,
+          `CRM sweep failed for firm ${firmId}: ${err instanceof Error ? err.message : String(err)}`,
         );
       }
     }
 
-    this.logger.log(`Compliance sweep complete across ${firmIds.length} firm(s)`);
+    this.logger.log(`CRM sweep complete across ${firmIds.length} firm(s)`);
   }
 }

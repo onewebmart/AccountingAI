@@ -292,3 +292,35 @@ export enum LeadQualificationStatus {
   DONE = 'DONE',
   FAILED = 'FAILED',
 }
+
+// ── Practice invoices (the firm's own fee billing) ────────────────────────────
+
+/**
+ * Status ladder for a fee invoice the CA firm raises on its client.
+ *
+ * Distinct from BillStatus, which is a client's purchase ledger. These are the
+ * firm's own receivables and, per decision D3, are CRM records that never post
+ * to the double-entry ledger.
+ */
+export enum PracticeInvoiceStatus {
+  DRAFT = 'DRAFT',
+  SENT = 'SENT',
+  PARTIALLY_PAID = 'PARTIALLY_PAID',
+  PAID = 'PAID',
+  OVERDUE = 'OVERDUE',
+  /** Escalated after repeated non-payment. */
+  LEGAL_NOTICE = 'LEGAL_NOTICE',
+  CANCELLED = 'CANCELLED',
+}
+
+/** Rungs of the collection reminder ladder, relative to the due date. */
+export enum ReminderRung {
+  /** 7 days before falling due — polite. */
+  BEFORE_DUE = 'BEFORE_DUE',
+  /** On the due date. */
+  ON_DUE = 'ON_DUE',
+  /** 7 days late. */
+  OVERDUE_7 = 'OVERDUE_7',
+  /** 15 days late — the last automated rung before a human escalates. */
+  OVERDUE_15 = 'OVERDUE_15',
+}

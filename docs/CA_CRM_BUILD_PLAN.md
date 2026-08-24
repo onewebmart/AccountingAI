@@ -154,7 +154,7 @@ No UI. Fix the substrate.
 - Escalating reminder ladder (7 days before → due → +7 → +15) as queue jobs.
 - UI: outstanding table, ageing summary, reminder schedule panel.
 
-**Done when:** an invoice issues with a gapless number and its reminder ladder queues correctly.
+**Done when:** an invoice issues with a gapless number and its reminder ladder queues correctly. — **Shipped.** Verified live: three invoices numbered INV-2026-27-0001 to 0003, a part payment moved one to PARTIALLY_PAID, an overpayment and a fractional paise amount were both refused, and a collections run queued three reminders then zero on the re-run. Ten concurrently-raised invoices produced a contiguous 1–10 sequence under test.
 
 ### Phase 7 — AI support agent
 
