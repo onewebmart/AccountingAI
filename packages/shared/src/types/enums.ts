@@ -324,3 +324,34 @@ export enum ReminderRung {
   /** 15 days late — the last automated rung before a human escalates. */
   OVERDUE_15 = 'OVERDUE_15',
 }
+
+// ── AI support agent ──────────────────────────────────────────────────────────
+
+export enum ConversationStatus {
+  /** The agent is handling it. */
+  ACTIVE = 'ACTIVE',
+  /** Handed to a human; auto-reply is suppressed until they resolve it. */
+  ESCALATED = 'ESCALATED',
+  RESOLVED = 'RESOLVED',
+}
+
+/**
+ * Why a thread was handed to a person.
+ *
+ * These are the safety boundary of the agent: anything commercial, anything it
+ * is unsure of, and anything the client explicitly asks a human about.
+ */
+export enum EscalationReason {
+  /** Fees, discounts, refunds — commercial commitments a firm must make itself. */
+  COMMERCIAL = 'COMMERCIAL',
+  /** Complaints, legal threats, notices from a department. */
+  SENSITIVE = 'SENSITIVE',
+  /** The client asked for a person. */
+  CLIENT_REQUESTED = 'CLIENT_REQUESTED',
+  /** The model was not confident enough to answer. */
+  LOW_CONFIDENCE = 'LOW_CONFIDENCE',
+  /** The model failed outright. */
+  AGENT_ERROR = 'AGENT_ERROR',
+  /** A human took the thread over deliberately. */
+  MANUAL = 'MANUAL',
+}

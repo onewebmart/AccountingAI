@@ -29,6 +29,8 @@ export interface EnqueueMessageInput {
   recipientName?: string;
   clientOrgId?: string;
   leadId?: string;
+  /** Threads this send into a support-agent conversation. */
+  conversationId?: string;
   cause?: { type: string; id: string };
 }
 
@@ -77,6 +79,9 @@ export class MessagingService {
       status: MessageStatus.QUEUED,
       clientOrgId: input.clientOrgId ? new Types.ObjectId(input.clientOrgId) : undefined,
       leadId: input.leadId ? new Types.ObjectId(input.leadId) : undefined,
+      conversationId: input.conversationId
+        ? new Types.ObjectId(input.conversationId)
+        : undefined,
       recipientName: input.recipientName,
       recipientAddress: input.recipientAddress,
       templateKey: input.templateKey,

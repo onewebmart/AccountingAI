@@ -163,7 +163,7 @@ No UI. Fix the substrate.
 - Escalation rules: fee questions, low confidence, and explicit client requests route to a human and **suppress auto-reply**.
 - Auto-resolve rate, average response time, FAQ aggregation.
 
-**Done when:** an inbound message produces a contextual reply, and a fee question escalates instead of answering.
+**Done when:** an inbound message produces a contextual reply, and a fee question escalates instead of answering. — **Shipped.** Verified live against real Gemini: "GSTR-3B August ka kab tak bharna hai?" was answered in Hinglish from the client's own compliance record, and "Mere documents mein kya pending hai?" from their document requests. "Fees kitni hogi?" and "GST department se notice aaya hai" both escalated without the model being called at all, each sending a fixed holding message threaded into the conversation.
 
 ### Phase 8 — Dashboard + Reports
 

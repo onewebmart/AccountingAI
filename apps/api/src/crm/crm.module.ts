@@ -8,6 +8,7 @@ import { DocumentRequest, DocumentRequestSchema } from './schemas/document-reque
 import { Lead, LeadSchema } from './schemas/lead.schema';
 import { PracticeInvoice, PracticeInvoiceSchema } from './schemas/practice-invoice.schema';
 import { Counter, CounterSchema } from '../gl/schemas/counter.schema';
+import { Conversation, ConversationSchema } from './schemas/conversation.schema';
 import { AuditLog, AuditLogSchema } from '../gl/schemas/audit-log.schema';
 import { Organization, OrganizationSchema } from '../tenancy/schemas/organization.schema';
 import { Firm, FirmSchema } from '../tenancy/schemas/firm.schema';
@@ -32,6 +33,11 @@ import { LeadQualifierService } from './leads/lead-qualifier.service';
 import { OcrModule } from '../ocr/ocr.module';
 import { PracticeInvoiceService } from './invoices/practice-invoice.service';
 import { PracticeInvoiceController } from './invoices/practice-invoice.controller';
+import { ConversationsService, CRM_AGENT_QUEUE } from './agent/conversations.service';
+import { AgentController } from './agent/agent.controller';
+import { AgentProcessor } from './agent/agent.processor';
+import { SupportAgentService } from './agent/support-agent.service';
+import { ClientContextService } from './agent/client-context.service';
 
 /**
  * CA firm practice management (CRM). Firm-scoped, unlike the accounting modules
@@ -50,6 +56,7 @@ import { PracticeInvoiceController } from './invoices/practice-invoice.controlle
       { name: Lead.name, schema: LeadSchema },
       { name: PracticeInvoice.name, schema: PracticeInvoiceSchema },
       { name: Counter.name, schema: CounterSchema },
+      { name: Conversation.name, schema: ConversationSchema },
       { name: AuditLog.name, schema: AuditLogSchema },
       { name: Organization.name, schema: OrganizationSchema },
       { name: Firm.name, schema: FirmSchema },
@@ -57,6 +64,7 @@ import { PracticeInvoiceController } from './invoices/practice-invoice.controlle
     BullModule.registerQueue({ name: CRM_MESSAGING_QUEUE }),
     BullModule.registerQueue({ name: CRM_COMPLIANCE_QUEUE }),
     BullModule.registerQueue({ name: CRM_LEADS_QUEUE }),
+    BullModule.registerQueue({ name: CRM_AGENT_QUEUE }),
     // UsageMeterService — AI spend on lead qualification is billed like any other.
     OcrModule,
   ],
@@ -66,6 +74,7 @@ import { PracticeInvoiceController } from './invoices/practice-invoice.controlle
     DocumentRequestController,
     LeadsController,
     PracticeInvoiceController,
+    AgentController,
   ],
   providers: [
     MessagingService,
@@ -77,6 +86,10 @@ import { PracticeInvoiceController } from './invoices/practice-invoice.controlle
     LeadsProcessor,
     LeadQualifierService,
     PracticeInvoiceService,
+    ConversationsService,
+    AgentProcessor,
+    SupportAgentService,
+    ClientContextService,
     { provide: MESSAGING_PROVIDER, useClass: MockMessagingProvider },
   ],
   exports: [
@@ -85,6 +98,7 @@ import { PracticeInvoiceController } from './invoices/practice-invoice.controlle
     DocumentRequestService,
     LeadsService,
     PracticeInvoiceService,
+    ConversationsService,
   ],
 })
 export class CrmModule implements OnModuleInit {

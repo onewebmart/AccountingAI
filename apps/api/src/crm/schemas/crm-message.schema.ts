@@ -54,6 +54,10 @@ export class CrmMessage {
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'CrmLead', index: true })
   leadId?: MongooseSchema.Types.ObjectId;
 
+  /** The support-agent thread this message belongs to, when it is part of one. */
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Conversation', index: true })
+  conversationId?: MongooseSchema.Types.ObjectId;
+
   /** Display name at send time — kept even if the client is renamed later. */
   @Prop() recipientName?: string;
 
