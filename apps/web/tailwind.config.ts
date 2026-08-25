@@ -42,10 +42,25 @@ const config: Config = {
         roast: {
           900: '#241A11',
         },
-        // Semantic states
+        // Semantic states.
+        // Kept as literal hex rather than var(--token) so Tailwind's opacity
+        // modifiers (border-error-fg/20) resolve; the values mirror the
+        // custom properties of the same name in globals.css.
         pending: {
           fg: '#945800',
           bg: '#FFF4DC',
+        },
+        success: {
+          fg: '#1E7A47',
+          bg: '#E6F6EE',
+        },
+        error: {
+          fg: '#C92A2A',
+          bg: '#FBE9E9',
+        },
+        info: {
+          fg: '#3B5BC0',
+          bg: '#E9EDFB',
         },
         // shadcn compatibility mappings
         border: 'hsl(var(--border))',

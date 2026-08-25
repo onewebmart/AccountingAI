@@ -2,22 +2,29 @@
 
 import { Suspense, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { setTokens } from '@/lib/api';
+import { useAuth } from '@/lib/auth-context';
 
 function CallbackHandler() {
   const router = useRouter();
   const params = useSearchParams();
+  const { adoptSession } = useAuth();
 
   useEffect(() => {
     const accessToken = params.get('accessToken');
     const refreshToken = params.get('refreshToken');
-    if (accessToken && refreshToken) {
-      setTokens(accessToken, refreshToken);
-      router.replace('/dashboard');
-    } else {
-      router.replace('/auth/login');
+
+    if (!accessToken || !refreshToken) {
+      router.replace('/auth/login?reason=oauth-failed');
+      return;
     }
-  }, [params, router]);
+
+    // Storing the tokens is not enough: the provider mounted before they
+    // existed, so it still holds a signed-out session and the dashboard would
+    // bounce straight back here. Let it load the user before navigating.
+    void adoptSession(accessToken, refreshToken).then(() => {
+      router.replace('/dashboard');
+    });
+  }, [params, router, adoptSession]);
 
   return null;
 }

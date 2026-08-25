@@ -21,6 +21,7 @@ import {
   Stagger,
   StaggerItem,
 } from '@/components/motion/primitives';
+import { useAuth } from '@/lib/auth-context';
 
 /**
  * Public landing page, aimed at CA firms.
@@ -105,6 +106,8 @@ const TRUST = [
 ];
 
 function Nav() {
+  const { user } = useAuth();
+
   return (
     <header className="sticky top-0 z-40 border-b border-line-200/60 bg-surface-page/80 backdrop-blur">
       <nav className="mx-auto flex max-w-6xl items-center gap-6 px-6 py-3.5">
@@ -128,12 +131,22 @@ function Nav() {
         </div>
 
         <div className="ml-auto flex items-center gap-2 sm:ml-0">
-          <Button variant="secondary" size="sm" asChild>
-            <Link href="/auth/login">Sign in</Link>
-          </Button>
-          <Button size="sm" asChild>
-            <Link href="/auth/signup">Start free</Link>
-          </Button>
+          {user ? (
+            // Signing out lands here, and so does a bookmark. Someone with a
+            // live session should not be asked to sign in again.
+            <Button size="sm" asChild>
+              <Link href="/dashboard">Go to dashboard</Link>
+            </Button>
+          ) : (
+            <>
+              <Button variant="secondary" size="sm" asChild>
+                <Link href="/auth/login">Sign in</Link>
+              </Button>
+              <Button size="sm" asChild>
+                <Link href="/auth/signup">Start free</Link>
+              </Button>
+            </>
+          )}
         </div>
       </nav>
     </header>
@@ -141,6 +154,8 @@ function Nav() {
 }
 
 export default function LandingPage() {
+  const { user } = useAuth();
+
   return (
     <main className="min-h-screen bg-surface-page">
       <Nav />
@@ -380,15 +395,26 @@ export default function LandingPage() {
               save your team an afternoon in the first week, nothing is lost.
             </p>
             <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-              <Button size="lg" className="gap-2" asChild>
-                <Link href="/auth/signup">
-                  Start free
-                  <ArrowRight size={16} />
-                </Link>
-              </Button>
-              <Button variant="secondary" size="lg" asChild>
-                <Link href="/auth/login">Sign in</Link>
-              </Button>
+              {user ? (
+                <Button size="lg" className="gap-2" asChild>
+                  <Link href="/dashboard">
+                    Go to dashboard
+                    <ArrowRight size={16} />
+                  </Link>
+                </Button>
+              ) : (
+                <>
+                  <Button size="lg" className="gap-2" asChild>
+                    <Link href="/auth/signup">
+                      Start free
+                      <ArrowRight size={16} />
+                    </Link>
+                  </Button>
+                  <Button variant="secondary" size="lg" asChild>
+                    <Link href="/auth/login">Sign in</Link>
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         </FadeIn>

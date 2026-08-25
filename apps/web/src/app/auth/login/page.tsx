@@ -1,15 +1,48 @@
 'use client';
 
-import { useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuth, ApiError } from '@/lib/auth-context';
 
-export default function LoginPage() {
-  const { login, loginTotp } = useAuth();
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api/v1';
+
+/**
+ * Only ever return to a path inside this app.
+ *
+ * `next` arrives in the URL, so anyone can set it; a value like
+ * `//evil.example` is a protocol-relative URL that a browser would follow off
+ * the site, turning the sign-in page into an open redirect.
+ */
+function safeNext(value: string | null): string {
+  if (!value || !value.startsWith('/') || value.startsWith('//')) return '/dashboard';
+  // Sending someone back to a sign-in page after signing in is a loop.
+  if (value.startsWith('/auth')) return '/dashboard';
+  return value;
+}
+
+function LoginForm() {
+  const { login, loginTotp, user, loading: authLoading } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const next = safeNext(searchParams.get('next'));
+  const reason = searchParams.get('reason');
+  const notice =
+    reason === 'expired'
+      ? { tone: 'warn' as const, text: 'Your session expired. Sign in again to pick up where you left off.' }
+      : reason === 'oauth-failed'
+        ? { tone: 'warn' as const, text: "Google sign-in didn't complete. Try again, or use your email and password." }
+        : reason === 'password-reset'
+          ? { tone: 'ok' as const, text: 'Password updated. Sign in with your new one.' }
+          : null;
+
+  // Someone already signed in has no business on this page — most often they
+  // reached it from a stale tab or the browser's history.
+  useEffect(() => {
+    if (!authLoading && user) router.replace(next);
+  }, [authLoading, user, next, router]);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -27,7 +60,7 @@ export default function LoginPage() {
       if (result.requiresTotp) {
         setTempToken(result.tempToken ?? null);
       } else {
-        router.push('/dashboard');
+        router.replace(next);
       }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'That email and password don\'t match. Try again or reset your password.');
@@ -43,7 +76,7 @@ export default function LoginPage() {
     setLoading(true);
     try {
       await loginTotp(tempToken, totpCode);
-      router.push('/dashboard');
+      router.replace(next);
     } catch {
       setError('Invalid code. Check your authenticator app and try again.');
     } finally {
@@ -67,6 +100,18 @@ export default function LoginPage() {
                 Welcome back
               </h1>
               <p className="text-body text-ink-500 mb-6">Sign in to your account.</p>
+
+              {notice && !error ? (
+                <p
+                  className={
+                    notice.tone === 'ok'
+                      ? 'mb-5 rounded border border-success-fg/25 bg-success-bg px-3 py-2 text-caption text-ink-700'
+                      : 'mb-5 rounded border border-marigold-400/40 bg-honey-100 px-3 py-2 text-caption text-ink-700'
+                  }
+                >
+                  {notice.text}
+                </p>
+              ) : null}
 
               <form className="space-y-5" onSubmit={handleLogin}>
                 <Input type="email" label="Email" placeholder="you@example.com" autoComplete="email"
@@ -94,7 +139,7 @@ export default function LoginPage() {
                 </div>
               </div>
 
-              <a href="http://localhost:3001/api/v1/auth/google">
+              <a href={`${API_BASE}/auth/google`}>
                 <Button variant="secondary" className="w-full gap-2" type="button">
                   <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
                     <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.615z" fill="#4285F4"/>
@@ -133,5 +178,19 @@ export default function LoginPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-surface-page flex items-center justify-center">
+          <span className="text-body text-ink-500">Loading…</span>
+        </div>
+      }
+    >
+      <LoginForm />
+    </Suspense>
   );
 }

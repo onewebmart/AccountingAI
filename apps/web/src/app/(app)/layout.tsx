@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { Sidebar } from '@/components/shell/sidebar';
 import { Topbar } from '@/components/shell/topbar';
 import { useAuth } from '@/lib/auth-context';
@@ -14,12 +14,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   // can never disagree with the page beside it.
   const { data: workspace } = useWorkspace();
   const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
     if (!loading && !user) {
-      router.replace('/auth/login');
+      // Carry the destination through the sign-in so an expired session
+      // returns to the page it interrupted rather than to the dashboard.
+      router.replace(`/auth/login?next=${encodeURIComponent(pathname)}`);
     }
-  }, [user, loading, router]);
+  }, [user, loading, router, pathname]);
 
   if (loading) {
     return (
@@ -37,6 +40,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         inboxCount={workspace?.counts.inbox ?? 0}
         reviewCount={workspace?.counts.review ?? 0}
         firmName={workspace?.firm?.name}
+        role={workspace?.user.role}
       />
       <Topbar />
       <main className="ml-[260px] pt-16">

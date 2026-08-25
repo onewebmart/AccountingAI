@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -8,8 +8,14 @@ import { Input } from '@/components/ui/input';
 import { useAuth, ApiError } from '@/lib/auth-context';
 
 export default function SignupPage() {
-  const { signup } = useAuth();
+  const { signup, user, loading: authLoading } = useAuth();
   const router = useRouter();
+
+  // Already signed in — creating a second account here would silently replace
+  // the session they are holding.
+  useEffect(() => {
+    if (!authLoading && user) router.replace('/dashboard');
+  }, [authLoading, user, router]);
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -24,7 +30,7 @@ export default function SignupPage() {
     setLoading(true);
     try {
       await signup(name, email, password, businessName);
-      router.push('/dashboard');
+      router.replace('/dashboard');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Something went wrong. Please try again.');
     } finally {
