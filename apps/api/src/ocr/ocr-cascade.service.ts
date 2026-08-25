@@ -31,6 +31,36 @@ const NATIVE_TEXT_THRESHOLD = 100;
 /** Below this confidence from the OCR provider, escalate to vision LLM. */
 const OCR_CONFIDENCE_THRESHOLD = 0.7;
 
+/** Extension → the type the cascade should route on. */
+const TYPE_BY_EXTENSION: Record<string, string> = {
+  pdf: 'application/pdf',
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  webp: 'image/webp',
+  tif: 'image/tiff',
+  tiff: 'image/tiff',
+  heic: 'image/heic',
+  heif: 'image/heif',
+};
+
+/**
+ * The type to route on, trusting the extension when the browser's is useless.
+ *
+ * Uploads routinely arrive as `application/octet-stream` (or an empty type) —
+ * the upload controller already accepts them on the strength of the extension.
+ * The cascade has to apply the same trust or the two disagree: a PDF sent as
+ * octet-stream skipped the PDF branch entirely, fell through to the image tier,
+ * and was posted to the vision model labelled `image/jpeg`, which answered
+ * "Unable to process input image" and failed the document outright.
+ */
+export function effectiveMimeType(mimeType: string, fileName: string): string {
+  const generic = !mimeType || mimeType === 'application/octet-stream' || mimeType === 'binary/octet-stream';
+  if (!generic) return mimeType;
+  const ext = fileName.split('.').pop()?.toLowerCase() ?? '';
+  return TYPE_BY_EXTENSION[ext] ?? mimeType;
+}
+
 @Injectable()
 export class OcrCascadeService {
   private readonly logger = new Logger(OcrCascadeService.name);
@@ -45,8 +75,17 @@ export class OcrCascadeService {
   ) {}
 
   async process(input: CascadeInput): Promise<CascadeOutput> {
-    const { documentId, orgId, buffer, mimeType, fileName = '' } = input;
+    const { documentId, orgId, buffer, fileName = '' } = input;
     const start = Date.now();
+
+    // Resolved once, then used for every downstream decision and for the label
+    // sent to the vision model — so routing and transport can never disagree.
+    const mimeType = effectiveMimeType(input.mimeType, fileName);
+    if (mimeType !== input.mimeType) {
+      this.logger.log(
+        `Document ${documentId}: upload type "${input.mimeType}" is generic, reading it as "${mimeType}" from the file name`,
+      );
+    }
 
     let tier: number;
     let rawText: string;

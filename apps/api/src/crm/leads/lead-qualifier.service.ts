@@ -4,7 +4,18 @@ import { GenerationConfig, GoogleGenerativeAI } from '@google/generative-ai';
 import { FirmService, LeadSource, LeadStage } from '@ai-accounting/shared';
 
 const DEFAULT_MODEL = 'gemini-2.5-flash';
-const MAX_OUTPUT_TOKENS = 1024;
+
+/**
+ * Output budget, which on a thinking model must also cover the thinking.
+ *
+ * gemini-2.5-flash spends its reasoning tokens out of `maxOutputTokens`, and on
+ * this prompt that is ~1,200 before a single character of JSON is written. The
+ * previous 1,024 meant reasoning consumed the entire budget: the response came
+ * back `MAX_TOKENS`, truncated mid-sentence, and every qualification failed.
+ * Measured need is ~1,440 (1,176 thinking + 262 output); this leaves headroom
+ * for a longer enquiry without paying for tokens the model never uses.
+ */
+const MAX_OUTPUT_TOKENS = 4096;
 
 export interface QualifyInput {
   name: string;

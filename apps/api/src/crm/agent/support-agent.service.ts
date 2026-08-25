@@ -4,7 +4,18 @@ import { GenerationConfig, GoogleGenerativeAI } from '@google/generative-ai';
 import { ClientContext, ClientContextService } from './client-context.service';
 
 const DEFAULT_MODEL = 'gemini-2.5-flash';
-const MAX_OUTPUT_TOKENS = 800;
+
+/**
+ * Output budget, which on a thinking model must also cover the thinking.
+ *
+ * Replies here are deliberately short, but `maxOutputTokens` does not bound the
+ * reply — it bounds reasoning plus reply, and the reasoning is by far the larger
+ * half. At 800 a slightly harder client question exhausts the budget on thinking
+ * alone and returns a truncated answer (the same fault that broke lead
+ * qualification at 1,024). Reply length is held down by the prompt, which is
+ * where a length rule belongs.
+ */
+const MAX_OUTPUT_TOKENS = 3072;
 
 export interface AgentReplyInput {
   /** What the client just said. */
