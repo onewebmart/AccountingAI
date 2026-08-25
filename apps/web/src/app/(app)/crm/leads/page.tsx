@@ -500,7 +500,7 @@ export default function LeadsPage() {
           {followUps.data.skippedNoContact > 0
             ? ` · ${followUps.data.skippedNoContact} without contact details`
             : ''}
-          . They appear in Settings → Outbox.
+          . They appear under Practice → Messaging.
         </p>
       ) : null}
 

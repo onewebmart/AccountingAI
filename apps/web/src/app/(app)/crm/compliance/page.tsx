@@ -207,7 +207,10 @@ export default function CompliancePage() {
   };
 
   const generate = useMutation({
-    mutationFn: () => api.post('/crm/compliance/generate'),
+    mutationFn: () =>
+      api.post<{ created: number; alreadyPresent: number; clientsConsidered: number }>(
+        '/crm/compliance/generate',
+      ),
     onSuccess: invalidate,
   });
 
@@ -217,6 +220,36 @@ export default function CompliancePage() {
     ),
     onSuccess: invalidate,
   });
+
+  /**
+   * What the last refresh actually did.
+   *
+   * The calendar is built from each client's services, so a firm whose clients
+   * carry none gets nothing back — and silently doing nothing looks identical
+   * to a broken button. Say which of the two happened.
+   */
+  const generateResult = generate.data;
+  const generateNotice = !generateResult
+    ? null
+    : generateResult.created > 0
+      ? {
+          tone: 'ok' as const,
+          text: `Added ${generateResult.created} deadline${generateResult.created === 1 ? '' : 's'} across ${generateResult.clientsConsidered} client${generateResult.clientsConsidered === 1 ? '' : 's'}.`,
+        }
+      : generateResult.clientsConsidered === 0
+        ? {
+            tone: 'warn' as const,
+            text: 'No clients yet. Add a client and tag the services you handle for them — their deadlines then appear here automatically.',
+          }
+        : generateResult.alreadyPresent > 0
+          ? {
+              tone: 'ok' as const,
+              text: `Already up to date — ${generateResult.alreadyPresent} deadline${generateResult.alreadyPresent === 1 ? '' : 's'} on the calendar.`,
+            }
+          : {
+              tone: 'warn' as const,
+              text: `Nothing to add. None of your ${generateResult.clientsConsidered} client${generateResult.clientsConsidered === 1 ? ' carries' : 's carry'} a service yet — open Clients and tag GST, TDS, ITR or ROC against them.`,
+            };
 
   const markFiled = useMutation({
     mutationFn: (itemId: string) => api.post(`/crm/compliance/items/${itemId}/file`),
@@ -282,12 +315,18 @@ export default function CompliancePage() {
           {runReminders.data.skippedNoContact > 0
             ? ` · ${runReminders.data.skippedNoContact} client(s) skipped for missing contact details`
             : ''}
-          . They appear in Settings → Outbox.
+          . They appear under Practice → Messaging.
         </p>
       ) : null}
-      {generate.isSuccess ? (
-        <p className="mb-4 rounded-lg bg-surface-sink px-3 py-2 text-sm text-ink-700">
-          Calendar up to date.
+      {generateNotice ? (
+        <p
+          className={
+            generateNotice.tone === 'ok'
+              ? 'mb-4 rounded-lg bg-[#E6F4EA] px-3 py-2 text-sm text-[#1E7B34]'
+              : 'mb-4 rounded-lg border border-marigold-400/40 bg-honey-100 px-3 py-2 text-sm text-ink-700'
+          }
+        >
+          {generateNotice.text}
         </p>
       ) : null}
       {generate.error || runReminders.error ? (

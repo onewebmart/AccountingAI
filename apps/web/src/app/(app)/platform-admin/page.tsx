@@ -1,8 +1,10 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { useWorkspace } from '@/lib/use-workspace';
 import {
   AlertTriangle,
   Building2,
@@ -339,21 +341,30 @@ export default function PlatformAdminPage() {
   const [impersonating, setImpersonating] = useState<OrgRow | null>(null);
   const [period] = useState(() => new Date().toISOString().slice(0, 7));
 
+  // The API is the authority here — every /platform route refuses a non-admin
+  // token. This check only decides what the page says, so someone who reaches
+  // the URL directly gets a plain answer rather than four failed panels.
+  const { data: workspace, isLoading: workspaceLoading } = useWorkspace();
+  const isPlatformAdmin = workspace?.user.role === 'PLATFORM_SUPER_ADMIN';
+
   // Cost is metered per org per period and already carries the org name and
   // margin flag, so it doubles as the organisation list.
   const costQuery = useQuery<ApiCostSummary>({
     queryKey: ['platform', 'cost', period],
     queryFn: () => api.get<ApiCostSummary>(`/platform/cost?period=${period}`),
+    enabled: isPlatformAdmin,
   });
 
   const orgsQuery = useQuery<ApiOrg[]>({
     queryKey: ['platform', 'orgs'],
     queryFn: () => api.get<ApiOrg[]>('/platform/orgs'),
+    enabled: isPlatformAdmin,
   });
 
   const auditQuery = useQuery<ApiAuditLog[]>({
     queryKey: ['platform', 'audit'],
     queryFn: () => api.get<ApiAuditLog[]>('/platform/audit'),
+    enabled: isPlatformAdmin,
   });
 
   const costByOrg = new Map((costQuery.data?.byOrg ?? []).map((r) => [r.orgId, r]));
@@ -389,6 +400,30 @@ export default function PlatformAdminPage() {
   const flags: FeatureFlagRow[] = [];
 
   const alertCount = orgs.filter((o) => o.marginAlert).length;
+
+  if (workspaceLoading) {
+    return <p className="text-body text-ink-500">Loading…</p>;
+  }
+
+  if (!isPlatformAdmin) {
+    return (
+      <div className="rounded-sm border border-line-200 bg-surface-card p-8">
+        <h1 className="text-h2 font-display text-ink-900" style={{ fontFamily: 'var(--font-display)' }}>
+          Platform admin only
+        </h1>
+        <p className="mt-2 max-w-prose text-body text-ink-500">
+          This area covers every organisation on the platform, so it is limited to platform
+          administrators. Your own organisation&apos;s figures are on the dashboard.
+        </p>
+        <Link
+          href="/dashboard"
+          className="mt-6 inline-block text-body font-medium text-saffron-600 hover:underline"
+        >
+          Back to dashboard
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <>

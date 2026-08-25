@@ -231,13 +231,16 @@ export default function AgentPage() {
               <ul className="space-y-3">
                 {thread.messages.map((m) => {
                   const fromClient = m.direction === MessageDirection.INBOUND;
+                  // The agent speaks on the left, the client answers on the
+                  // right — this thread is read by the firm watching its own
+                  // assistant work, so the assistant holds the near side.
                   return (
                     <li
                       key={m._id}
-                      className={cn('flex gap-2', fromClient ? 'justify-start' : 'justify-end')}
+                      className={cn('flex gap-2', fromClient ? 'justify-end' : 'justify-start')}
                     >
-                      {fromClient ? (
-                        <User size={14} className="mt-2 shrink-0 text-ink-400" />
+                      {!fromClient ? (
+                        <Bot size={14} className="mt-2 shrink-0 text-saffron-600" />
                       ) : null}
                       <div
                         className={cn(
@@ -258,8 +261,8 @@ export default function AgentPage() {
                           {new Date(m.createdAt).toLocaleTimeString('en-IN')}
                         </p>
                       </div>
-                      {!fromClient ? (
-                        <Bot size={14} className="mt-2 shrink-0 text-saffron-600" />
+                      {fromClient ? (
+                        <User size={14} className="mt-2 shrink-0 text-ink-400" />
                       ) : null}
                     </li>
                   );

@@ -379,9 +379,12 @@ export default function CrmSettingsPage() {
     <div>
       <FadeIn>
         <div className="mb-6">
-          <h1 className="font-heading text-2xl font-bold text-ink-900">Settings</h1>
+          {/* Named for what it does, not where it sits: the app already has a
+              global Settings, and this page is only about client messaging. */}
+          <h1 className="font-heading text-2xl font-bold text-ink-900">Messaging</h1>
           <p className="mt-1 text-sm text-ink-500">
-            Messaging templates, delivery adapter and the outbox.
+            Every message your firm sends clients — the outbox, the templates behind them, and the
+            delivery adapter carrying them.
           </p>
         </div>
       </FadeIn>

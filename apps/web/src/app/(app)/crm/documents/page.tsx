@@ -383,7 +383,7 @@ export default function DocumentsPage() {
           {remind.data.skippedNoContact > 0
             ? ` · ${remind.data.skippedNoContact} without contact details`
             : ''}
-          . They appear in Settings → Outbox.
+          . They appear under Practice → Messaging.
         </p>
       ) : null}
 

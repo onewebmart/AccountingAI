@@ -24,6 +24,8 @@ import {
   ListChecks,
   PieChart,
   IndianRupee,
+  ShieldCheck,
+  MessageSquare,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -65,6 +67,7 @@ const practiceItems: NavItem[] = [
   { href: '/crm/invoices', label: 'Fees', icon: <IndianRupee size={18} /> },
   { href: '/crm/tasks', label: 'Tasks', icon: <ListChecks size={18} /> },
   { href: '/crm/reports', label: 'Practice reports', icon: <PieChart size={18} /> },
+  { href: '/crm/settings', label: 'Messaging', icon: <MessageSquare size={18} /> },
 ];
 
 interface SidebarProps {
@@ -77,10 +80,17 @@ interface SidebarProps {
    * offering to switch it on.
    */
   firmName?: string;
+  /**
+   * The signed-in user's role. Only PLATFORM_SUPER_ADMIN sees the Platform
+   * section — the API refuses those routes to everyone else, so showing the
+   * link to a tenant would only offer them a page of errors.
+   */
+  role?: string;
 }
 
-export function Sidebar({ inboxCount = 0, reviewCount = 0, firmName }: SidebarProps) {
+export function Sidebar({ inboxCount = 0, reviewCount = 0, firmName, role }: SidebarProps) {
   const pathname = usePathname();
+  const isPlatformAdmin = role === 'PLATFORM_SUPER_ADMIN';
 
   const itemsWithBadges = navItems.map((item) => ({
     ...item,
@@ -166,6 +176,36 @@ export function Sidebar({ inboxCount = 0, reviewCount = 0, firmName }: SidebarPr
               })}
             </ul>
           </>
+
+        {isPlatformAdmin ? (
+          <>
+            <p className="mt-6 px-6 pb-2 text-[11px] font-semibold uppercase tracking-wide text-ink-500">
+              Platform
+            </p>
+            <ul className="space-y-0.5 px-3">
+              <li>
+                <Link
+                  href="/platform-admin"
+                  className={cn(
+                    'flex min-h-[44px] items-center gap-3 rounded-sm px-3 py-2.5 text-body transition-colors',
+                    pathname.startsWith('/platform-admin')
+                      ? 'sidebar-active text-white'
+                      : 'text-ink-400 hover:bg-white/5 hover:text-white',
+                  )}
+                >
+                  <span
+                    className={
+                      pathname.startsWith('/platform-admin') ? 'text-white' : 'text-ink-500'
+                    }
+                  >
+                    <ShieldCheck size={18} />
+                  </span>
+                  <span className="flex-1">Platform admin</span>
+                </Link>
+              </li>
+            </ul>
+          </>
+        ) : null}
       </nav>
 
       {/* Settings at bottom */}
