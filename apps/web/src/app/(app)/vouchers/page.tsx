@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { api } from '@/lib/api';
+import { QueryError } from '@/components/ui/query-error';
 import { FileText, Loader2, RotateCcw, X } from 'lucide-react';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -152,6 +153,8 @@ export default function VouchersPage() {
     data: apiResponse,
     isLoading,
     isError,
+    error,
+    refetch,
   } = useQuery({
     queryKey: ['journals', fy],
     queryFn: () =>
@@ -258,11 +261,7 @@ export default function VouchersPage() {
         </div>
 
         {/* Error state */}
-        {isError && (
-          <p className="text-body text-error-fg text-center py-4">
-            Couldn&apos;t load data. Try refreshing.
-          </p>
-        )}
+        {isError && <QueryError error={error} onRetry={() => void refetch()} />}
 
         {/* Table */}
         {isLoading ? (

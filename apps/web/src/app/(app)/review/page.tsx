@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { ReviewQueueItem, ProposedEntryData } from '@/components/review/review-queue-item';
 import { api } from '@/lib/api';
+import { QueryError } from '@/components/ui/query-error';
 import { CheckCircle, ChevronLeft, ChevronRight, Loader2, Sparkles } from 'lucide-react';
 
 // ── API response type ─────────────────────────────────────────────────────────
@@ -86,6 +87,8 @@ export default function ReviewQueuePage() {
     data: apiResponse,
     isLoading,
     isError,
+    error,
+    refetch,
   } = useQuery({
     queryKey: ['proposals', 'proposed'],
     queryFn: () =>
@@ -192,11 +195,7 @@ export default function ReviewQueuePage() {
 
   // ── Error state ──────────────────────────────────────────────────────────
   if (isError) {
-    return (
-      <div className="flex items-center justify-center py-32">
-        <p className="text-body text-error-fg">Couldn&apos;t load data. Try refreshing.</p>
-      </div>
-    );
+    return <QueryError error={error} onRetry={() => void refetch()} />;
   }
 
   // ── Empty state ───────────────────────────────────────────────────────

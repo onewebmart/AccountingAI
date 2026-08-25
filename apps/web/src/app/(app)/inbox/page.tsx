@@ -4,6 +4,7 @@ import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { api } from '@/lib/api';
+import { QueryError } from '@/components/ui/query-error';
 import {
   Upload,
   FileText,
@@ -217,6 +218,8 @@ export default function InboxPage() {
     data: apiResponse,
     isLoading,
     isError,
+    error,
+    refetch,
   } = useQuery({
     queryKey: ['documents'],
     queryFn: () =>
@@ -340,11 +343,7 @@ export default function InboxPage() {
       <Dropzone onDrop={handleDrop} />
 
       {/* Error state */}
-      {isError && (
-        <p className="text-body text-error-fg text-center py-4">
-          Couldn&apos;t load data. Try refreshing.
-        </p>
-      )}
+      {isError && <QueryError error={error} onRetry={() => void refetch()} />}
 
       {/* Filter pills */}
       <div className="flex flex-wrap gap-2">
