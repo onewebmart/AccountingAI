@@ -14,6 +14,7 @@ import {
   WifiOff,
 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { currentFinancialYear, recentFinancialYears } from '@/lib/financial-year';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -61,14 +62,23 @@ interface SyncRecord {
   errorMessage: string | null;
 }
 
+/**
+ * Only reports the API actually serves.
+ *
+ * Two of these used to point at endpoints that do not exist — journals.csv and
+ * gst-purchase.csv, both 404 — while P&L, Balance Sheet and Cash Flow carried a
+ * null path and the click handler reported "Downloaded" regardless. Three
+ * buttons lied and two failed.
+ */
 const EXPORT_REPORTS = [
-  { id: 'trial-balance', label: 'Trial Balance', filename: 'trial-balance-2025-26.csv', apiPath: '/exports/trial-balance.csv' },
-  { id: 'profit-loss', label: 'P & L', filename: 'profit-loss-2025-26.csv', apiPath: null },
-  { id: 'balance-sheet', label: 'Balance Sheet', filename: 'balance-sheet-2025-26.csv', apiPath: null },
-  { id: 'journals', label: 'Journals', filename: 'journals-2025-26.csv', apiPath: '/exports/journals.csv' },
-  { id: 'gst-purchase', label: 'GST Purchase', filename: 'gst-purchase-2025-26.csv', apiPath: '/exports/gst-purchase.csv' },
-  { id: 'cash-flow', label: 'Cash Flow', filename: 'cash-flow-2025-26.csv', apiPath: null },
-];
+  { id: 'trial-balance', label: 'Trial Balance', slug: 'trial-balance' },
+  { id: 'profit-loss', label: 'P & L', slug: 'profit-loss' },
+  { id: 'balance-sheet', label: 'Balance Sheet', slug: 'balance-sheet' },
+  { id: 'day-book', label: 'Day Book', slug: 'day-book' },
+] as const;
+
+/** Ledger is CSV-only on the API, so it is offered separately. */
+const CSV_ONLY_REPORTS = [{ id: 'ledger', label: 'Ledger', slug: 'ledger' }] as const;
 
 // ── Formatters ─────────────────────────────────────────────────────────────────
 
@@ -96,13 +106,20 @@ function fmtRelative(iso: string | null): string {
 
 // ── CSV download helper ───────────────────────────────────────────────────────
 
-async function downloadCsv(apiPath: string, filename: string): Promise<void> {
+async function downloadReport(
+  slug: string,
+  format: 'csv' | 'xlsx',
+  financialYear: string,
+): Promise<void> {
   const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
   const apiBase = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api/v1';
-  const res = await fetch(`${apiBase}${apiPath}`, {
+  // Without financialYear the report builds for an undefined year and comes
+  // back empty rather than failing, which is the worst of both.
+  const res = await fetch(`${apiBase}/exports/${slug}.${format}?financialYear=${financialYear}`, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  if (!res.ok) throw new Error(`Export failed (HTTP ${res.status})`);
+  const filename = `${slug}-${financialYear}.${format}`;
   const blob = await res.blob();
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -139,7 +156,8 @@ function StatusChip({ status }: { status: SyncRecord['status'] }) {
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function ExportsPage() {
-  const [financialYear, setFinancialYear] = useState('2025-26');
+  // Was pinned to '2025-26', so every export silently built the wrong year.
+  const [financialYear, setFinancialYear] = useState(currentFinancialYear);
   const [toast, setToast] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
@@ -220,16 +238,14 @@ export default function ExportsPage() {
     syncMutation.mutate();
   };
 
-  const handleDownload = async (report: (typeof EXPORT_REPORTS)[0]) => {
-    if (report.apiPath) {
-      try {
-        await downloadCsv(report.apiPath, report.filename);
-        showToast(`Downloaded ${report.filename}`);
-      } catch {
-        showToast(`Download failed — ${report.filename}`);
-      }
-    } else {
-      showToast(`Downloaded ${report.filename}`);
+  const handleDownload = async (slug: string, label: string, format: 'csv' | 'xlsx') => {
+    try {
+      await downloadReport(slug, format, financialYear);
+      showToast(`Downloaded ${slug}-${financialYear}.${format}`);
+    } catch (e) {
+      // Say what failed. The previous version reported success unconditionally
+      // when there was no endpoint to call.
+      showToast(`${label} export failed — ${(e as Error).message}`);
     }
   };
 
@@ -250,7 +266,8 @@ export default function ExportsPage() {
           onChange={(e) => setFinancialYear(e.target.value)}
           className="rounded-md border border-line-200 bg-surface-card px-3 py-1.5 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-brand-500"
         >
-          {['2024-25', '2025-26', '2026-27'].map((fy) => (
+          {/* Rolls forward on its own; the hardcoded list went stale each April. */}
+          {recentFinancialYears(3).map((fy) => (
             <option key={fy} value={fy}>FY {fy}</option>
           ))}
         </select>
@@ -270,13 +287,15 @@ export default function ExportsPage() {
               <div key={report.id} className="flex items-center justify-between px-4 py-3">
                 <div>
                   <p className="text-body font-medium text-ink-900">{report.label}</p>
-                  <p className="text-caption text-ink-500 font-mono">{report.filename}</p>
+                  <p className="text-caption font-mono text-ink-500">
+                    {report.slug}-{financialYear}
+                  </p>
                 </div>
                 <div className="flex items-center gap-2">
                   <Button
                     variant="secondary"
                     size="sm"
-                    onClick={() => handleDownload(report)}
+                    onClick={() => handleDownload(report.slug, report.label, 'csv')}
                     className="flex items-center gap-1.5"
                   >
                     <Download size={12} /> CSV
@@ -284,12 +303,30 @@ export default function ExportsPage() {
                   <Button
                     variant="secondary"
                     size="sm"
-                    onClick={() => showToast('PDF export — coming soon')}
+                    onClick={() => handleDownload(report.slug, report.label, 'xlsx')}
                     className="flex items-center gap-1.5"
                   >
-                    <FileText size={12} /> PDF
+                    <FileText size={12} /> Excel
                   </Button>
                 </div>
+              </div>
+            ))}
+            {CSV_ONLY_REPORTS.map((report) => (
+              <div key={report.id} className="flex items-center justify-between px-4 py-3">
+                <div>
+                  <p className="text-body font-medium text-ink-900">{report.label}</p>
+                  <p className="text-caption font-mono text-ink-500">
+                    {report.slug}-{financialYear}
+                  </p>
+                </div>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => handleDownload(report.slug, report.label, 'csv')}
+                  className="flex items-center gap-1.5"
+                >
+                  <Download size={12} /> CSV
+                </Button>
               </div>
             ))}
           </div>

@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { formatRupeesCompact } from '@/lib/utils';
 import { api } from '@/lib/api';
+import { currentFinancialYear } from '@/lib/financial-year';
 import {
   AlertCircle,
   FileText,
@@ -20,18 +21,6 @@ import Link from 'next/link';
 
 // ── API response types ──────────────────────────────────────────────────────
 
-/**
- * The Indian financial year we are currently in — 1 April to 31 March.
- *
- * This was pinned to '2025-26', so from April 2026 the dashboard queried a year
- * with nothing posted in it and every figure read ₹0.00 however much had been
- * entered.
- */
-function currentFinancialYear(): string {
-  const now = new Date();
-  const startYear = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
-  return `${startYear}-${String((startYear + 1) % 100).padStart(2, '0')}`;
-}
 
 const FINANCIAL_YEAR = currentFinancialYear();
 
