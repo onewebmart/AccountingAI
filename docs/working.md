@@ -104,7 +104,8 @@ deliberately use `find()` and sort in memory instead.
 ### Sign-in
 
 `POST /auth/login` returns an access token (15 minutes) and a refresh token
-(long-lived). The access token carries `sub`, `email`, `orgId`, `firmId`, `role`.
+(long-lived). The access token carries `sub`, `email`, `orgId`, `firmId`, `role`
+and `firmRole`.
 
 Signing up creates the person and their organisation together:
 
@@ -144,8 +145,13 @@ that `orgId` and `role` are in here rather than in any request you send:
 { "userId": "6a8d5a46…", "email": "priya@kaveri.co.in", "orgId": "6a8d5a46…", "role": "COMPANY_ADMIN" }
 ```
 
-A `firmId` claim only appears once the org has a firm — which is why enabling
-practice management returns `reauthRequired: true`.
+A `firmId` claim only appears once the org has a firm, and `firmRole` only for
+someone who runs the practice — which is why enabling practice management
+returns `reauthRequired: true`. A sole practitioner's token carries both:
+
+```json
+{ "orgId": "6a8c7f5e…", "role": "COMPANY_ADMIN", "firmId": "6a8c8b3b…", "firmRole": "FIRM_ADMIN" }
+```
 
 Refresh tokens **rotate**: each use replaces the stored hash, so a refresh token
 works exactly once. Two consequences the web client has to respect —
@@ -179,7 +185,7 @@ convenience, never security.**
 | `CA_REVIEWER` | Review proposals, manage sales/purchase/GST — but **cannot post to the ledger** |
 | `EMPLOYEE` | Upload documents, view documents and reports. No ledger access |
 | `AUDITOR` | Read-only: journals, documents, reports, audit trail |
-| `FIRM_ADMIN` | The practice side: manage firm, users, org; view reports/journals/documents |
+| `FIRM_ADMIN` | The practice side: manage firm, users, org; view reports/journals/documents. Held as `firmRole`, alongside — not instead of — an org role |
 
 Verified against a live server, one column per role:
 
@@ -192,30 +198,42 @@ practice clients      403    403        403      403    403     200
 POST /gl/accounts     201    201        403      403    403     403
 ```
 
-### The FIRM_ADMIN trap — read this before filing a bug
+### Practice administration is a separate axis from the org role
 
-`FIRM_ADMIN` holds **no bookkeeping permissions at all**: no `POST_JOURNAL`, no
-`APPROVE_PROPOSAL`, no `MANAGE_COA`, no `MANAGE_SALES` / `MANAGE_PURCHASE`, no
-`UPLOAD_DOCUMENT`.
+A membership carries two roles, because they answer two different questions on
+the two tenancy axes this system already distinguishes:
 
-And `POST /workspace/practice` — "turn on practice management" — **promotes the
-caller from `COMPANY_ADMIN` to `FIRM_ADMIN`** (`practice-setup.service.ts`).
+- **`role`** — scoped by `orgId`. What you may do to *this organisation's books*.
+- **`firmRole`** — scoped by `firmId`. Whether you run *the practice* those books
+  belong to.
 
-So the moment a sole practitioner switches on the practice side, they silently
-lose the ability to run their own books. Review, Sales, Purchase, Inbox and Chart
-of accounts all start returning 403, and nothing explains why. This is the cause
-of the classic "I clicked Add account and it said Unauthorized" report.
+Both are claims on the access token. `FirmAdminGuard` reads `firmRole`; the
+`@RequirePermission` guards read `role`. A sole practitioner is therefore
+normally `COMPANY_ADMIN` **and** `FIRM_ADMIN` at once, which is exactly right:
+they keep their own books and run their own practice.
 
-Defensible for a large firm where the managing partner is not the bookkeeper; a
-trap for a one-person practice. Two ways out, neither yet chosen: grant
-`FIRM_ADMIN` the bookkeeping permissions, or give the promoted user both
-memberships plus a role/org switcher.
+This used to be one field, and it caused a real failure worth remembering.
+`FIRM_ADMIN` holds no bookkeeping permissions at all — no `POST_JOURNAL`,
+`APPROVE_PROPOSAL`, `MANAGE_COA`, `MANAGE_SALES`/`MANAGE_PURCHASE` or
+`UPLOAD_DOCUMENT` — and `POST /workspace/practice` used to *overwrite* `role`
+with it. So the moment a sole practitioner switched on the practice side, they
+silently lost the ability to run their own books: Review, Sales, Purchase, Inbox
+and Chart of accounts all began returning 403 with nothing to explain why. That
+is the origin of the classic "I clicked Add account and it said Unauthorized".
 
-Meanwhile: the practice routes (`/firm/*`, `/crm/*`) are guarded by
-`FirmAdminGuard`, which requires `role === FIRM_ADMIN` **and** a `firmId` on the
-token. The `firmId` check is not redundant — without it,
-`new Types.ObjectId(undefined)` mints a *random* id and the route would return an
-empty list instead of an error, which is a far worse failure.
+Practice setup now sets `firmRole` and leaves `role` alone. Existing accounts are
+repaired by `node apps/api/scripts/migrate-firm-role.mjs --apply` (dry run by
+default), which restores `role` to `COMPANY_ADMIN` and moves practice
+administration to `firmRole`. Affected users must sign in again — both are token
+claims.
+
+`role === FIRM_ADMIN` is still accepted by the guard while pre-split tokens and
+unmigrated memberships drain.
+
+One consequence in the UI: `GET /workspace` returns the `firm` object only to
+someone who actually has firm access. Belonging to an org that happens to have a
+firm is not enough — otherwise a plain accountant would get a Practice section in
+their sidebar where every link answers 403.
 
 ---
 

@@ -3,9 +3,15 @@ dist/
 .next/
 .turbo/
 coverage/
+# Every env file except the committed template. The previous three patterns
+# missed .env.production and .env.staging, so a file holding real production
+# secrets was committable.
+.env
+.env.*
 *.env
-*.env.local
-*.env.*.local
+*.env.*
+!.env.example
+!*.env.example
 .DS_Store
 *.log
 npm-debug.log*
