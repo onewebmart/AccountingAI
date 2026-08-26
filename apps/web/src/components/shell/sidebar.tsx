@@ -26,6 +26,7 @@ import {
   IndianRupee,
   ShieldCheck,
   MessageSquare,
+  Palette,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -68,6 +69,9 @@ const practiceItems: NavItem[] = [
   { href: '/crm/tasks', label: 'Tasks', icon: <ListChecks size={18} /> },
   { href: '/crm/reports', label: 'Practice reports', icon: <PieChart size={18} /> },
   { href: '/crm/settings', label: 'Messaging', icon: <MessageSquare size={18} /> },
+  // The only route to /firm/config — white-label branding and the client
+  // portal domain could not be configured from anywhere before this.
+  { href: '/firm-portal', label: 'Firm & branding', icon: <Palette size={18} /> },
 ];
 
 interface SidebarProps {

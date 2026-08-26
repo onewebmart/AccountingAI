@@ -12,6 +12,7 @@ import {
   Plus,
 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { toCsv, paiseToCsvAmount, downloadCsvFile } from '@/lib/csv';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -223,6 +224,59 @@ export default function GstPage() {
 
   const purchaseRows = purchaseQuery.data ?? [];
   const salesRows = salesQuery.data ?? [];
+
+  /**
+   * Writes the two registers for the selected period as CSV.
+   *
+   * Built from the rows already on screen rather than a second server-side
+   * rendering, so the file always matches what is being looked at. The button
+   * used to show a "coming soon" toast.
+   */
+  const handleExportRegisters = () => {
+    if (salesRows.length > 0) {
+      downloadCsvFile(
+        toCsv(
+          ['Invoice date', 'Customer', 'Invoice no.', 'Taxable', 'CGST', 'SGST', 'IGST', 'Supply'],
+          salesRows.map((r) => [
+            r.invoiceDate?.slice(0, 10) ?? '',
+            r.customerName,
+            r.invoiceNumber ?? '',
+            paiseToCsvAmount(r.taxableValuePaise),
+            paiseToCsvAmount(r.cgstPaise),
+            paiseToCsvAmount(r.sgstPaise),
+            paiseToCsvAmount(r.igstPaise),
+            r.isInterState ? 'Inter-state' : 'Intra-state',
+          ]),
+        ),
+        `gstr1-sales-register-${period}.csv`,
+      );
+    }
+    if (purchaseRows.length > 0) {
+      downloadCsvFile(
+        toCsv(
+          ['Invoice date', 'Vendor', 'Supplier GSTIN', 'Invoice no.', 'Taxable', 'CGST', 'SGST', 'IGST', 'ITC eligible', 'Supply'],
+          purchaseRows.map((r) => [
+            r.invoiceDate?.slice(0, 10) ?? '',
+            r.vendorName,
+            r.supplierGstin ?? '',
+            r.invoiceNumber ?? '',
+            paiseToCsvAmount(r.taxableValuePaise),
+            paiseToCsvAmount(r.cgstPaise),
+            paiseToCsvAmount(r.sgstPaise),
+            paiseToCsvAmount(r.igstPaise),
+            paiseToCsvAmount(r.itcEligiblePaise),
+            r.isInterState ? 'Inter-state' : 'Intra-state',
+          ]),
+        ),
+        `gstr2-purchase-register-${period}.csv`,
+      );
+    }
+    const parts = [
+      salesRows.length ? `${salesRows.length} sales` : null,
+      purchaseRows.length ? `${purchaseRows.length} purchase` : null,
+    ].filter(Boolean);
+    showToast(`Exported ${parts.join(' and ')} rows for ${period}`);
+  };
   const lines = lines2bQuery.data ?? [];
   const has2B = lines.length > 0;
 
@@ -296,11 +350,12 @@ export default function GstPage() {
           </select>
           <Button
             variant="secondary"
-            onClick={() => showToast('Export GSTR-ready — coming soon')}
+            onClick={handleExportRegisters}
+            disabled={purchaseRows.length === 0 && salesRows.length === 0}
             className="flex items-center gap-2"
           >
             <FileText size={14} />
-            Export GSTR-ready
+            Export registers
           </Button>
         </div>
       </div>

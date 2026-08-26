@@ -358,10 +358,23 @@ export default function BankingPage() {
               Confirm matches
             </Button>
           )}
-          <Button variant="secondary" onClick={() => showToast('Upload new statement — coming soon')} className="flex items-center gap-2">
+          {/* The same upload the empty state offers — this button used to show a
+              "coming soon" toast while the working path sat a few lines above. */}
+          <label className="inline-flex cursor-pointer items-center gap-2 rounded-sm border border-line-200 bg-surface-card px-4 py-2 text-body font-medium text-ink-900 transition-colors hover:bg-surface-sink">
             <Upload size={14} />
-            Upload statement
-          </Button>
+            {uploading ? 'Uploading…' : 'Upload statement'}
+            <input
+              type="file"
+              accept=".csv,.xlsx,.xls"
+              className="hidden"
+              disabled={uploading}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                e.target.value = '';
+                if (file) void uploadStatement(file);
+              }}
+            />
+          </label>
         </div>
       </div>
 
