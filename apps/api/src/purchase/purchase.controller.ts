@@ -12,8 +12,9 @@ import { Permission, BillStatus } from '@ai-accounting/shared';
 import { RequirePermission } from '../auth/decorators';
 import { PermissionGuard } from '../auth/guards/permission.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { VendorsService, CreateVendorInput } from './vendors.service';
-import { PurchaseBillsService, CreateBillInput } from './purchase-bills.service';
+import { VendorsService } from './vendors.service';
+import { PurchaseBillsService } from './purchase-bills.service';
+import { CreateVendorDto, CreateBillDto } from './dto/purchase.dto';
 
 interface AuthRequest {
   user: { orgId: string; sub: string };
@@ -37,7 +38,7 @@ export class PurchaseController {
 
   @Post('vendors')
   @RequirePermission(Permission.MANAGE_PURCHASE)
-  createVendor(@Request() req: AuthRequest, @Body() body: Omit<CreateVendorInput, 'orgId'>) {
+  createVendor(@Request() req: AuthRequest, @Body() body: CreateVendorDto) {
     return this.vendorsService.create({ ...body, orgId: req.user.orgId });
   }
 
@@ -69,7 +70,7 @@ export class PurchaseController {
 
   @Post('bills')
   @RequirePermission(Permission.MANAGE_PURCHASE)
-  createBill(@Request() req: AuthRequest, @Body() body: Omit<CreateBillInput, 'orgId'>) {
+  createBill(@Request() req: AuthRequest, @Body() body: CreateBillDto) {
     return this.billsService.create({ ...body, orgId: req.user.orgId });
   }
 

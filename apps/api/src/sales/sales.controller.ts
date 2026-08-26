@@ -12,8 +12,9 @@ import { Permission, InvoiceStatus } from '@ai-accounting/shared';
 import { RequirePermission } from '../auth/decorators';
 import { PermissionGuard } from '../auth/guards/permission.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { CustomersService, CreateCustomerInput } from './customers.service';
-import { SalesInvoicesService, CreateInvoiceInput } from './sales-invoices.service';
+import { CustomersService } from './customers.service';
+import { SalesInvoicesService } from './sales-invoices.service';
+import { CreateCustomerDto, CreateSalesInvoiceDto } from './dto/sales.dto';
 
 interface AuthRequest {
   user: { orgId: string; sub: string };
@@ -37,7 +38,7 @@ export class SalesController {
 
   @Post('customers')
   @RequirePermission(Permission.MANAGE_SALES)
-  createCustomer(@Request() req: AuthRequest, @Body() body: Omit<CreateCustomerInput, 'orgId'>) {
+  createCustomer(@Request() req: AuthRequest, @Body() body: CreateCustomerDto) {
     return this.customersService.create({ ...body, orgId: req.user.orgId });
   }
 
@@ -69,7 +70,7 @@ export class SalesController {
 
   @Post('invoices')
   @RequirePermission(Permission.MANAGE_SALES)
-  createInvoice(@Request() req: AuthRequest, @Body() body: Omit<CreateInvoiceInput, 'orgId'>) {
+  createInvoice(@Request() req: AuthRequest, @Body() body: CreateSalesInvoiceDto) {
     return this.invoicesService.create({ ...body, orgId: req.user.orgId });
   }
 
