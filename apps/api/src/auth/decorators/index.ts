@@ -24,7 +24,10 @@ export interface JwtPayload {
   email: string;
   orgId: string;
   firmId?: string;
+  /** Org-level role — what the holder may do to this org's books. */
   role: string;
+  /** Firm-level role, present only for someone who runs the practice. */
+  firmRole?: string;
   type: 'access' | 'temp';
   iat?: number;
   exp?: number;

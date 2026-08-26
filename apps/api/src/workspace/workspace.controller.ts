@@ -5,7 +5,7 @@ import { WorkspaceService } from './workspace.service';
 import { PracticeSetupService } from './practice-setup.service';
 
 interface AuthRequest {
-  user: { sub: string; orgId: string; role: string; firmId?: string };
+  user: { sub: string; orgId: string; role: string; firmRole?: string; firmId?: string };
 }
 
 /**
@@ -30,7 +30,7 @@ export class WorkspaceController {
 
   @Get()
   get(@Request() req: AuthRequest) {
-    return this.workspace.forUser(req.user.sub, req.user.orgId, req.user.role);
+    return this.workspace.forUser(req.user.sub, req.user.orgId, req.user.role, req.user.firmRole);
   }
 
   /**

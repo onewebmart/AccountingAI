@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import { DocumentStatus, ProposedEntryStatus } from '@ai-accounting/shared';
+import { DocumentStatus, ProposedEntryStatus, UserRole } from '@ai-accounting/shared';
 import { Organization, OrganizationDocument } from '../tenancy/schemas/organization.schema';
 import { Firm, FirmDocument } from '../tenancy/schemas/firm.schema';
 import { User, UserDocument } from '../tenancy/schemas/user.schema';
@@ -38,9 +38,24 @@ const INBOX_STATUSES = [
 ];
 
 export interface Workspace {
-  user: { id: string; name: string; email: string; initials: string; role: string };
+  user: {
+    id: string;
+    name: string;
+    email: string;
+    initials: string;
+    role: string;
+    /** Set only for someone who runs the practice. */
+    firmRole?: string;
+  };
   org: { id: string; name: string; gstin?: string };
-  /** Present only when this user's org belongs to a CA firm. */
+  /**
+   * Present only when this user may actually reach the practice.
+   *
+   * Belonging to an org that has a firm is not enough — every /firm and /crm
+   * route additionally requires firm admin. Returning the firm to a plain
+   * accountant would put a Practice section in their sidebar where every link
+   * answers 403.
+   */
   firm?: { id: string; name: string };
   counts: {
     /** Documents needing attention — the Inbox badge. */
@@ -81,7 +96,12 @@ export class WorkspaceService {
    * One round trip rather than five, because the shell renders on every single
    * page — a chattier version would put four extra requests on every navigation.
    */
-  async forUser(userId: string, orgId: string, role: string): Promise<Workspace> {
+  async forUser(
+    userId: string,
+    orgId: string,
+    role: string,
+    firmRole?: string,
+  ): Promise<Workspace> {
     const period = new Date().toISOString().slice(0, 7);
 
     const [user, org, documents, reviewCount, meter] = await Promise.all([
@@ -99,7 +119,11 @@ export class WorkspaceService {
     const email = user?.email ?? '';
     const name = user?.name ?? email;
 
-    const firm = org?.firmId ? await this.firmModel.findById(org.firmId).exec() : null;
+    // `role === FIRM_ADMIN` is the pre-split shape; still honoured while old
+    // tokens and unmigrated memberships drain.
+    const runsThePractice = firmRole === UserRole.FIRM_ADMIN || role === UserRole.FIRM_ADMIN;
+    const firm =
+      org?.firmId && runsThePractice ? await this.firmModel.findById(org.firmId).exec() : null;
 
     return {
       user: {
@@ -108,6 +132,7 @@ export class WorkspaceService {
         email,
         initials: initialsOf(user?.name, email),
         role,
+        ...(firmRole ? { firmRole } : {}),
       },
       org: {
         id: orgId,

@@ -64,9 +64,25 @@ export class PracticeSetupService {
     org.firmId = firm._id as unknown as typeof org.firmId;
     await org.save();
 
-    // The person switching this on runs the practice.
+    // The person switching this on runs the practice — recorded as firmRole, a
+    // separate axis. Overwriting `role` here is what used to leave a sole
+    // practitioner administering a firm whose books they could no longer touch:
+    // FIRM_ADMIN holds no POST_JOURNAL, APPROVE_PROPOSAL or MANAGE_COA.
+    const membership = await this.membershipModel
+      .findOne({ userId: new Types.ObjectId(userId), orgId: org._id })
+      .exec();
+
+    const update: Record<string, unknown> = { firmRole: UserRole.FIRM_ADMIN };
+
+    // Repair anyone caught by the old behaviour. Their org role reads FIRM_ADMIN
+    // only because a previous run of this method overwrote it; nobody is granted
+    // a membership of that role by any other path.
+    if (membership?.role === UserRole.FIRM_ADMIN) {
+      update.role = UserRole.COMPANY_ADMIN;
+    }
+
     await this.membershipModel
-      .updateOne({ userId: new Types.ObjectId(userId), orgId: org._id }, { $set: { role: UserRole.FIRM_ADMIN } })
+      .updateOne({ userId: new Types.ObjectId(userId), orgId: org._id }, { $set: update })
       .exec();
 
     await this.auditLogModel.create({

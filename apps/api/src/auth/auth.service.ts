@@ -343,12 +343,18 @@ export class AuthService {
     const org = await this.tenancy.findOrgById(orgId);
     const firmId = org?.firmId?.toString();
 
+    // Practice administration is its own claim, not a value of `role`. Someone
+    // can therefore be COMPANY_ADMIN over their books and FIRM_ADMIN over the
+    // practice at the same time, which is the normal case for a sole practitioner.
+    const firmRole = membership?.firmRole;
+
     const accessPayload: JwtPayload & { jti: string } = {
       sub: user._id.toString(),
       email: user.email,
       orgId,
       ...(firmId ? { firmId } : {}),
       role,
+      ...(firmRole ? { firmRole } : {}),
       type: 'access',
       jti: randomUUID(), // ensures each token is unique even within the same second
     };
