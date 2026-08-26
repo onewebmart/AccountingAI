@@ -2,14 +2,13 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { useWorkspace } from '@/lib/use-workspace';
 import {
   AlertTriangle,
   Building2,
   Cpu,
-  Flag,
   ClipboardList,
   X,
   ChevronRight,
@@ -20,26 +19,17 @@ import {
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type Tab = 'cost' | 'orgs' | 'flags' | 'audit';
+type Tab = 'cost' | 'orgs' | 'audit';
 
 interface OrgRow {
   orgId: string;
   name: string;
-  plan: 'free' | 'starter' | 'business' | 'enterprise';
-  status: 'active' | 'past_due' | 'cancelled';
+  /** Real: derived from the org's isActive flag. */
+  status: 'active' | 'cancelled';
   costPaise: number;
   ocrPages: number;
   groqTokens: number;
   marginAlert: boolean;
-  memberCount: number;
-}
-
-interface FeatureFlagRow {
-  orgId: string;
-  orgName: string;
-  flagName: string;
-  enabled: boolean;
-  overriddenBy: string | null;
 }
 
 /** Raw API shapes, mapped into the row models above. */
@@ -78,6 +68,34 @@ interface ApiAuditLog {
   meta?: Record<string, unknown>;
 }
 
+type SubscriptionPlan = 'free' | 'starter' | 'business' | 'enterprise';
+
+interface ApiSubscription {
+  orgId: string;
+  plan: SubscriptionPlan;
+  status: 'active' | 'cancelled' | 'past_due';
+  ocrPageQuota: number;
+  groqTokenQuota: number;
+  changedBy: string | null;
+}
+
+interface ApiFeatureFlag {
+  orgId: string;
+  flagName: string;
+  enabled: boolean;
+  overriddenBy: string | null;
+}
+
+interface ApiUsageMeter {
+  orgId: string;
+  period: string;
+  ocrPagesTier1: number;
+  ocrPagesTier2: number;
+  ocrPagesTier3: number;
+  groqTokensIn: number;
+  groqTokensOut: number;
+}
+
 interface AuditRow {
   id: string;
   orgId: string;
@@ -101,28 +119,20 @@ function fmtDate(d: string): string {
   return new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
 
-function planBadge(plan: OrgRow['plan']) {
-  const cls: Record<string, string> = {
-    free: 'bg-surface-sink text-ink-500 border-line-200',
-    starter: 'bg-pending-bg text-pending-fg border-pending-fg/30',
-    business: 'bg-success-bg text-success-fg border-success-fg/30',
-    enterprise: 'bg-brand-50 text-brand-700 border-brand-200',
-  };
-  return (
-    <span className={`inline-flex text-caption font-semibold rounded-full px-2 py-0.5 border capitalize ${cls[plan]}`}>
-      {plan}
-    </span>
-  );
-}
-
 // ── Impersonation banner ───────────────────────────────────────────────────────
 
+/**
+ * The endpoint behind this records an audit row; it does not start a session in
+ * the target org. Saying "you're viewing X as support" would be false, and a
+ * platform admin who believed it might think they had checked something they
+ * had not.
+ */
 function ImpersonationBanner({ org, onExit }: { org: OrgRow; onExit: () => void }) {
   return (
     <div className="fixed top-0 inset-x-0 z-50 bg-pending-fg text-white px-6 py-2.5 flex items-center justify-between text-body font-medium shadow-lg">
       <div className="flex items-center gap-2">
         <Shield size={16} />
-        You&apos;re viewing <strong className="ml-1">{org.name}</strong> as support.
+        Support access to <strong className="mx-1">{org.name}</strong> recorded in the audit trail.
       </div>
       <button onClick={onExit} className="inline-flex items-center gap-1.5 rounded bg-white/20 px-3 py-1 text-caption font-medium hover:bg-white/30 transition">
         <X size={12} /> Exit
@@ -199,13 +209,21 @@ function CostTab({ orgs }: { orgs: OrgRow[] }) {
 
 // ── Orgs tab ──────────────────────────────────────────────────────────────────
 
-function OrgsTab({ orgs, onImpersonate }: { orgs: OrgRow[]; onImpersonate: (org: OrgRow) => void }) {
+function OrgsTab({
+  orgs,
+  onImpersonate,
+  onManage,
+}: {
+  orgs: OrgRow[];
+  onImpersonate: (org: OrgRow) => void;
+  onManage: (org: OrgRow) => void;
+}) {
   return (
     <div className="space-y-4">
       <table className="w-full text-left">
         <thead>
           <tr className="border-b border-line-200">
-            {['Organisation', 'Plan', 'Status', 'Members', 'Cost this month', ''].map((h) => (
+            {['Organisation', 'Status', 'Cost this month', ''].map((h) => (
               <th key={h} className="pb-2 pr-4 text-caption font-semibold text-ink-500 uppercase tracking-wide">{h}</th>
             ))}
           </tr>
@@ -214,21 +232,27 @@ function OrgsTab({ orgs, onImpersonate }: { orgs: OrgRow[]; onImpersonate: (org:
           {orgs.map((org) => (
             <tr key={org.orgId} className="border-b border-line-100">
               <td className="py-3 pr-4 text-body font-medium text-ink-900">{org.name}</td>
-              <td className="py-3 pr-4">{planBadge(org.plan)}</td>
               <td className="py-3 pr-4">
                 <span className={`text-caption font-medium ${org.status === 'active' ? 'text-success-fg' : 'text-error-fg'}`}>
-                  {org.status === 'past_due' ? 'Past due' : org.status.charAt(0).toUpperCase() + org.status.slice(1)}
+                  {org.status === 'active' ? 'Active' : 'Cancelled'}
                 </span>
               </td>
-              <td className="py-3 pr-4 text-body text-ink-600">{org.memberCount}</td>
               <td className="py-3 pr-4 font-mono text-body text-ink-900">{fmt(org.costPaise)}</td>
               <td className="py-3">
-                <button
-                  onClick={() => onImpersonate(org)}
-                  className="inline-flex items-center gap-1 text-caption font-medium text-brand-600 hover:underline"
-                >
-                  View as this org <ChevronRight size={12} />
-                </button>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => onManage(org)}
+                    className="inline-flex items-center gap-1 text-caption font-medium text-brand-600 hover:underline"
+                  >
+                    Manage <ChevronRight size={12} />
+                  </button>
+                  <button
+                    onClick={() => onImpersonate(org)}
+                    className="text-caption font-medium text-ink-500 hover:text-ink-900 hover:underline"
+                  >
+                    Record access
+                  </button>
+                </div>
               </td>
             </tr>
           ))}
@@ -238,57 +262,168 @@ function OrgsTab({ orgs, onImpersonate }: { orgs: OrgRow[]; onImpersonate: (org:
   );
 }
 
-// ── Feature flags tab ─────────────────────────────────────────────────────────
+// ── Org detail panel ──────────────────────────────────────────────────────────
 
-function FlagsTab({ flags: initialFlags }: { flags: FeatureFlagRow[] }) {
-  const [flags, setFlags] = useState(initialFlags);
+const PLANS: SubscriptionPlan[] = ['free', 'starter', 'business', 'enterprise'];
 
-  const toggle = (orgId: string, flagName: string) => {
-    setFlags((f) =>
-      f.map((flag) =>
-        flag.orgId === orgId && flag.flagName === flagName
-          ? { ...flag, enabled: !flag.enabled }
-          : flag,
-      ),
-    );
+/**
+ * Flags the platform knows how to name.
+ *
+ * Kept as a list here because flags are stored per org on write — there is no
+ * catalogue collection to read, so an org that has never been touched has no
+ * flag rows at all and the panel would otherwise show nothing to toggle.
+ */
+const KNOWN_FLAGS = [
+  'ai_insights',
+  'bank_reconciliation',
+  'e_invoicing',
+  'practice_portal',
+  'whatsapp_agent',
+];
+
+function OrgDetailPanel({ org, onClose }: { org: OrgRow; onClose: () => void }) {
+  const queryClient = useQueryClient();
+  const period = new Date().toISOString().slice(0, 7);
+
+  const usage = useQuery<ApiUsageMeter | null>({
+    queryKey: ['platform', 'usage', org.orgId, period],
+    queryFn: () => api.get<ApiUsageMeter | null>(`/platform/orgs/${org.orgId}/usage?period=${period}`),
+  });
+
+  const subscription = useQuery<ApiSubscription | null>({
+    queryKey: ['platform', 'subscription', org.orgId],
+    queryFn: () => api.get<ApiSubscription | null>(`/platform/orgs/${org.orgId}/subscription`),
+  });
+
+  const flags = useQuery<ApiFeatureFlag[]>({
+    queryKey: ['platform', 'flags', org.orgId],
+    queryFn: () => api.get<ApiFeatureFlag[]>(`/platform/orgs/${org.orgId}/features`),
+  });
+
+  const invalidate = () => {
+    void queryClient.invalidateQueries({ queryKey: ['platform'] });
   };
 
+  const changePlan = useMutation({
+    mutationFn: (plan: SubscriptionPlan) =>
+      api.patch(`/platform/orgs/${org.orgId}/subscription`, { plan }),
+    onSuccess: invalidate,
+  });
+
+  const toggleFlag = useMutation({
+    mutationFn: ({ flagName, enabled }: { flagName: string; enabled: boolean }) =>
+      api.patch(`/platform/orgs/${org.orgId}/features/${flagName}`, { enabled }),
+    onSuccess: invalidate,
+  });
+
+  const flagState = (name: string) => flags.data?.find((f) => f.flagName === name);
+  const currentPlan = subscription.data?.plan ?? 'free';
+  const meter = usage.data;
+
   return (
-    <div className="space-y-4">
-      <p className="text-caption text-ink-500">Per-org feature overrides. Changes take effect immediately.</p>
-      <table className="w-full text-left">
-        <thead>
-          <tr className="border-b border-line-200">
-            {['Organisation', 'Flag', 'State', 'Changed by', ''].map((h) => (
-              <th key={h} className="pb-2 pr-4 text-caption font-semibold text-ink-500 uppercase tracking-wide">{h}</th>
+    <div className="fixed inset-y-0 right-0 z-40 w-full max-w-md overflow-y-auto border-l border-white/10 bg-ink-900 p-6 text-white shadow-2xl">
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h2 className="font-heading text-lg font-semibold">{org.name}</h2>
+          <p className="mt-0.5 font-mono text-[11px] text-white/40">{org.orgId}</p>
+        </div>
+        <button onClick={onClose} className="rounded p-1 text-white/50 hover:bg-white/10 hover:text-white">
+          <X size={16} />
+        </button>
+      </div>
+
+      {/* Usage — real, metered per org per month */}
+      <section className="mb-7">
+        <h3 className="mb-2 text-caption font-semibold uppercase tracking-wide text-white/40">
+          Usage · {period}
+        </h3>
+        {usage.isLoading ? (
+          <p className="text-caption text-white/40">Loading…</p>
+        ) : !meter ? (
+          <p className="text-caption text-white/40">Nothing metered this month.</p>
+        ) : (
+          <dl className="space-y-1.5 text-body">
+            {[
+              ['OCR pages — tier 1', meter.ocrPagesTier1],
+              ['OCR pages — tier 2', meter.ocrPagesTier2],
+              ['OCR pages — tier 3', meter.ocrPagesTier3],
+              ['AI tokens in', meter.groqTokensIn],
+              ['AI tokens out', meter.groqTokensOut],
+            ].map(([label, value]) => (
+              <div key={label as string} className="flex justify-between">
+                <dt className="text-white/60">{label}</dt>
+                <dd className="font-mono">{(value as number).toLocaleString('en-IN')}</dd>
+              </div>
             ))}
-          </tr>
-        </thead>
-        <tbody>
-          {flags.map((flag, i) => (
-            <tr key={i} className="border-b border-line-100">
-              <td className="py-3 pr-4 text-body text-ink-900">{flag.orgName}</td>
-              <td className="py-3 pr-4 font-mono text-caption text-ink-700">{flag.flagName}</td>
-              <td className="py-3 pr-4">
-                <span className={`text-caption font-semibold ${flag.enabled ? 'text-success-fg' : 'text-ink-400'}`}>
-                  {flag.enabled ? 'Enabled' : 'Disabled'}
-                </span>
-              </td>
-              <td className="py-3 pr-4 text-caption text-ink-500">{flag.overriddenBy ?? '—'}</td>
-              <td className="py-3">
-                <button
-                  onClick={() => toggle(flag.orgId, flag.flagName)}
-                  className={`transition-colors ${flag.enabled ? 'text-success-fg' : 'text-ink-300'}`}
-                >
-                  {flag.enabled
-                    ? <ToggleRight size={22} />
-                    : <ToggleLeft size={22} />}
-                </button>
-              </td>
-            </tr>
+            <div className="flex justify-between border-t border-white/10 pt-1.5">
+              <dt className="text-white/60">Cost</dt>
+              <dd className="font-mono text-marigold-400">{fmt(org.costPaise)}</dd>
+            </div>
+          </dl>
+        )}
+      </section>
+
+      {/* Subscription — persisted, but nothing enforces it yet */}
+      <section className="mb-7">
+        <h3 className="mb-2 text-caption font-semibold uppercase tracking-wide text-white/40">Plan</h3>
+        <div className="flex flex-wrap gap-2">
+          {PLANS.map((plan) => (
+            <button
+              key={plan}
+              disabled={changePlan.isPending}
+              onClick={() => changePlan.mutate(plan)}
+              className={`rounded px-3 py-1.5 text-caption font-medium capitalize transition ${
+                currentPlan === plan
+                  ? 'bg-marigold-400 text-ink-900'
+                  : 'bg-white/10 text-white/70 hover:bg-white/20'
+              }`}
+            >
+              {plan}
+            </button>
           ))}
-        </tbody>
-      </table>
+        </div>
+        <p className="mt-2 text-[11px] leading-relaxed text-white/40">
+          Recorded against the org and shown in the list. Quotas are stored on the plan but no
+          code enforces them yet, so changing this does not restrict the org.
+        </p>
+        {changePlan.isError ? (
+          <p className="mt-2 text-caption text-error-fg">{(changePlan.error as Error).message}</p>
+        ) : null}
+      </section>
+
+      {/* Feature flags — persisted, but nothing reads them yet */}
+      <section className="mb-7">
+        <h3 className="mb-2 text-caption font-semibold uppercase tracking-wide text-white/40">
+          Feature flags
+        </h3>
+        <ul className="space-y-1">
+          {KNOWN_FLAGS.map((name) => {
+            const state = flagState(name);
+            const enabled = state?.enabled ?? false;
+            return (
+              <li key={name} className="flex items-center justify-between py-1">
+                <div>
+                  <span className="font-mono text-caption text-white/80">{name}</span>
+                  {state?.overriddenBy ? (
+                    <p className="text-[10px] text-white/35">overridden by {state.overriddenBy}</p>
+                  ) : null}
+                </div>
+                <button
+                  disabled={toggleFlag.isPending}
+                  onClick={() => toggleFlag.mutate({ flagName: name, enabled: !enabled })}
+                  className={enabled ? 'text-success-fg' : 'text-white/25'}
+                >
+                  {enabled ? <ToggleRight size={22} /> : <ToggleLeft size={22} />}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+        <p className="mt-2 text-[11px] leading-relaxed text-white/40">
+          These persist and are audited, but no feature currently consults them — nothing in the
+          product changes when you flip one.
+        </p>
+      </section>
     </div>
   );
 }
@@ -332,13 +467,30 @@ function AuditTab({ logs }: { logs: AuditRow[] }) {
 const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: 'cost', label: 'AI cost', icon: <Cpu size={15} /> },
   { id: 'orgs', label: 'Organisations', icon: <Building2 size={15} /> },
-  { id: 'flags', label: 'Feature flags', icon: <Flag size={15} /> },
   { id: 'audit', label: 'Audit', icon: <ClipboardList size={15} /> },
 ];
 
 export default function PlatformAdminPage() {
   const [activeTab, setActiveTab] = useState<Tab>('cost');
+  const [managing, setManaging] = useState<OrgRow | null>(null);
   const [impersonating, setImpersonating] = useState<OrgRow | null>(null);
+  const queryClient = useQueryClient();
+
+  /**
+   * Records a support access against the org.
+   *
+   * The endpoint writes an audit row and nothing else — it mints no session and
+   * grants no rights, so this deliberately does not claim to "view as" the org.
+   * Invariant 6 requires platform access to leave an audited trace; this is that
+   * trace, and the banner says so plainly.
+   */
+  const recordAccess = useMutation({
+    mutationFn: (org: OrgRow) => api.post(`/platform/orgs/${org.orgId}/impersonate`, {}),
+    onSuccess: (_data, org) => {
+      setImpersonating(org);
+      void queryClient.invalidateQueries({ queryKey: ['platform', 'audit'] });
+    },
+  });
   const [period] = useState(() => new Date().toISOString().slice(0, 7));
 
   // The API is the authority here — every /platform route refuses a non-admin
@@ -374,14 +526,12 @@ export default function PlatformAdminPage() {
     return {
       orgId: o._id,
       name: o.name,
-      plan: 'free',
       status: o.isActive === false ? 'cancelled' : 'active',
       costPaise: cost?.totalCostPaise ?? 0,
       ocrPages:
         (cost?.ocrPagesTier1 ?? 0) + (cost?.ocrPagesTier2 ?? 0) + (cost?.ocrPagesTier3 ?? 0),
       groqTokens: (cost?.groqTokensIn ?? 0) + (cost?.groqTokensOut ?? 0),
       marginAlert: cost?.marginAlert ?? false,
-      memberCount: 0,
     };
   });
 
@@ -394,10 +544,6 @@ export default function PlatformAdminPage() {
     timestamp: l.createdAt,
     meta: l.meta ? JSON.stringify(l.meta) : '',
   }));
-
-  // Feature flags are stored per org and fetched on demand from the org detail
-  // route; the overview lists none until an org is opened.
-  const flags: FeatureFlagRow[] = [];
 
   const alertCount = orgs.filter((o) => o.marginAlert).length;
 
@@ -475,11 +621,18 @@ export default function PlatformAdminPage() {
         <main className="px-8 py-6">
           <div className="rounded-xl border border-white/10 bg-white/5 p-6">
             {activeTab === 'cost' && <CostTab orgs={orgs} />}
-            {activeTab === 'orgs' && <OrgsTab orgs={orgs} onImpersonate={setImpersonating} />}
-            {activeTab === 'flags' && <FlagsTab flags={flags} />}
+            {activeTab === 'orgs' && (
+              <OrgsTab
+                orgs={orgs}
+                onImpersonate={(org) => recordAccess.mutate(org)}
+                onManage={setManaging}
+              />
+            )}
             {activeTab === 'audit' && <AuditTab logs={auditLogs} />}
           </div>
         </main>
+
+        {managing ? <OrgDetailPanel org={managing} onClose={() => setManaging(null)} /> : null}
 
         {/* System health footer */}
         <footer className="px-8 py-4 border-t border-white/10 flex items-center justify-between">
