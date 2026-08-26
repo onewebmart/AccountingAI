@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { DocumentUploadButton } from '@/components/shell/document-upload-button';
 import { Plus, ChevronRight, Send } from 'lucide-react';
 import { api } from '@/lib/api';
+import { TableError } from '@/components/ui/query-error';
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -318,9 +319,7 @@ export default function SalesPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  <tr>
-                    <td colSpan={7} className="px-4 py-8 text-center text-caption text-error-fg">Couldn&apos;t load data.</td>
-                  </tr>
+                  <TableError error={invoicesQuery.error} colSpan={7} onRetry={() => void invoicesQuery.refetch()} />
                 </tbody>
               </table>
             </div>
@@ -418,9 +417,7 @@ export default function SalesPage() {
                   <td colSpan={4} className="px-4 py-8 text-center text-caption text-ink-400">Loading…</td>
                 </tr>
               ) : customersQuery.isError ? (
-                <tr>
-                  <td colSpan={4} className="px-4 py-8 text-center text-caption text-error-fg">Couldn&apos;t load data.</td>
-                </tr>
+                <TableError error={customersQuery.error} colSpan={4} onRetry={() => void customersQuery.refetch()} />
               ) : (
                 customers.map((customer) => (
                   <tr key={customer._id} className="bg-surface-card hover:bg-surface-sink/50 transition-colors">
@@ -490,9 +487,7 @@ export default function SalesPage() {
                     <td colSpan={4} className="px-4 py-8 text-center text-caption text-ink-400">Loading…</td>
                   </tr>
                 ) : invoicesQuery.isError ? (
-                  <tr>
-                    <td colSpan={4} className="px-4 py-8 text-center text-caption text-error-fg">Couldn&apos;t load data.</td>
-                  </tr>
+                  <TableError error={invoicesQuery.error} colSpan={4} onRetry={() => void invoicesQuery.refetch()} />
                 ) : (
                   invoices.filter((i) => i.status === 'posted' || i.status === 'sent').map((inv) => (
                     <tr key={inv._id} className="bg-surface-card">

@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { DocumentUploadButton } from '@/components/shell/document-upload-button';
 import { Plus, ChevronRight } from 'lucide-react';
 import { api } from '@/lib/api';
+import { TableError } from '@/components/ui/query-error';
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -399,9 +400,7 @@ export default function PurchasePage() {
                   </tr>
                 </thead>
                 <tbody>
-                  <tr>
-                    <td colSpan={7} className="px-4 py-8 text-center text-caption text-error-fg">Couldn&apos;t load data.</td>
-                  </tr>
+                  <TableError error={billsQuery.error} colSpan={7} onRetry={() => void billsQuery.refetch()} />
                 </tbody>
               </table>
             </div>
@@ -501,9 +500,7 @@ export default function PurchasePage() {
                     <td colSpan={4} className="px-4 py-8 text-center text-caption text-ink-400">Loading…</td>
                   </tr>
                 ) : vendorsQuery.isError ? (
-                  <tr>
-                    <td colSpan={4} className="px-4 py-8 text-center text-caption text-error-fg">Couldn&apos;t load data.</td>
-                  </tr>
+                  <TableError error={vendorsQuery.error} colSpan={4} onRetry={() => void vendorsQuery.refetch()} />
                 ) : (
                   vendors.map((vendor) => (
                     <tr key={vendor._id} className="bg-surface-card hover:bg-surface-sink/50 transition-colors">
@@ -575,9 +572,7 @@ export default function PurchasePage() {
                     <td colSpan={5} className="px-4 py-8 text-center text-caption text-ink-400">Loading…</td>
                   </tr>
                 ) : billsQuery.isError ? (
-                  <tr>
-                    <td colSpan={5} className="px-4 py-8 text-center text-caption text-error-fg">Couldn&apos;t load data.</td>
-                  </tr>
+                  <TableError error={billsQuery.error} colSpan={5} onRetry={() => void billsQuery.refetch()} />
                 ) : (
                   bills.filter((b) => b.status === 'posted').map((bill) => {
                     const due = dueDays(bill.dueDate);

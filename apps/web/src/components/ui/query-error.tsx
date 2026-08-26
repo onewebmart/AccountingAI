@@ -11,7 +11,11 @@ import { Button } from './button';
  * any failure — a dead server, an expired session and a permission refusal all
  * looked identical, and refreshing only helped in one of the three cases.
  */
-function describe(error: unknown): { title: string; detail: string; retryable: boolean } {
+export function describeError(error: unknown): {
+  title: string;
+  detail: string;
+  retryable: boolean;
+} {
   if (error instanceof ApiError) {
     if (error.isOffline) {
       return {
@@ -59,7 +63,7 @@ export function QueryError({
   /** Omit to hide the retry action — some failures are not worth retrying. */
   onRetry?: () => void;
 }) {
-  const { title, detail, retryable } = describe(error);
+  const { title, detail, retryable } = describeError(error);
 
   return (
     <div className="flex flex-col items-center justify-center py-24 text-center">
@@ -75,5 +79,48 @@ export function QueryError({
         </Button>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * The same explanation, sized for one row inside a table.
+ *
+ * A table cannot host the full-page block without breaking its own layout, and
+ * the previous inline text ("Couldn't load data.") gave a reader nothing to act
+ * on. Render inside a <tbody>.
+ */
+export function TableError({
+  error,
+  colSpan,
+  onRetry,
+}: {
+  error: unknown;
+  colSpan: number;
+  onRetry?: () => void;
+}) {
+  const { title, detail, retryable } = describeError(error);
+
+  return (
+    <tr>
+      <td colSpan={colSpan} className="px-4 py-8 text-center">
+        <div className="flex flex-col items-center gap-1">
+          <span className="flex items-center gap-1.5 text-body font-medium text-error-fg">
+            <AlertCircle size={15} />
+            {title}
+          </span>
+          <span className="max-w-sm text-caption text-ink-500">{detail}</span>
+          {onRetry && retryable ? (
+            <button
+              type="button"
+              onClick={onRetry}
+              className="mt-2 inline-flex items-center gap-1.5 text-caption font-medium text-saffron-600 hover:underline"
+            >
+              <RefreshCw size={13} />
+              Try again
+            </button>
+          ) : null}
+        </div>
+      </td>
+    </tr>
   );
 }

@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Upload, CheckCircle, AlertCircle, Minus } from 'lucide-react';
 import { api } from '@/lib/api';
+import { QueryError } from '@/components/ui/query-error';
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -393,8 +394,8 @@ export default function BankingPage() {
       )}
 
       {reportQuery.isError && (
-        <div className="rounded-lg border border-line-200 bg-surface-card p-8 text-center text-caption text-error-fg">
-          Couldn&apos;t load data.
+        <div className="rounded-lg border border-line-200 bg-surface-card">
+          <QueryError error={reportQuery.error} onRetry={() => void reportQuery.refetch()} />
         </div>
       )}
 
