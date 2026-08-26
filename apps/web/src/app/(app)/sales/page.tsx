@@ -5,12 +5,16 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { DocumentUploadButton } from '@/components/shell/document-upload-button';
 import { Plus, ChevronRight, Send } from 'lucide-react';
+import { InvoiceStatus as SharedInvoiceStatus } from '@ai-accounting/shared';
 import { api } from '@/lib/api';
+import { GST_RATES, GstRate, splitGst, rupeesToPaise, formatPaise } from '@/lib/gst';
 import { TableError } from '@/components/ui/query-error';
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
-type InvoiceStatus = 'draft' | 'sent' | 'posted' | 'paid';
+// Imported rather than redeclared: a local copy of this union is how the
+// chart of accounts ended up filtering on values the API never sends.
+type InvoiceStatus = `${SharedInvoiceStatus}`;
 
 interface Invoice {
   _id: string;
@@ -55,24 +59,31 @@ type Tab = 'Invoices' | 'Customers' | 'Receivables';
 // ── Add Invoice Modal ─────────────────────────────────────────────────────
 
 interface AddInvoiceModalProps {
+  /** Existing customers — the API takes a customerId, not a typed-in name. */
+  customers: Customer[];
   onClose: () => void;
   onSuccess: () => void;
   showToast: (msg: string, type?: 'success' | 'info') => void;
 }
 
-function AddInvoiceModal({ onClose, onSuccess, showToast }: AddInvoiceModalProps) {
+function AddInvoiceModal({ customers, onClose, onSuccess, showToast }: AddInvoiceModalProps) {
   const [form, setForm] = useState({
-    customerName: '',
+    customerId: '',
     invoiceNumber: '',
-    invoiceDate: '',
-    totalRupees: '',
+    invoiceDate: new Date().toISOString().slice(0, 10),
+    dueDate: '',
+    taxableRupees: '',
+    rate: 18 as GstRate,
+    interState: false,
     description: '',
   });
-  const [errors, setErrors] = useState<Partial<typeof form>>({});
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const taxablePaise = rupeesToPaise(form.taxableRupees) ?? 0;
+  const amounts = splitGst(taxablePaise, form.rate, form.interState);
 
   const mutation = useMutation({
-    mutationFn: (body: { customerName: string; invoiceNumber: string; invoiceDate: string; totalPaise: number; description: string }) =>
-      api.post('/sales/invoices', body),
+    mutationFn: (body: unknown) => api.post('/sales/invoices', body),
     onSuccess: () => {
       showToast('Invoice created');
       onSuccess();
@@ -81,93 +92,202 @@ function AddInvoiceModal({ onClose, onSuccess, showToast }: AddInvoiceModalProps
   });
 
   const validate = () => {
-    const e: Partial<typeof form> = {};
-    if (!form.customerName.trim()) e.customerName = 'Required';
+    const e: Record<string, string> = {};
+    if (!form.customerId) e.customerId = 'Choose a customer';
     if (!form.invoiceDate) e.invoiceDate = 'Required';
-    if (!form.totalRupees || isNaN(Number(form.totalRupees)) || Number(form.totalRupees) <= 0)
-      e.totalRupees = 'Enter a valid amount';
+    if (rupeesToPaise(form.taxableRupees) === null || taxablePaise <= 0)
+      e.taxableRupees = 'Enter a valid amount';
+    if (form.dueDate && form.dueDate < form.invoiceDate)
+      e.dueDate = 'Due date cannot precede the invoice date';
     return e;
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const errs = validate();
-    if (Object.keys(errs).length > 0) { setErrors(errs); return; }
+    if (Object.keys(errs).length > 0) {
+      setErrors(errs);
+      return;
+    }
+    // The shape the API actually takes: a customer id, a full tax breakdown in
+    // paise, and the line items behind it.
     mutation.mutate({
-      customerName: form.customerName.trim(),
-      invoiceNumber: form.invoiceNumber.trim(),
+      customerId: form.customerId,
+      invoiceNumber: form.invoiceNumber.trim() || null,
       invoiceDate: form.invoiceDate,
-      totalPaise: Math.round(Number(form.totalRupees) * 100),
-      description: form.description.trim(),
+      dueDate: form.dueDate || null,
+      amountsPaise: amounts,
+      lineItems: [
+        {
+          description: form.description.trim() || 'Sale',
+          qty: 1,
+          ratePaise: amounts.taxableValue,
+          amountPaise: amounts.taxableValue,
+          taxRatePct: form.rate,
+        },
+      ],
+      notes: form.description.trim() || null,
     });
   };
 
+  const field = 'w-full rounded-md border border-line-200 bg-white px-3 py-2 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-saffron-600/40';
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-surface-card rounded-xl border border-line-200 shadow-xl w-full max-w-md p-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-xl border border-line-200 bg-surface-card p-6 shadow-xl">
         <h2 className="text-h3 font-display text-ink-900 mb-5" style={{ fontFamily: 'var(--font-display)' }}>New invoice</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="text-caption font-medium text-ink-700 block mb-1">Customer name <span className="text-error-fg">*</span></label>
-            <input
-              type="text"
-              className="w-full rounded-md border border-line-200 bg-white px-3 py-2 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-saffron-600/40"
-              value={form.customerName}
-              onChange={(e) => setForm((f) => ({ ...f, customerName: e.target.value }))}
-              placeholder="e.g. Rahul Enterprises"
-            />
-            {errors.customerName && <p className="text-caption text-error-fg mt-1">{errors.customerName}</p>}
+            <label className="text-caption font-medium text-ink-700 block mb-1">
+              Customer <span className="text-error-fg">*</span>
+            </label>
+            <select
+              className={field}
+              value={form.customerId}
+              onChange={(e) => setForm((f) => ({ ...f, customerId: e.target.value }))}
+            >
+              <option value="">Choose a customer…</option>
+              {customers.map((c) => (
+                <option key={c._id} value={c._id}>
+                  {c.name}
+                  {c.gstin ? ` · ${c.gstin}` : ''}
+                </option>
+              ))}
+            </select>
+            {customers.length === 0 && (
+              <p className="mt-1 text-caption text-ink-500">
+                No customers yet — add one on the Customers tab first.
+              </p>
+            )}
+            {errors.customerId && <p className="text-caption text-error-fg mt-1">{errors.customerId}</p>}
           </div>
+
           <div>
             <label className="text-caption font-medium text-ink-700 block mb-1">Invoice number</label>
             <input
               type="text"
-              className="w-full rounded-md border border-line-200 bg-white px-3 py-2 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-saffron-600/40"
+              className={field}
               value={form.invoiceNumber}
               onChange={(e) => setForm((f) => ({ ...f, invoiceNumber: e.target.value }))}
-              placeholder="e.g. INV-2025-0001"
+              placeholder="Leave blank to number it automatically"
             />
           </div>
-          <div>
-            <label className="text-caption font-medium text-ink-700 block mb-1">Invoice date <span className="text-error-fg">*</span></label>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-caption font-medium text-ink-700 block mb-1">
+                Invoice date <span className="text-error-fg">*</span>
+              </label>
+              <input
+                type="date"
+                className={field}
+                value={form.invoiceDate}
+                onChange={(e) => setForm((f) => ({ ...f, invoiceDate: e.target.value }))}
+              />
+              {errors.invoiceDate && <p className="text-caption text-error-fg mt-1">{errors.invoiceDate}</p>}
+            </div>
+            <div>
+              <label className="text-caption font-medium text-ink-700 block mb-1">Due date</label>
+              <input
+                type="date"
+                className={field}
+                value={form.dueDate}
+                onChange={(e) => setForm((f) => ({ ...f, dueDate: e.target.value }))}
+              />
+              {errors.dueDate && <p className="text-caption text-error-fg mt-1">{errors.dueDate}</p>}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-caption font-medium text-ink-700 block mb-1">
+                Taxable amount (₹) <span className="text-error-fg">*</span>
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                className={`${field} font-mono`}
+                value={form.taxableRupees}
+                onChange={(e) => setForm((f) => ({ ...f, taxableRupees: e.target.value }))}
+                placeholder="0.00"
+              />
+              {errors.taxableRupees && <p className="text-caption text-error-fg mt-1">{errors.taxableRupees}</p>}
+            </div>
+            <div>
+              <label className="text-caption font-medium text-ink-700 block mb-1">GST rate</label>
+              <select
+                className={field}
+                value={form.rate}
+                onChange={(e) => setForm((f) => ({ ...f, rate: Number(e.target.value) as GstRate }))}
+              >
+                {GST_RATES.map((r) => (
+                  <option key={r} value={r}>{r}%</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <label className="flex items-center gap-2 text-caption text-ink-700">
             <input
-              type="date"
-              className="w-full rounded-md border border-line-200 bg-white px-3 py-2 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-saffron-600/40"
-              value={form.invoiceDate}
-              onChange={(e) => setForm((f) => ({ ...f, invoiceDate: e.target.value }))}
+              type="checkbox"
+              checked={form.interState}
+              onChange={(e) => setForm((f) => ({ ...f, interState: e.target.checked }))}
+              className="h-4 w-4 rounded border-line-200 accent-saffron-600"
             />
-            {errors.invoiceDate && <p className="text-caption text-error-fg mt-1">{errors.invoiceDate}</p>}
-          </div>
-          <div>
-            <label className="text-caption font-medium text-ink-700 block mb-1">Amount (₹) <span className="text-error-fg">*</span></label>
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              className="w-full rounded-md border border-line-200 bg-white px-3 py-2 text-body font-mono text-ink-900 focus:outline-none focus:ring-2 focus:ring-saffron-600/40"
-              value={form.totalRupees}
-              onChange={(e) => setForm((f) => ({ ...f, totalRupees: e.target.value }))}
-              placeholder="0.00"
-            />
-            {errors.totalRupees && <p className="text-caption text-error-fg mt-1">{errors.totalRupees}</p>}
-          </div>
+            Inter-state supply (IGST instead of CGST + SGST)
+          </label>
+
+          {/* What will actually be stored, before it is stored. */}
+          {taxablePaise > 0 && (
+            <dl className="rounded-md border border-line-200 bg-surface-sink px-3 py-2 text-caption">
+              <div className="flex justify-between py-0.5">
+                <dt className="text-ink-500">Taxable</dt>
+                <dd className="font-mono text-ink-900">{formatPaise(amounts.taxableValue)}</dd>
+              </div>
+              {form.interState ? (
+                <div className="flex justify-between py-0.5">
+                  <dt className="text-ink-500">IGST {form.rate}%</dt>
+                  <dd className="font-mono text-ink-900">{formatPaise(amounts.igst)}</dd>
+                </div>
+              ) : (
+                <>
+                  <div className="flex justify-between py-0.5">
+                    <dt className="text-ink-500">CGST {form.rate / 2}%</dt>
+                    <dd className="font-mono text-ink-900">{formatPaise(amounts.cgst)}</dd>
+                  </div>
+                  <div className="flex justify-between py-0.5">
+                    <dt className="text-ink-500">SGST {form.rate / 2}%</dt>
+                    <dd className="font-mono text-ink-900">{formatPaise(amounts.sgst)}</dd>
+                  </div>
+                </>
+              )}
+              <div className="mt-1 flex justify-between border-t border-line-200 pt-1 font-medium">
+                <dt className="text-ink-700">Total</dt>
+                <dd className="font-mono text-ink-900">{formatPaise(amounts.total)}</dd>
+              </div>
+            </dl>
+          )}
+
           <div>
             <label className="text-caption font-medium text-ink-700 block mb-1">Description</label>
             <input
               type="text"
-              className="w-full rounded-md border border-line-200 bg-white px-3 py-2 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-saffron-600/40"
+              className={field}
               value={form.description}
               onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-              placeholder="Optional notes"
+              placeholder="What was sold"
             />
           </div>
+
           {mutation.isError && (
-            <p className="text-caption text-error-fg">Couldn&apos;t create invoice. Try again.</p>
+            <p className="text-caption text-error-fg">{(mutation.error as Error).message}</p>
           )}
+
           <div className="flex justify-end gap-3 pt-2">
             <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
             <Button type="submit" disabled={mutation.isPending}>
-              {mutation.isPending ? 'Saving…' : 'New invoice'}
+              {mutation.isPending ? 'Saving…' : 'Create invoice'}
             </Button>
           </div>
         </form>
@@ -184,6 +304,17 @@ export default function SalesPage() {
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
 
   const queryClient = useQueryClient();
+
+  /**
+   * Posting is what moves the ledger — creating an invoice only records it.
+   * Both refresh the journals and reports caches, because a posting changes
+   * every figure derived from them.
+   */
+  const afterLedgerChange = () => {
+    void queryClient.invalidateQueries({ queryKey: ['sales'] });
+    void queryClient.invalidateQueries({ queryKey: ['journals'] });
+    void queryClient.invalidateQueries({ queryKey: ['reports'] });
+  };
 
   const showToast = (message: string, type: 'success' | 'info' = 'success') => {
     setToast({ message, type });
@@ -204,9 +335,27 @@ export default function SalesPage() {
     mutationFn: (id: string) => api.post(`/sales/invoices/${id}/send`),
     onSuccess: () => {
       showToast('Invoice sent');
-      queryClient.invalidateQueries({ queryKey: ['sales', 'invoices'] });
+      void queryClient.invalidateQueries({ queryKey: ['sales'] });
     },
-    onError: () => showToast("Couldn&apos;t send invoice. Try again.", 'info'),
+    onError: (e) => showToast((e as Error).message, 'info'),
+  });
+
+  const postMutation = useMutation({
+    mutationFn: (id: string) => api.post(`/sales/invoices/${id}/post`),
+    onSuccess: () => {
+      showToast('Posted to ledger');
+      afterLedgerChange();
+    },
+    onError: (e) => showToast((e as Error).message, 'info'),
+  });
+
+  const payMutation = useMutation({
+    mutationFn: (id: string) => api.post(`/sales/invoices/${id}/pay`),
+    onSuccess: () => {
+      showToast('Payment recorded');
+      afterLedgerChange();
+    },
+    onError: (e) => showToast((e as Error).message, 'info'),
   });
 
   const invoices = invoicesQuery.data ?? [];
@@ -371,14 +520,35 @@ export default function SalesPage() {
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
                           {inv.status === 'draft' && (
+                            <>
+                              <button
+                                type="button"
+                                title="Send invoice"
+                                onClick={() => sendMutation.mutate(inv._id)}
+                                disabled={sendMutation.isPending}
+                                className="text-ink-400 hover:text-saffron-600 transition-colors disabled:opacity-40"
+                              >
+                                <Send size={14} />
+                              </button>
+                              {/* The only action here that reaches the ledger. */}
+                              <button
+                                type="button"
+                                onClick={() => postMutation.mutate(inv._id)}
+                                disabled={postMutation.isPending}
+                                className="rounded border border-saffron-600/30 px-2 py-0.5 text-caption font-medium text-saffron-600 transition-colors hover:bg-saffron-600/10 disabled:opacity-40"
+                              >
+                                Post to ledger
+                              </button>
+                            </>
+                          )}
+                          {(inv.status === 'sent' || inv.status === 'posted') && (
                             <button
                               type="button"
-                              title="Send invoice"
-                              onClick={() => sendMutation.mutate(inv._id)}
-                              disabled={sendMutation.isPending}
-                              className="text-ink-400 hover:text-saffron-600 transition-colors disabled:opacity-40"
+                              onClick={() => payMutation.mutate(inv._id)}
+                              disabled={payMutation.isPending}
+                              className="rounded border border-success-fg/30 px-2 py-0.5 text-caption font-medium text-success-fg transition-colors hover:bg-success-bg disabled:opacity-40"
                             >
-                              <Send size={14} />
+                              Mark paid
                             </button>
                           )}
                           <button
@@ -527,6 +697,7 @@ export default function SalesPage() {
       {/* Modals */}
       {showInvoiceModal && (
         <AddInvoiceModal
+          customers={customersQuery.data ?? []}
           onClose={() => setShowInvoiceModal(false)}
           onSuccess={() => queryClient.invalidateQueries({ queryKey: ['sales', 'invoices'] })}
           showToast={showToast}

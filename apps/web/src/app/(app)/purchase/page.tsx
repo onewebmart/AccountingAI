@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { DocumentUploadButton } from '@/components/shell/document-upload-button';
 import { Plus, ChevronRight } from 'lucide-react';
 import { api } from '@/lib/api';
+import { GST_RATES, GstRate, splitGst, rupeesToPaise, formatPaise } from '@/lib/gst';
 import { TableError } from '@/components/ui/query-error';
 
 // ── Types ─────────────────────────────────────────────────────────────────
@@ -65,119 +66,235 @@ type Tab = 'Bills' | 'Vendors' | 'Outstanding';
 // ── Add Bill Modal ────────────────────────────────────────────────────────
 
 interface AddBillModalProps {
+  /** Existing vendors — the API takes a vendorId, not a typed-in name. */
+  vendors: Vendor[];
   onClose: () => void;
   onSuccess: () => void;
   showToast: (msg: string) => void;
 }
 
-function AddBillModal({ onClose, onSuccess, showToast }: AddBillModalProps) {
+function AddBillModal({ vendors, onClose, onSuccess, showToast }: AddBillModalProps) {
   const [form, setForm] = useState({
-    vendorName: '',
+    vendorId: '',
     billNumber: '',
-    billDate: '',
-    totalRupees: '',
+    billDate: new Date().toISOString().slice(0, 10),
+    dueDate: '',
+    taxableRupees: '',
+    rate: 18 as GstRate,
+    interState: false,
     description: '',
   });
-  const [errors, setErrors] = useState<Partial<typeof form>>({});
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const taxablePaise = rupeesToPaise(form.taxableRupees) ?? 0;
+  const amounts = splitGst(taxablePaise, form.rate, form.interState);
 
   const mutation = useMutation({
-    mutationFn: (body: { vendorName: string; billNumber: string; billDate: string; totalPaise: number; description: string }) =>
-      api.post('/purchase/bills', body),
+    mutationFn: (body: unknown) => api.post('/purchase/bills', body),
     onSuccess: () => {
-      showToast('Bill added');
+      showToast('Bill created');
       onSuccess();
       onClose();
     },
   });
 
   const validate = () => {
-    const e: Partial<typeof form> = {};
-    if (!form.vendorName.trim()) e.vendorName = 'Required';
+    const e: Record<string, string> = {};
+    if (!form.vendorId) e.vendorId = 'Choose a vendor';
     if (!form.billDate) e.billDate = 'Required';
-    if (!form.totalRupees || isNaN(Number(form.totalRupees)) || Number(form.totalRupees) <= 0)
-      e.totalRupees = 'Enter a valid amount';
+    if (rupeesToPaise(form.taxableRupees) === null || taxablePaise <= 0)
+      e.taxableRupees = 'Enter a valid amount';
+    if (form.dueDate && form.dueDate < form.billDate)
+      e.dueDate = 'Due date cannot precede the bill date';
     return e;
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const errs = validate();
-    if (Object.keys(errs).length > 0) { setErrors(errs); return; }
+    if (Object.keys(errs).length > 0) {
+      setErrors(errs);
+      return;
+    }
+    // The shape the API actually takes: a customer id, a full tax breakdown in
+    // paise, and the line items behind it.
     mutation.mutate({
-      vendorName: form.vendorName.trim(),
-      billNumber: form.billNumber.trim(),
+      vendorId: form.vendorId,
+      billNumber: form.billNumber.trim() || null,
       billDate: form.billDate,
-      totalPaise: Math.round(Number(form.totalRupees) * 100),
-      description: form.description.trim(),
+      dueDate: form.dueDate || null,
+      amountsPaise: amounts,
+      lineItems: [
+        {
+          description: form.description.trim() || 'Purchase',
+          qty: 1,
+          ratePaise: amounts.taxableValue,
+          amountPaise: amounts.taxableValue,
+          taxRatePct: form.rate,
+        },
+      ],
+      notes: form.description.trim() || null,
     });
   };
 
+  const field = 'w-full rounded-md border border-line-200 bg-white px-3 py-2 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-saffron-600/40';
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-surface-card rounded-xl border border-line-200 shadow-xl w-full max-w-md p-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-xl border border-line-200 bg-surface-card p-6 shadow-xl">
         <h2 className="text-h3 font-display text-ink-900 mb-5" style={{ fontFamily: 'var(--font-display)' }}>New bill</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="text-caption font-medium text-ink-700 block mb-1">Vendor name <span className="text-error-fg">*</span></label>
-            <input
-              type="text"
-              className="w-full rounded-md border border-line-200 bg-white px-3 py-2 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-saffron-600/40"
-              value={form.vendorName}
-              onChange={(e) => setForm((f) => ({ ...f, vendorName: e.target.value }))}
-              placeholder="e.g. Sigma Electricals"
-            />
-            {errors.vendorName && <p className="text-caption text-error-fg mt-1">{errors.vendorName}</p>}
+            <label className="text-caption font-medium text-ink-700 block mb-1">
+              Vendor <span className="text-error-fg">*</span>
+            </label>
+            <select
+              className={field}
+              value={form.vendorId}
+              onChange={(e) => setForm((f) => ({ ...f, vendorId: e.target.value }))}
+            >
+              <option value="">Choose a vendor…</option>
+              {vendors.map((c) => (
+                <option key={c._id} value={c._id}>
+                  {c.name}
+                  {c.gstin ? ` · ${c.gstin}` : ''}
+                </option>
+              ))}
+            </select>
+            {vendors.length === 0 && (
+              <p className="mt-1 text-caption text-ink-500">
+                No vendors yet — add one on the Vendors tab first.
+              </p>
+            )}
+            {errors.vendorId && <p className="text-caption text-error-fg mt-1">{errors.vendorId}</p>}
           </div>
+
           <div>
             <label className="text-caption font-medium text-ink-700 block mb-1">Bill number</label>
             <input
               type="text"
-              className="w-full rounded-md border border-line-200 bg-white px-3 py-2 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-saffron-600/40"
+              className={field}
               value={form.billNumber}
               onChange={(e) => setForm((f) => ({ ...f, billNumber: e.target.value }))}
-              placeholder="e.g. SWG/2025/0941"
+              placeholder="Vendor's bill number"
             />
           </div>
-          <div>
-            <label className="text-caption font-medium text-ink-700 block mb-1">Bill date <span className="text-error-fg">*</span></label>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-caption font-medium text-ink-700 block mb-1">
+                Bill date <span className="text-error-fg">*</span>
+              </label>
+              <input
+                type="date"
+                className={field}
+                value={form.billDate}
+                onChange={(e) => setForm((f) => ({ ...f, billDate: e.target.value }))}
+              />
+              {errors.billDate && <p className="text-caption text-error-fg mt-1">{errors.billDate}</p>}
+            </div>
+            <div>
+              <label className="text-caption font-medium text-ink-700 block mb-1">Due date</label>
+              <input
+                type="date"
+                className={field}
+                value={form.dueDate}
+                onChange={(e) => setForm((f) => ({ ...f, dueDate: e.target.value }))}
+              />
+              {errors.dueDate && <p className="text-caption text-error-fg mt-1">{errors.dueDate}</p>}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-caption font-medium text-ink-700 block mb-1">
+                Taxable amount (₹) <span className="text-error-fg">*</span>
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                className={`${field} font-mono`}
+                value={form.taxableRupees}
+                onChange={(e) => setForm((f) => ({ ...f, taxableRupees: e.target.value }))}
+                placeholder="0.00"
+              />
+              {errors.taxableRupees && <p className="text-caption text-error-fg mt-1">{errors.taxableRupees}</p>}
+            </div>
+            <div>
+              <label className="text-caption font-medium text-ink-700 block mb-1">GST rate</label>
+              <select
+                className={field}
+                value={form.rate}
+                onChange={(e) => setForm((f) => ({ ...f, rate: Number(e.target.value) as GstRate }))}
+              >
+                {GST_RATES.map((r) => (
+                  <option key={r} value={r}>{r}%</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <label className="flex items-center gap-2 text-caption text-ink-700">
             <input
-              type="date"
-              className="w-full rounded-md border border-line-200 bg-white px-3 py-2 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-saffron-600/40"
-              value={form.billDate}
-              onChange={(e) => setForm((f) => ({ ...f, billDate: e.target.value }))}
+              type="checkbox"
+              checked={form.interState}
+              onChange={(e) => setForm((f) => ({ ...f, interState: e.target.checked }))}
+              className="h-4 w-4 rounded border-line-200 accent-saffron-600"
             />
-            {errors.billDate && <p className="text-caption text-error-fg mt-1">{errors.billDate}</p>}
-          </div>
-          <div>
-            <label className="text-caption font-medium text-ink-700 block mb-1">Amount (₹) <span className="text-error-fg">*</span></label>
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              className="w-full rounded-md border border-line-200 bg-white px-3 py-2 text-body font-mono text-ink-900 focus:outline-none focus:ring-2 focus:ring-saffron-600/40"
-              value={form.totalRupees}
-              onChange={(e) => setForm((f) => ({ ...f, totalRupees: e.target.value }))}
-              placeholder="0.00"
-            />
-            {errors.totalRupees && <p className="text-caption text-error-fg mt-1">{errors.totalRupees}</p>}
-          </div>
+            Inter-state supply (IGST instead of CGST + SGST)
+          </label>
+
+          {/* What will actually be stored, before it is stored. */}
+          {taxablePaise > 0 && (
+            <dl className="rounded-md border border-line-200 bg-surface-sink px-3 py-2 text-caption">
+              <div className="flex justify-between py-0.5">
+                <dt className="text-ink-500">Taxable</dt>
+                <dd className="font-mono text-ink-900">{formatPaise(amounts.taxableValue)}</dd>
+              </div>
+              {form.interState ? (
+                <div className="flex justify-between py-0.5">
+                  <dt className="text-ink-500">IGST {form.rate}%</dt>
+                  <dd className="font-mono text-ink-900">{formatPaise(amounts.igst)}</dd>
+                </div>
+              ) : (
+                <>
+                  <div className="flex justify-between py-0.5">
+                    <dt className="text-ink-500">CGST {form.rate / 2}%</dt>
+                    <dd className="font-mono text-ink-900">{formatPaise(amounts.cgst)}</dd>
+                  </div>
+                  <div className="flex justify-between py-0.5">
+                    <dt className="text-ink-500">SGST {form.rate / 2}%</dt>
+                    <dd className="font-mono text-ink-900">{formatPaise(amounts.sgst)}</dd>
+                  </div>
+                </>
+              )}
+              <div className="mt-1 flex justify-between border-t border-line-200 pt-1 font-medium">
+                <dt className="text-ink-700">Total</dt>
+                <dd className="font-mono text-ink-900">{formatPaise(amounts.total)}</dd>
+              </div>
+            </dl>
+          )}
+
           <div>
             <label className="text-caption font-medium text-ink-700 block mb-1">Description</label>
             <input
               type="text"
-              className="w-full rounded-md border border-line-200 bg-white px-3 py-2 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-saffron-600/40"
+              className={field}
               value={form.description}
               onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-              placeholder="Optional notes"
+              placeholder="What was bought"
             />
           </div>
+
           {mutation.isError && (
-            <p className="text-caption text-error-fg">Couldn&apos;t save bill. Try again.</p>
+            <p className="text-caption text-error-fg">{(mutation.error as Error).message}</p>
           )}
+
           <div className="flex justify-end gap-3 pt-2">
             <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
             <Button type="submit" disabled={mutation.isPending}>
-              {mutation.isPending ? 'Saving…' : 'Add bill'}
+              {mutation.isPending ? 'Saving…' : 'Create bill'}
             </Button>
           </div>
         </form>
@@ -185,8 +302,6 @@ function AddBillModal({ onClose, onSuccess, showToast }: AddBillModalProps) {
     </div>
   );
 }
-
-// ── Add Vendor Modal ──────────────────────────────────────────────────────
 
 interface AddVendorModalProps {
   onClose: () => void;
@@ -288,6 +403,31 @@ export default function PurchasePage() {
   const vendorsQuery = useQuery<Vendor[]>({
     queryKey: ['purchase', 'vendors'],
     queryFn: () => api.get<Vendor[]>('/purchase/vendors'),
+  });
+
+  /** Posting is what moves the ledger; adding a bill only records it. */
+  const afterLedgerChange = () => {
+    void queryClient.invalidateQueries({ queryKey: ['purchase'] });
+    void queryClient.invalidateQueries({ queryKey: ['journals'] });
+    void queryClient.invalidateQueries({ queryKey: ['reports'] });
+  };
+
+  const postMutation = useMutation({
+    mutationFn: (id: string) => api.post(`/purchase/bills/${id}/post`),
+    onSuccess: () => {
+      showToast('Posted to ledger');
+      afterLedgerChange();
+    },
+    onError: (e) => showToast((e as Error).message),
+  });
+
+  const payMutation = useMutation({
+    mutationFn: (id: string) => api.post(`/purchase/bills/${id}/pay`),
+    onSuccess: () => {
+      showToast('Payment recorded');
+      afterLedgerChange();
+    },
+    onError: (e) => showToast((e as Error).message),
   });
 
   const bills = billsQuery.data ?? [];
@@ -457,6 +597,27 @@ export default function PurchasePage() {
                           <BillStatusBadge status={bill.status} />
                         </td>
                         <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                          {bill.status === 'draft' && (
+                            <button
+                              type="button"
+                              onClick={() => postMutation.mutate(bill._id)}
+                              disabled={postMutation.isPending}
+                              className="rounded border border-saffron-600/30 px-2 py-0.5 text-caption font-medium text-saffron-600 transition-colors hover:bg-saffron-600/10 disabled:opacity-40"
+                            >
+                              Post to ledger
+                            </button>
+                          )}
+                          {bill.status === 'posted' && (
+                            <button
+                              type="button"
+                              onClick={() => payMutation.mutate(bill._id)}
+                              disabled={payMutation.isPending}
+                              className="rounded border border-success-fg/30 px-2 py-0.5 text-caption font-medium text-success-fg transition-colors hover:bg-success-bg disabled:opacity-40"
+                            >
+                              Mark paid
+                            </button>
+                          )}
                           <button
                             type="button"
                             className="text-ink-400 hover:text-ink-700 transition-colors"
@@ -464,6 +625,7 @@ export default function PurchasePage() {
                           >
                             <ChevronRight size={16} />
                           </button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -617,6 +779,7 @@ export default function PurchasePage() {
       {/* Modals */}
       {showBillModal && (
         <AddBillModal
+          vendors={vendorsQuery.data ?? []}
           onClose={() => setShowBillModal(false)}
           onSuccess={() => queryClient.invalidateQueries({ queryKey: ['purchase', 'bills'] })}
           showToast={showToast}
