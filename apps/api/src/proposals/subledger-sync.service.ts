@@ -117,6 +117,9 @@ export class SubledgerSyncService {
       lineItems: [],
       financialYear: proposal.financialYear,
       journalId,
+      // Marks this row as read off an upload rather than typed in, and links
+      // back to the file so Purchase and Sales can show the original.
+      sourceDocumentId: proposal.documentId ?? null,
       postedBy: actorId,
       notes: `Auto-created from approved document ${proposal.documentId ?? proposal._id}`,
     });
@@ -166,6 +169,9 @@ export class SubledgerSyncService {
       lineItems: [],
       financialYear: proposal.financialYear,
       journalId,
+      // Marks this row as read off an upload rather than typed in, and links
+      // back to the file so Purchase and Sales can show the original.
+      sourceDocumentId: proposal.documentId ?? null,
       postedBy: actorId,
       notes: `Auto-created from approved document ${proposal.documentId ?? proposal._id}`,
     });

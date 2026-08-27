@@ -280,6 +280,47 @@ export class AccountsService {
   }
 
   /**
+   * Resolve several system accounts at once.
+   *
+   * Not the same as calling resolveSystemAccount in a Promise.all: on an org
+   * whose chart has not been seeded yet, every one of those calls would find
+   * nothing and start its own seed, and the concurrent inserts collide on the
+   * unique (orgId, code) index. Whichever seed lost the race then re-read an
+   * only partly written chart and reported the account missing — on the org's
+   * very first posting, which is exactly when nothing is seeded.
+   *
+   * Seeding once up front and then reading every key in a single query removes
+   * the race and the round trips together.
+   */
+  async resolveSystemAccounts(
+    orgId: string,
+    keys: SystemAccountKey[],
+  ): Promise<Map<SystemAccountKey, LedgerAccountDocument>> {
+    const unique = [...new Set(keys)];
+
+    const load = async () => {
+      const accounts = await withOrg(orgId, () =>
+        this.accountModel.find({ systemKey: { $in: unique } }).exec(),
+      );
+      return new Map(accounts.map((a) => [a.systemKey as SystemAccountKey, a]));
+    };
+
+    let found = await load();
+    if (found.size < unique.length) {
+      await this.seedDefaults(orgId);
+      found = await load();
+    }
+
+    const missing = unique.filter((k) => !found.has(k));
+    if (missing.length > 0) {
+      throw new NotFoundException(
+        `System account${missing.length > 1 ? 's' : ''} ${missing.join(', ')} not configured for this org.`,
+      );
+    }
+    return found;
+  }
+
+  /**
    * Find the best posting account for a free-text expense/income description.
    * Used by the AI proposal builder to map "Zomato — food delivery" onto a real
    * ledger account instead of inventing one. Falls back to the given system key.

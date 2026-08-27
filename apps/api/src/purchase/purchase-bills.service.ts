@@ -8,8 +8,36 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { BillStatus, VoucherType } from '@ai-accounting/shared';
 import { PurchaseBill, PurchaseBillDocument } from './schemas/purchase-bill.schema';
+import { Vendor, VendorDocument } from './schemas/vendor.schema';
+import { AccountsService } from '../gl/accounts.service';
+import { SystemAccountKey } from '../gl/schemas/ledger-account.schema';
 import { PostingService } from '../gl/posting.service';
 import { withOrg } from '../database/tenant.plugin';
+
+/** The shape every list of bills is rendered from. */
+export interface BillListItem {
+  _id: string;
+  vendorId: string | null;
+  vendorName: string;
+  vendorGstin: string | null;
+  billNumber: string | null;
+  billDate: string;
+  dueDate: string | null;
+  status: BillStatus;
+  amountsPaise: {
+    taxableValue: number;
+    cgst: number;
+    sgst: number;
+    igst: number;
+    cess: number;
+    total: number;
+  };
+  /** amountsPaise.total, flattened — integer paise. */
+  totalPaise: number;
+  financialYear: string | null;
+  journalId: string | null;
+  sourceDocumentId: string | null;
+}
 
 export interface CreateBillInput {
   orgId: string;
@@ -49,7 +77,10 @@ export class PurchaseBillsService {
 
   constructor(
     @InjectModel(PurchaseBill.name) private billModel: Model<PurchaseBillDocument>,
+    // Read-only: the list joins the vendor's name onto each bill.
+    @InjectModel(Vendor.name) private vendorModel: Model<VendorDocument>,
     private postingService: PostingService,
+    private accountsService: AccountsService,
   ) {}
 
   async create(input: CreateBillInput): Promise<PurchaseBillDocument> {
@@ -68,11 +99,50 @@ export class PurchaseBillsService {
     return bill;
   }
 
-  async list(orgId: string, status?: BillStatus): Promise<PurchaseBillDocument[]> {
+  /**
+   * Bills for the Purchase screen.
+   *
+   * Returns a view model rather than the raw documents. A bill stores its
+   * counterparty as `vendorId` and its money under `amountsPaise.total`, but
+   * every list that shows one needs the vendor's name and a single total — so
+   * the shape was flattened in the client instead, and when the client read
+   * `totalPaise` and `vendorName` off a raw document it got undefined and
+   * rendered "?" and ₹0.00 against a bill that was perfectly correct in the
+   * database. Doing the join here means one shape, and it cannot drift.
+   */
+  async list(orgId: string, status?: BillStatus): Promise<BillListItem[]> {
     const filter = status ? { status } : {};
-    return withOrg(orgId, () =>
+    const bills = await withOrg(orgId, () =>
       this.billModel.find(filter).sort({ billDate: -1 }).limit(200).exec(),
     );
+
+    const vendorIds = [...new Set(bills.map((b) => b.vendorId?.toString()).filter(Boolean))];
+    const vendors = vendorIds.length
+      ? await withOrg(orgId, () =>
+          this.vendorModel.find({ _id: { $in: vendorIds } }).select('name gstin').exec(),
+        )
+      : [];
+    const vendorById = new Map(vendors.map((v) => [v._id.toString(), v]));
+
+    return bills.map((b) => {
+      const vendor = vendorById.get(b.vendorId?.toString() ?? '');
+      return {
+        _id: b._id.toString(),
+        vendorId: b.vendorId?.toString() ?? null,
+        vendorName: vendor?.name ?? 'Unknown vendor',
+        vendorGstin: vendor?.gstin ?? null,
+        billNumber: b.billNumber ?? null,
+        billDate: b.billDate,
+        dueDate: b.dueDate ?? null,
+        status: b.status,
+        amountsPaise: b.amountsPaise,
+        totalPaise: b.amountsPaise?.total ?? 0,
+        financialYear: b.financialYear ?? null,
+        journalId: b.journalId?.toString() ?? null,
+        // Null for a manual entry; set when the bill was read off an upload.
+        sourceDocumentId: b.sourceDocumentId?.toString() ?? null,
+      };
+    });
   }
 
   async findById(id: string, orgId: string): Promise<PurchaseBillDocument> {
@@ -96,28 +166,57 @@ export class PurchaseBillsService {
     }
 
     const { taxableValue, cgst, sgst, igst, cess, total } = bill.amountsPaise;
-    const gstTotal = cgst + sgst + igst + cess;
     const fy = getFY(bill.billDate);
+
+    // Real accounts from this org's chart, resolved by their stable system key.
+    // These lines used to carry `new Types.ObjectId()` — a fresh, random id per
+    // posting — so a manually entered bill hit a ledger account that existed
+    // nowhere, a different one each time. The amounts were right and the journal
+    // balanced, which is why it looked fine; but the Chart of accounts never saw
+    // them, and a per-account total could never agree with the sub-ledger.
+    const accounts = await this.accountsService.resolveSystemAccounts(orgId, [
+      SystemAccountKey.PURCHASE_EXPENSE,
+      SystemAccountKey.ACCOUNTS_PAYABLE,
+      SystemAccountKey.GST_INPUT_CGST,
+      SystemAccountKey.GST_INPUT_SGST,
+      SystemAccountKey.GST_INPUT_IGST,
+      SystemAccountKey.GST_INPUT_CESS,
+    ]);
+    const expense = accounts.get(SystemAccountKey.PURCHASE_EXPENSE)!;
+    const payable = accounts.get(SystemAccountKey.ACCOUNTS_PAYABLE)!;
+    const inputCgst = accounts.get(SystemAccountKey.GST_INPUT_CGST)!;
+    const inputSgst = accounts.get(SystemAccountKey.GST_INPUT_SGST)!;
+    const inputIgst = accounts.get(SystemAccountKey.GST_INPUT_IGST)!;
+    const inputCess = accounts.get(SystemAccountKey.GST_INPUT_CESS)!;
 
     const lines = [
       {
-        accountId: new Types.ObjectId().toString(),
-        description: 'Purchase / Expense Account',
+        accountId: expense._id.toString(),
+        description: expense.name,
         debitPaise: taxableValue,
         creditPaise: 0,
       },
     ];
-    if (gstTotal > 0) {
-      lines.push({
-        accountId: new Types.ObjectId().toString(),
-        description: 'GST Input Tax Credit',
-        debitPaise: gstTotal,
-        creditPaise: 0,
-      });
+    // Each tax head posts to its own account, as the return expects — lumping
+    // them into one "GST Input Tax Credit" line loses the CGST/SGST/IGST split.
+    for (const [account, amount] of [
+      [inputCgst, cgst],
+      [inputSgst, sgst],
+      [inputIgst, igst],
+      [inputCess, cess],
+    ] as const) {
+      if (amount > 0) {
+        lines.push({
+          accountId: account._id.toString(),
+          description: account.name,
+          debitPaise: amount,
+          creditPaise: 0,
+        });
+      }
     }
     lines.push({
-      accountId: new Types.ObjectId().toString(),
-      description: 'Accounts Payable',
+      accountId: payable._id.toString(),
+      description: payable.name,
       debitPaise: 0,
       creditPaise: total,
     });
@@ -154,6 +253,15 @@ export class PurchaseBillsService {
     const { total } = bill.amountsPaise;
     const fy = bill.financialYear ?? getFY(bill.billDate);
 
+    const payAccountMap = await this.accountsService.resolveSystemAccounts(orgId, [
+      SystemAccountKey.ACCOUNTS_PAYABLE,
+      SystemAccountKey.BANK,
+    ]);
+    const payAccounts = {
+      payable: payAccountMap.get(SystemAccountKey.ACCOUNTS_PAYABLE)!,
+      bank: payAccountMap.get(SystemAccountKey.BANK)!,
+    };
+
     // Payment journal: Dr Accounts Payable / Cr Bank
     await this.postingService.post({
       orgId,
@@ -163,8 +271,8 @@ export class PurchaseBillsService {
       narration: `Payment for bill ${bill.billNumber ?? id}`,
       postedBy: actorId,
       lines: [
-        { accountId: new Types.ObjectId().toString(), description: 'Accounts Payable', debitPaise: total, creditPaise: 0 },
-        { accountId: new Types.ObjectId().toString(), description: 'Bank / Cash Account', debitPaise: 0, creditPaise: total },
+        { accountId: payAccounts.payable._id.toString(), description: payAccounts.payable.name, debitPaise: total, creditPaise: 0 },
+        { accountId: payAccounts.bank._id.toString(), description: payAccounts.bank.name, debitPaise: 0, creditPaise: total },
       ],
     });
 

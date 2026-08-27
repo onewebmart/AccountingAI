@@ -62,6 +62,17 @@ export class PurchaseBill {
   /** Actor who marked this bill as paid. */
   @Prop({ type: String, default: null }) paidBy: string | null;
   @Prop({ type: String, default: null }) notes: string | null;
+
+  /**
+   * The uploaded document this came from, when it came from one.
+   *
+   * Null for a manual entry. Lets Purchase and Sales show which rows were read
+   * off a scan and link back to the file, rather than the two kinds of entry
+   * being indistinguishable once posted.
+   */
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Document', default: null, index: true })
+  sourceDocumentId?: MongooseSchema.Types.ObjectId | null;
+
 }
 
 export const PurchaseBillSchema = SchemaFactory.createForClass(PurchaseBill);

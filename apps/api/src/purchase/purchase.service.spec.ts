@@ -26,6 +26,8 @@ import { Journal, JournalSchema, JournalDocument } from '../gl/schemas/journal.s
 import { Counter, CounterSchema } from '../gl/schemas/counter.schema';
 import { AuditLog, AuditLogSchema } from '../gl/schemas/audit-log.schema';
 import { PostingService } from '../gl/posting.service';
+import { AccountsService } from '../gl/accounts.service';
+import { LedgerAccount, LedgerAccountSchema } from '../gl/schemas/ledger-account.schema';
 import { BillStatus } from '@ai-accounting/shared';
 
 const ORG_ID = new Types.ObjectId().toString();
@@ -50,9 +52,12 @@ beforeAll(async () => {
         { name: Journal.name, schema: JournalSchema },
         { name: Counter.name, schema: CounterSchema },
         { name: AuditLog.name, schema: AuditLogSchema },
+        // Posting resolves real accounts by system key, seeding the chart on
+        // first use — so these specs need the ledger accounts collection.
+        { name: LedgerAccount.name, schema: LedgerAccountSchema },
       ]),
     ],
-    providers: [VendorsService, PurchaseBillsService, PostingService],
+    providers: [VendorsService, PurchaseBillsService, PostingService, AccountsService],
   }).compile();
 
   vendorsSvc = moduleRef.get(VendorsService);

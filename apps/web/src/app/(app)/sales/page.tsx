@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { DocumentUploadButton } from '@/components/shell/document-upload-button';
@@ -24,6 +25,8 @@ interface Invoice {
   dueDate: string | null;
   status: InvoiceStatus;
   totalPaise: number;
+  /** Set when this row was read off an upload; null when typed in by hand. */
+  sourceDocumentId?: string | null;
 }
 
 interface Customer {
@@ -296,6 +299,32 @@ function AddInvoiceModal({ customers, onClose, onSuccess, showToast }: AddInvoic
   );
 }
 
+/**
+ * Whether this row was typed in or read off an upload.
+ *
+ * Once posted the two are identical in the ledger, which is correct — but when
+ * a figure looks wrong the first question is always "where did this come from",
+ * and the answer was not on the screen.
+ */
+function SourceChip({ documentId }: { documentId?: string | null }) {
+  if (!documentId) {
+    return (
+      <span title="Entered by hand" className="rounded bg-surface-sink px-1.5 py-0.5 text-[10px] font-medium text-ink-500">
+        Manual
+      </span>
+    );
+  }
+  return (
+    <Link
+      href="/inbox"
+      title="Read from an uploaded document — open the Inbox"
+      className="rounded bg-honey-100 px-1.5 py-0.5 text-[10px] font-medium text-pending-fg hover:underline"
+    >
+      Scanned
+    </Link>
+  );
+}
+
 // ── Page ─────────────────────────────────────────────────────────────────
 
 export default function SalesPage() {
@@ -501,7 +530,10 @@ export default function SalesPage() {
                     <tr key={inv._id} className="bg-surface-card hover:bg-surface-sink/50 transition-colors">
                       <td className="px-4 py-3 font-medium text-ink-900">{inv.customerName}</td>
                       <td className="px-4 py-3 font-mono text-caption text-ink-600">
-                        {inv.invoiceNumber ?? <span className="text-ink-400">—</span>}
+                        <span className="flex items-center gap-2">
+                          {inv.invoiceNumber ?? <span className="text-ink-400">—</span>}
+                          <SourceChip documentId={inv.sourceDocumentId} />
+                        </span>
                       </td>
                       <td className="px-4 py-3 text-ink-600">
                         {new Date(inv.invoiceDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: '2-digit' })}
