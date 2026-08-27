@@ -32,14 +32,23 @@ function readUriFromEnvFile() {
 const MONGODB_URI =
   process.env.MONGODB_URI ?? readUriFromEnvFile() ?? 'mongodb://127.0.0.1:27018/ai_accounting?directConnection=true';
 
-/** One login per role, so each permission set has a face. */
+/**
+ * One login per role, so each permission set has a face.
+ *
+ * The fourth column is the firm role. Only the owner and the practice login
+ * carry one: `role` governs the books, `firmRole` governs the practice, and the
+ * owner of a one-person practice legitimately holds both. It is deliberately
+ * not granted to every COMPANY_ADMIN — client organisations sit under the same
+ * firm, so a client's own admin would otherwise be able to read the whole
+ * practice: every other client, all fees, all leads.
+ */
 const ROLE_ACCOUNTS = [
-  ['owner',      'COMPANY_ADMIN', 'Priya Nair',    'Runs the company books end to end.'],
-  ['accountant', 'ACCOUNTANT',    'Ravi Kulkarni', 'Posts entries, approves AI proposals, files GST.'],
-  ['reviewer',   'CA_REVIEWER',   'Anjali Desai',  'Reviews proposals but cannot post to the ledger.'],
-  ['clerk',      'EMPLOYEE',      'Imran Shaikh',  'Uploads bills only — no ledger access.'],
-  ['auditor',    'AUDITOR',       'Meera Iyer',    'Read-only across ledger, documents and audit trail.'],
-  ['practice',   'FIRM_ADMIN',    'KP Practice',   'Runs the CA practice side (clients, deadlines, fees).'],
+  ['owner',      'COMPANY_ADMIN', 'Priya Nair',    'Main board — the books and the practice, end to end.', 'FIRM_ADMIN'],
+  ['accountant', 'ACCOUNTANT',    'Ravi Kulkarni', 'Posts entries, approves AI proposals, files GST.', null],
+  ['reviewer',   'CA_REVIEWER',   'Anjali Desai',  'Reviews proposals but cannot post to the ledger.', null],
+  ['clerk',      'EMPLOYEE',      'Imran Shaikh',  'Uploads bills only — no ledger access.', null],
+  ['auditor',    'AUDITOR',       'Meera Iyer',    'Read-only across ledger, documents and audit trail.', null],
+  ['practice',   'COMPANY_ADMIN', 'KP Practice',   'Main board — same access, a second seat.', 'FIRM_ADMIN'],
 ];
 
 async function api(method, path, token, body) {
@@ -93,15 +102,18 @@ try {
   const passwordHash = await bcrypt.hash(DEMO_PASSWORD, 12);
   const emailFor = (kind) => `${slug}.${kind}@demo.test`;
 
-  for (const [kind, role, name] of ROLE_ACCOUNTS) {
+  for (const [kind, role, name, , firmRole] of ROLE_ACCOUNTS) {
     const email = emailFor(kind);
     const existing = await db.collection('users').findOne({ email });
     if (existing) {
-      // Keep the role in step even when the user is already there, so re-runs
-      // repair a matrix someone has since edited.
+      // Both roles are set or cleared explicitly, so a re-run repairs a matrix
+      // someone has since edited, in either direction.
+      const update = firmRole
+        ? { $set: { role, firmRole, isActive: true, updatedAt: new Date() } }
+        : { $set: { role, isActive: true, updatedAt: new Date() }, $unset: { firmRole: 1 } };
       await db.collection('orgMemberships').updateOne(
         { userId: existing._id, orgId },
-        { $set: { role, isActive: true, updatedAt: new Date() } },
+        update,
         { upsert: true },
       );
       created.skipped.push(`${email} (${role})`);
@@ -114,6 +126,7 @@ try {
     });
     await db.collection('orgMemberships').insertOne({
       _id: new ObjectId(), userId, orgId, role, isActive: true,
+      ...(firmRole ? { firmRole } : {}),
       createdAt: new Date(), updatedAt: new Date(),
     });
     created.users.push(`${email} (${role})`);
@@ -272,8 +285,9 @@ try {
   // ── Summary ─────────────────────────────────────────────────────────
   console.log('─'.repeat(64));
   console.log('Sign in with any of these — password is the same for all:\n');
-  for (const [kind, role, name, what] of ROLE_ACCOUNTS) {
-    console.log(`  ${emailFor(kind).padEnd(30)} ${role.padEnd(15)} ${what}`);
+  for (const [kind, role, , what, firmRole] of ROLE_ACCOUNTS) {
+    const roles = firmRole ? `${role} + ${firmRole}` : role;
+    console.log(`  ${emailFor(kind).padEnd(30)} ${roles.padEnd(30)} ${what}`);
   }
   console.log(`\n  password: ${DEMO_PASSWORD}`);
   console.log(`\n  ${OWNER_EMAIL} keeps its own password and its ${membership.role} role.`);

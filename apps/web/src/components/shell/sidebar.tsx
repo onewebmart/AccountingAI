@@ -37,6 +37,13 @@ interface NavItem {
   badge?: number;
 }
 
+/**
+ * The main board — one list, books and practice together.
+ *
+ * These were two sections with two headings. A CA moves between a client's
+ * ledger and their own practice constantly, and a heading between them framed
+ * that as crossing into a different product when it is the same day's work.
+ */
 const navItems: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} /> },
   { href: '/inbox', label: 'Inbox', icon: <Inbox size={18} /> },
@@ -51,13 +58,7 @@ const navItems: NavItem[] = [
   { href: '/insights', label: 'Insights', icon: <Lightbulb size={18} /> },
 ];
 
-/**
- * The practice-management views, for firms that manage client books.
- *
- * They live in this same sidebar rather than a separate workspace: a CA moves
- * between a client's ledger and their own practice constantly, and making that
- * a different app with a different nav means re-orienting on every switch.
- */
+/** Practice views, appended to the same list once the org has a firm. */
 const practiceItems: NavItem[] = [
   { href: '/crm', label: 'Practice home', icon: <Briefcase size={18} /> },
   { href: '/crm/clients', label: 'Clients', icon: <Users size={18} /> },
@@ -78,16 +79,16 @@ interface SidebarProps {
   inboxCount?: number;
   reviewCount?: number;
   /**
-   * The practice this org runs, when it has one. The Practice section shows
-   * either way — an org without a firm lands on a short setup step rather than
-   * being shown nothing, since hiding half the product is a worse answer than
-   * offering to switch it on.
+   * The practice this org runs, when it has one. Without a firm the list ends
+   * at a single setup entry rather than hiding that half of the product.
    */
   firmName?: string;
   /**
-   * The signed-in user's role. Only PLATFORM_SUPER_ADMIN sees the Platform
-   * section — the API refuses those routes to everyone else, so showing the
-   * link to a tenant would only offer them a page of errors.
+   * The signed-in user's role.
+   *
+   * There are two boards, not three. A platform admin runs the platform and has
+   * no books of their own, so they get the admin board alone; everyone else gets
+   * the main board, which carries the whole product.
    */
   role?: string;
 }
@@ -96,7 +97,13 @@ export function Sidebar({ inboxCount = 0, reviewCount = 0, firmName, role }: Sid
   const pathname = usePathname();
   const isPlatformAdmin = role === 'PLATFORM_SUPER_ADMIN';
 
-  const itemsWithBadges = navItems.map((item) => ({
+  // One list. Practice is appended rather than sectioned off; an org with no
+  // firm gets only the first entry, which is the short setup step.
+  const mainBoard: NavItem[] = isPlatformAdmin
+    ? []
+    : [...navItems, ...(firmName ? practiceItems : practiceItems.slice(0, 1))];
+
+  const itemsWithBadges = mainBoard.map((item) => ({
     ...item,
     badge:
       item.href === '/inbox' && inboxCount > 0
@@ -105,6 +112,12 @@ export function Sidebar({ inboxCount = 0, reviewCount = 0, firmName, role }: Sid
           ? reviewCount
           : undefined,
   }));
+
+  const linkClass = (isActive: boolean) =>
+    cn(
+      'flex min-h-[44px] items-center gap-3 rounded-sm px-3 py-2.5 text-body transition-colors',
+      isActive ? 'sidebar-active text-white' : 'text-ink-400 hover:bg-white/5 hover:text-white',
+    );
 
   return (
     <aside
@@ -123,79 +136,17 @@ export function Sidebar({ inboxCount = 0, reviewCount = 0, firmName, role }: Sid
         </span>
       </div>
 
-      {/* Navigation */}
       <nav className="flex-1 overflow-y-auto py-4">
-        <ul className="space-y-0.5 px-3">
-          {itemsWithBadges.map((item) => {
-            const isActive = pathname.startsWith(item.href);
-            return (
-              <li key={item.href}>
-                <Link
-                  href={item.href}
-                  className={cn(
-                    'flex items-center gap-3 rounded-sm px-3 py-2.5 text-body transition-colors min-h-[44px]',
-                    isActive
-                      ? 'sidebar-active text-white'
-                      : 'text-ink-400 hover:text-white hover:bg-white/5',
-                  )}
-                >
-                  <span className={isActive ? 'text-white' : 'text-ink-500'}>{item.icon}</span>
-                  <span className="flex-1">{item.label}</span>
-                  {item.badge !== undefined && item.badge > 0 && (
-                    <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-marigold-400 px-1.5 text-[0.75rem] font-semibold text-ink-900">
-                      {item.badge}
-                    </span>
-                  )}
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
-
-        <>
-            <p className="mt-6 px-6 pb-2 text-[11px] font-semibold uppercase tracking-wide text-ink-500">
-              {firmName ?? 'Practice'}
-            </p>
-            <ul className="space-y-0.5 px-3">
-              {(firmName ? practiceItems : practiceItems.slice(0, 1)).map((item) => {
-                // '/crm' must not light up for every practice page beneath it.
-                const isActive =
-                  item.href === '/crm' ? pathname === '/crm' : pathname.startsWith(item.href);
-                return (
-                  <li key={item.href}>
-                    <Link
-                      href={item.href}
-                      className={cn(
-                        'flex min-h-[44px] items-center gap-3 rounded-sm px-3 py-2.5 text-body transition-colors',
-                        isActive
-                          ? 'sidebar-active text-white'
-                          : 'text-ink-400 hover:bg-white/5 hover:text-white',
-                      )}
-                    >
-                      <span className={isActive ? 'text-white' : 'text-ink-500'}>{item.icon}</span>
-                      <span className="flex-1">{item.label}</span>
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          </>
-
         {isPlatformAdmin ? (
           <>
-            <p className="mt-6 px-6 pb-2 text-[11px] font-semibold uppercase tracking-wide text-ink-500">
-              Platform
+            <p className="px-6 pb-2 text-[11px] font-semibold uppercase tracking-wide text-ink-500">
+              Admin
             </p>
             <ul className="space-y-0.5 px-3">
               <li>
                 <Link
                   href="/platform-admin"
-                  className={cn(
-                    'flex min-h-[44px] items-center gap-3 rounded-sm px-3 py-2.5 text-body transition-colors',
-                    pathname.startsWith('/platform-admin')
-                      ? 'sidebar-active text-white'
-                      : 'text-ink-400 hover:bg-white/5 hover:text-white',
-                  )}
+                  className={linkClass(pathname.startsWith('/platform-admin'))}
                 >
                   <span
                     className={
@@ -209,10 +160,33 @@ export function Sidebar({ inboxCount = 0, reviewCount = 0, firmName, role }: Sid
               </li>
             </ul>
           </>
-        ) : null}
+        ) : (
+          <ul className="space-y-0.5 px-3">
+            {itemsWithBadges.map((item) => {
+              // '/crm' must not light up for every practice page beneath it.
+              const isActive =
+                item.href === '/crm' ? pathname === '/crm' : pathname.startsWith(item.href);
+              return (
+                <li key={item.href}>
+                  <Link href={item.href} className={linkClass(isActive)}>
+                    <span className={isActive ? 'text-white' : 'text-ink-500'}>{item.icon}</span>
+                    <span className="flex-1">{item.label}</span>
+                    {item.badge !== undefined && item.badge > 0 && (
+                      <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-marigold-400 px-1.5 text-[0.75rem] font-semibold text-ink-900">
+                        {item.badge}
+                      </span>
+                    )}
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </nav>
 
-      {/* Settings at bottom */}
+      {/* Org settings, at the bottom of the main board. A platform admin
+          administers the platform, not an organisation, so it is not theirs. */}
+      {!isPlatformAdmin && (
       <div className="border-t border-white/10 p-3">
         <Link
           href="/settings"
@@ -227,6 +201,7 @@ export function Sidebar({ inboxCount = 0, reviewCount = 0, firmName, role }: Sid
           <span>Settings</span>
         </Link>
       </div>
+      )}
     </aside>
   );
 }
