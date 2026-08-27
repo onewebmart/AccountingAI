@@ -29,6 +29,8 @@ interface InboxDoc {
   vendor: string | null;
   amountPaise: number | null;
   confidence: number | null;
+  /** Which OCR tier read the file: 0 native text … 3 vision model. */
+  ocrTier: number | null;
   status: DocStatus;
   duplicateOf?: string;
   /** Why the pipeline gave up, when it did. */
@@ -56,6 +58,7 @@ interface ApiDocument {
   invoiceNumber?: string | null;
   totalAmountPaise?: number | null;
   confidence?: number | null;
+  ocrTier?: number | null;
   proposalId?: string | null;
   uploadedAt: string;
   duplicateOf?: string;
@@ -96,6 +99,7 @@ function mapApiDoc(doc: ApiDocument): InboxDoc {
     vendor: doc.vendor ?? null,
     amountPaise: doc.totalAmountPaise ?? null,
     confidence: doc.confidence ?? null,
+    ocrTier: doc.ocrTier ?? null,
     status: mapApiStatus(doc.status),
     duplicateOf: doc.duplicateOfName ?? doc.duplicateOf,
     failureReason: doc.failureReason,
@@ -150,6 +154,36 @@ function StatusChip({ status, duplicateOf }: { status: DocStatus; duplicateOf?: 
   return (
     <span className="inline-flex items-center gap-1.5 text-caption font-medium text-error-fg bg-error-bg border border-error-fg/30 rounded-full px-2.5 py-0.5">
       <AlertCircle size={11} /> Couldn&apos;t read
+    </span>
+  );
+}
+
+/**
+ * Which tier read this file, and what that cost.
+ *
+ * The cascade escalates only as far as it must — tier 0 reads text straight out
+ * of the file for nothing, tier 3 posts the page to a vision model. Showing it
+ * makes an expensive scan visible next to a free one, which is otherwise
+ * invisible until the monthly bill.
+ */
+function OcrTierChip({ tier }: { tier: number | null }) {
+  if (tier == null) return null;
+
+  const meta: Record<number, { label: string; title: string; className: string }> = {
+    0: { label: 'T0', title: 'Read straight from the file — no OCR, no cost', className: 'bg-surface-sink text-ink-500' },
+    1: { label: 'T1', title: 'PDF text layer — cheapest OCR tier', className: 'bg-surface-sink text-ink-500' },
+    2: { label: 'T2', title: 'Image or scanned PDF — vision OCR', className: 'bg-honey-100 text-pending-fg' },
+    3: { label: 'T3', title: 'Escalated to the vision model — most expensive tier', className: 'bg-honey-100 text-pending-fg' },
+  };
+  const m = meta[tier];
+  if (!m) return null;
+
+  return (
+    <span
+      title={m.title}
+      className={`rounded px-1 py-0.5 font-mono text-[10px] font-medium ${m.className}`}
+    >
+      {m.label}
     </span>
   );
 }
@@ -293,6 +327,7 @@ export default function InboxPage() {
       vendor: null,
       amountPaise: null,
       confidence: null,
+      ocrTier: null,
       status: 'reading',
     }));
     setOptimisticDocs((prev) => [...placeholders, ...prev]);
@@ -420,9 +455,12 @@ export default function InboxPage() {
                       {doc.amountPaise != null ? fmt(doc.amountPaise) : <span className="text-ink-300">—</span>}
                     </td>
                     <td className="px-4 py-3">
-                      {doc.confidence != null
-                        ? <ConfidenceDot value={doc.confidence} />
-                        : <span className="text-ink-300 text-caption">—</span>}
+                      <div className="flex items-center gap-2">
+                        {doc.confidence != null
+                          ? <ConfidenceDot value={doc.confidence} />
+                          : <span className="text-ink-300 text-caption">—</span>}
+                        <OcrTierChip tier={doc.ocrTier} />
+                      </div>
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       <StatusChip status={doc.status} duplicateOf={doc.duplicateOf} />

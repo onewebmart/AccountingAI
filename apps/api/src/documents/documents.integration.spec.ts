@@ -31,6 +31,7 @@ import { TenancyModule } from '../tenancy/tenancy.module';
 import { DocumentsService, DOCUMENT_PROCESSING_QUEUE } from './documents.service';
 import { DocumentsController } from './documents.controller';
 import { StorageService } from './storage.service';
+import { OcrResult, OcrResultSchema } from '../ocr/schemas/ocr-result.schema';
 import { ProposedEntry, ProposedEntrySchema } from '../proposals/schemas/proposed-entry.schema';
 import { Document, DocumentSchema, DocumentDocument } from './schemas/document.schema';
 import { DocumentStatus, UserRole } from '@ai-accounting/shared';
@@ -90,6 +91,8 @@ beforeAll(async () => {
         { name: Document.name, schema: DocumentSchema },
         // The list endpoint joins in proposals so the Inbox can show vendor and amount.
         { name: ProposedEntry.name, schema: ProposedEntrySchema },
+        // …and the OCR result, so it can show which tier read the file.
+        { name: OcrResult.name, schema: OcrResultSchema },
       ]),
       TenancyModule,
       AuthModule,

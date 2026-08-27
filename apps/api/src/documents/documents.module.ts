@@ -11,6 +11,7 @@ import { ExtractionModule } from '../extraction/extraction.module';
 import { ProposalsModule } from '../proposals/proposals.module';
 import { IngestModule } from '../ingest/ingest.module';
 import { CrmModule } from '../crm/crm.module';
+import { OcrResult, OcrResultSchema } from '../ocr/schemas/ocr-result.schema';
 import { ProposedEntry, ProposedEntrySchema } from '../proposals/schemas/proposed-entry.schema';
 
 @Module({
@@ -18,6 +19,8 @@ import { ProposedEntry, ProposedEntrySchema } from '../proposals/schemas/propose
     MongooseModule.forFeature([
       { name: Document.name, schema: DocumentSchema },
       { name: ProposedEntry.name, schema: ProposedEntrySchema },
+      // Read-only here, so the Inbox can show which OCR tier handled each file.
+      { name: OcrResult.name, schema: OcrResultSchema },
     ]),
     BullModule.registerQueue({ name: DOCUMENT_PROCESSING_QUEUE }),
     OcrModule,

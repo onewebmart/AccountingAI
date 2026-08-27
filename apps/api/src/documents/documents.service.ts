@@ -6,6 +6,7 @@ import { Queue } from 'bullmq';
 import { createHash } from 'crypto';
 import { DocumentStatus } from '@ai-accounting/shared';
 import { Document, DocumentDocument } from './schemas/document.schema';
+import { OcrResult, OcrResultDocument } from '../ocr/schemas/ocr-result.schema';
 import { ProposedEntry, ProposedEntryDocument } from '../proposals/schemas/proposed-entry.schema';
 import { StorageService } from './storage.service';
 import { withOrg } from '../database/tenant.plugin';
@@ -52,6 +53,7 @@ export class DocumentsService {
   constructor(
     @InjectModel(Document.name) private documentModel: Model<DocumentDocument>,
     @InjectModel(ProposedEntry.name) private proposalModel: Model<ProposedEntryDocument>,
+    @InjectModel(OcrResult.name) private ocrResultModel: Model<OcrResultDocument>,
     @InjectQueue(DOCUMENT_PROCESSING_QUEUE) private processingQueue: Queue,
     private storage: StorageService,
   ) {}
@@ -140,6 +142,23 @@ export class DocumentsService {
       if (key && !byDocId.has(key)) byDocId.set(key, p);
     }
 
+    // Which tier read each file. Stored on the OCR result and never surfaced
+    // before, so there was no way to tell from the Inbox whether a document
+    // cost nothing (tier 0, read straight out of the file) or went to the
+    // vision model (tier 3).
+    const ocrResults = await withOrg(orgId, () =>
+      this.ocrResultModel
+        .find({ documentId: { $in: docIds } })
+        .select('documentId tier confidence')
+        .sort({ createdAt: -1 })
+        .exec(),
+    );
+    const tierByDocId = new Map<string, number>();
+    for (const r of ocrResults) {
+      const key = r.documentId?.toString();
+      if (key && !tierByDocId.has(key)) tierByDocId.set(key, r.tier);
+    }
+
     // Duplicate rows name the original file they collided with.
     const originalIds = docs.map((d) => d.duplicateOf).filter(Boolean);
     const originals = originalIds.length
@@ -166,6 +185,7 @@ export class DocumentsService {
         invoiceNumber: proposal?.invoiceNumber ?? null,
         totalAmountPaise: proposal?.amountsPaise?.total ?? null,
         confidence: proposal?.confidenceOverall ?? null,
+        ocrTier: tierByDocId.get(d._id.toString()) ?? null,
         proposalId: proposal?._id.toString() ?? null,
         sizeBytes: d.sizeBytes,
         sha256: d.sha256,
