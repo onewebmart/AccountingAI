@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { api, ApiError } from '@/lib/api';
+import { AuthShell } from '@/components/auth/auth-shell';
 
 /** Matches the API's MinLength(8) so the rule is stated before the round trip. */
 const MIN_PASSWORD_LENGTH = 8;
@@ -49,100 +50,78 @@ function ResetPasswordForm() {
     }
   };
 
+  if (!token) {
+    return (
+      <AuthShell
+        title="This link is incomplete"
+        subtitle="Open the link from your email exactly as it was sent, or request a new one."
+        footer={
+          <Link href="/auth/login" className="font-medium text-saffron-600 hover:underline">
+            ← Back to sign in
+          </Link>
+        }
+      >
+        <Button variant="primary" className="w-full" asChild>
+          <Link href="/auth/forgot-password">Request a new link</Link>
+        </Button>
+      </AuthShell>
+    );
+  }
+
   return (
-    <div className="rounded-lg border border-line-200 bg-surface-card shadow-e2 p-8">
-      {!token ? (
-        <>
-          <h1
-            className="text-h2 font-display text-ink-900 mb-1"
-            style={{ fontFamily: 'var(--font-display)' }}
-          >
-            This link is incomplete
-          </h1>
-          <p className="text-body text-ink-500 mb-6">
-            Open the link from your email exactly as it was sent, or request a new one.
+    <AuthShell
+      title="Set a new password"
+      subtitle="Signing in on your other devices will need this new password."
+      footer={
+        <Link href="/auth/login" className="font-medium text-saffron-600 hover:underline">
+          ← Back to sign in
+        </Link>
+      }
+    >
+      <form className="space-y-5" onSubmit={handleSubmit}>
+        <Input
+          type="password"
+          label="New password"
+          placeholder="••••••••"
+          autoComplete="new-password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          required
+        />
+        <Input
+          type="password"
+          label="Confirm new password"
+          placeholder="••••••••"
+          autoComplete="new-password"
+          value={confirm}
+          onChange={(e) => setConfirm(e.target.value)}
+          required
+        />
+
+        {error && (
+          <p className="rounded-sm border border-error-fg/20 bg-error-bg px-3 py-2 text-caption text-error-fg">
+            {error}
           </p>
-          <Button variant="primary" className="w-full" asChild>
-            <Link href="/auth/forgot-password">Request a new link</Link>
-          </Button>
-        </>
-      ) : (
-        <>
-          <h1
-            className="text-h2 font-display text-ink-900 mb-1"
-            style={{ fontFamily: 'var(--font-display)' }}
-          >
-            Set a new password
-          </h1>
-          <p className="text-body text-ink-500 mb-6">
-            Signing in on your other devices will need this new password.
-          </p>
+        )}
 
-          <form className="space-y-5" onSubmit={handleSubmit}>
-            <Input
-              type="password"
-              label="New password"
-              placeholder="••••••••"
-              autoComplete="new-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
-            <Input
-              type="password"
-              label="Confirm new password"
-              placeholder="••••••••"
-              autoComplete="new-password"
-              value={confirm}
-              onChange={(e) => setConfirm(e.target.value)}
-              required
-            />
-
-            {error && (
-              <p className="text-caption text-error-fg bg-error-bg border border-error-fg/20 rounded px-3 py-2">
-                {error}
-              </p>
-            )}
-
-            <Button type="submit" variant="primary" className="w-full" disabled={loading}>
-              {loading ? 'Saving…' : 'Set new password'}
-            </Button>
-          </form>
-        </>
-      )}
-    </div>
+        <Button type="submit" variant="primary" className="w-full" disabled={loading}>
+          {loading ? 'Saving…' : 'Set new password'}
+        </Button>
+      </form>
+    </AuthShell>
   );
 }
 
 export default function ResetPasswordPage() {
   return (
-    <div className="min-h-screen bg-surface-page flex items-center justify-center px-4">
-      <div className="w-full max-w-[400px]">
-        <div className="text-center mb-8">
-          <span
-            className="text-h2 font-display text-ink-900"
-            style={{ fontFamily: 'var(--font-display)' }}
-          >
-            ◆ <span className="text-saffron-600">Ai</span>Books
-          </span>
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-surface-page">
+          <p className="text-body text-ink-500">Loading…</p>
         </div>
-
-        <Suspense
-          fallback={
-            <div className="rounded-lg border border-line-200 bg-surface-card shadow-e2 p-8">
-              <p className="text-body text-ink-500">Loading…</p>
-            </div>
-          }
-        >
-          <ResetPasswordForm />
-        </Suspense>
-
-        <p className="text-center text-body text-ink-500 mt-6">
-          <Link href="/auth/login" className="text-saffron-600 hover:underline font-medium">
-            Back to sign in
-          </Link>
-        </p>
-      </div>
-    </div>
+      }
+    >
+      <ResetPasswordForm />
+    </Suspense>
   );
 }

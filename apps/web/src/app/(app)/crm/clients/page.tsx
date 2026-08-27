@@ -76,8 +76,8 @@ export default function ClientsPage() {
       <FadeIn>
         <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h1 className="font-heading text-2xl font-bold text-ink-900">Clients</h1>
-            <p className="mt-1 text-sm text-ink-500">
+            <h1 className="font-heading text-h1 text-ink-900">Clients</h1>
+            <p className="mt-1 text-body text-ink-500">
               Every client your firm manages, their services and contact details.
             </p>
           </div>
@@ -114,7 +114,7 @@ export default function ClientsPage() {
                 onClick={() => setServiceFilter(s as FirmService | 'ALL')}
                 aria-pressed={active}
                 className={cn(
-                  'rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors',
+                  'rounded-lg border px-3 py-1.5 text-caption font-medium transition-colors',
                   active
                     ? 'border-saffron-600 bg-saffron-600 text-white'
                     : 'border-line-200 bg-surface-card text-ink-700 hover:bg-surface-sink',
@@ -137,7 +137,7 @@ export default function ClientsPage() {
       ) : error ? (
         <div className="rounded-xl border border-[#C92A2A]/30 bg-[#C92A2A]/5 p-6">
           <p className="font-medium text-[#C92A2A]">Couldn&apos;t load clients</p>
-          <p className="mt-1 text-sm text-ink-500">
+          <p className="mt-1 text-body text-ink-500">
             {error instanceof ApiError && error.status === 403
               ? 'This account is not a firm admin, so it has no client book.'
               : (error as Error).message}
@@ -181,7 +181,7 @@ export default function ClientsPage() {
                       <p className="font-mono text-[11px] text-ink-400">PAN: {c.pan}</p>
                     ) : null}
                   </TableCell>
-                  <TableCell className="text-sm text-ink-700">
+                  <TableCell className="text-body text-ink-700">
                     {c.clientType ? CLIENT_TYPE_LABELS[c.clientType] : '—'}
                   </TableCell>
                   <TableCell>
@@ -189,11 +189,11 @@ export default function ClientsPage() {
                       {(c.services ?? []).length ? (
                         c.services!.map((s) => <ServicePill key={s} service={s} />)
                       ) : (
-                        <span className="text-sm text-ink-400">—</span>
+                        <span className="text-body text-ink-400">—</span>
                       )}
                     </div>
                   </TableCell>
-                  <TableCell className="text-sm text-ink-700">
+                  <TableCell className="text-body text-ink-700">
                     {c.contactName ? <p>{c.contactName}</p> : null}
                     {c.whatsappNumber ? (
                       <p className="font-mono text-[11px] text-ink-400">{c.whatsappNumber}</p>

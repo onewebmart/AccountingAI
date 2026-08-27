@@ -92,7 +92,7 @@ function Outbox() {
               onClick={() => setStatusFilter(s as MessageStatus | 'ALL')}
               aria-pressed={statusFilter === s}
               className={cn(
-                'rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors',
+                'rounded-lg border px-3 py-1.5 text-caption font-medium transition-colors',
                 statusFilter === s
                   ? 'border-saffron-600 bg-saffron-600 text-white'
                   : 'border-line-200 bg-surface-card text-ink-700 hover:bg-surface-sink',
@@ -121,10 +121,10 @@ function Outbox() {
       ) : filtered.length === 0 ? (
         <div className="rounded-xl border border-line-200 bg-surface-card px-6 py-14 text-center">
           <Send size={28} className="mx-auto text-ink-400" />
-          <p className="mt-3 font-heading text-lg font-semibold text-ink-900">
+          <p className="mt-3 font-heading text-h3 text-ink-900">
             {messages?.length ? 'Nothing with that status' : 'No messages yet'}
           </p>
-          <p className="mx-auto mt-1 max-w-sm text-sm text-ink-500">
+          <p className="mx-auto mt-1 max-w-sm text-body text-ink-500">
             {messages?.length
               ? 'Try a different status filter.'
               : 'Send a test message from the Delivery tab to see the queue working.'}
@@ -165,12 +165,12 @@ function Outbox() {
               </div>
 
               {m.subject ? (
-                <p className="mb-1 text-sm font-medium text-ink-700">{m.subject}</p>
+                <p className="mb-1 text-body font-medium text-ink-700">{m.subject}</p>
               ) : null}
-              <pre className="whitespace-pre-wrap font-body text-sm text-ink-700">{m.body}</pre>
+              <pre className="whitespace-pre-wrap font-body text-body text-ink-700">{m.body}</pre>
 
               {m.error ? (
-                <p className="mt-2 flex items-start gap-2 rounded-lg bg-[#C92A2A]/5 px-3 py-2 text-sm text-[#C92A2A]">
+                <p className="mt-2 flex items-start gap-2 rounded-lg bg-[#C92A2A]/5 px-3 py-2 text-body text-[#C92A2A]">
                   <AlertTriangle size={14} className="mt-0.5 shrink-0" />
                   {m.error}
                 </p>
@@ -203,7 +203,7 @@ function Templates() {
 
   return (
     <div>
-      <p className="mb-4 text-sm text-ink-500">
+      <p className="mb-4 text-body text-ink-500">
         Client-facing copy is Hinglish by design — the person reading a reminder is the
         client, not your team. Editing these per firm arrives in a later phase.
       </p>
@@ -224,14 +224,14 @@ function Templates() {
                 ))}
               </div>
             </div>
-            <p className="mb-3 text-sm text-ink-500">{t.description}</p>
+            <p className="mb-3 text-body text-ink-500">{t.description}</p>
             {t.subject ? (
-              <p className="mb-1 text-sm text-ink-700">
+              <p className="mb-1 text-body text-ink-700">
                 <span className="text-ink-400">Subject: </span>
                 {t.subject}
               </p>
             ) : null}
-            <pre className="whitespace-pre-wrap rounded-lg bg-surface-sink p-3 font-body text-sm text-ink-700">
+            <pre className="whitespace-pre-wrap rounded-lg bg-surface-sink p-3 font-body text-body text-ink-700">
               {t.body}
             </pre>
             <p className="mt-2 flex flex-wrap gap-1 text-[11px] text-ink-400">
@@ -278,7 +278,7 @@ function Delivery() {
     <div className="max-w-2xl space-y-6">
       <div className="rounded-xl border border-line-200 bg-surface-card p-5">
         <h3 className="font-heading font-semibold text-ink-900">Delivery adapter</h3>
-        <p className="mt-1 text-sm text-ink-500">
+        <p className="mt-1 text-body text-ink-500">
           Currently <span className="font-mono text-ink-700">mock</span>. Messages are
           rendered, queued and recorded in the outbox, but nothing leaves this machine — so
           the whole reminder flow is testable without a WhatsApp Business account or SMTP
@@ -294,7 +294,7 @@ function Delivery() {
         }}
       >
         <h3 className="font-heading font-semibold text-ink-900">Send a test message</h3>
-        <p className="mb-4 mt-1 text-sm text-ink-500">
+        <p className="mb-4 mt-1 text-body text-ink-500">
           Goes through the real queue and lands in the outbox.
         </p>
 
@@ -346,17 +346,17 @@ function Delivery() {
             rows={3}
             value={text}
             onChange={(e) => setText(e.target.value)}
-            className="w-full rounded-lg border border-line-200 bg-surface-card px-3 py-2 text-sm text-ink-900 outline-none focus:border-saffron-600"
+            className="w-full rounded-lg border border-line-200 bg-surface-card px-3 py-2 text-body text-ink-900 outline-none focus:border-saffron-600"
           />
         </div>
 
         {send.error ? (
-          <p className="mt-3 rounded-lg bg-[#C92A2A]/5 px-3 py-2 text-sm text-[#C92A2A]">
+          <p className="mt-3 rounded-lg bg-[#C92A2A]/5 px-3 py-2 text-body text-[#C92A2A]">
             {(send.error as Error).message}
           </p>
         ) : null}
         {send.isSuccess ? (
-          <p className="mt-3 rounded-lg bg-[#E6F4EA] px-3 py-2 text-sm text-[#1E7B34]">
+          <p className="mt-3 rounded-lg bg-[#E6F4EA] px-3 py-2 text-body text-[#1E7B34]">
             Queued — check the Outbox tab.
           </p>
         ) : null}
@@ -381,8 +381,8 @@ export default function CrmSettingsPage() {
         <div className="mb-6">
           {/* Named for what it does, not where it sits: the app already has a
               global Settings, and this page is only about client messaging. */}
-          <h1 className="font-heading text-2xl font-bold text-ink-900">Messaging</h1>
-          <p className="mt-1 text-sm text-ink-500">
+          <h1 className="font-heading text-h1 text-ink-900">Messaging</h1>
+          <p className="mt-1 text-body text-ink-500">
             Every message your firm sends clients — the outbox, the templates behind them, and the
             delivery adapter carrying them.
           </p>

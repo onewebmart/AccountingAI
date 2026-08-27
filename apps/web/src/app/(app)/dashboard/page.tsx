@@ -193,7 +193,7 @@ export default function DashboardPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-h1 font-display text-ink-900" style={{ fontFamily: 'var(--font-display)' }}>
+        <h1 className="text-h1 font-display text-ink-900">
           Dashboard
         </h1>
       </div>
@@ -201,7 +201,7 @@ export default function DashboardPage() {
       {!hasData && !isLoadingAny ? (
         /* Empty state */
         <div className="flex flex-col items-center justify-center py-24 text-center">
-          <p className="text-h3 font-display text-ink-900 mb-2" style={{ fontFamily: 'var(--font-display)' }}>
+          <p className="text-h3 font-display text-ink-900 mb-2">
             Nothing&apos;s waiting.
           </p>
           <p className="text-body text-ink-500 mb-8">

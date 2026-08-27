@@ -109,7 +109,7 @@ function ReverseModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
       <div className="bg-surface-card rounded-xl border border-line-200 shadow-e2 w-full max-w-md p-6">
         <div className="flex items-start justify-between mb-4">
-          <h2 className="text-h3 font-display text-ink-900" style={{ fontFamily: 'var(--font-display)' }}>
+          <h2 className="text-h3 font-display text-ink-900">
             Reverse entry
           </h2>
           <button onClick={onClose} className="text-ink-400 hover:text-ink-700 p-1 -mr-1" disabled={isPending}>
@@ -227,7 +227,7 @@ export default function VouchersPage() {
         <div className="flex items-center justify-between">
           <h1
             className="text-h1 font-display text-ink-900"
-            style={{ fontFamily: 'var(--font-display)' }}
+           
           >
             Vouchers
           </h1>
@@ -271,7 +271,7 @@ export default function VouchersPage() {
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-24 text-center rounded-xl border border-line-200 bg-surface-card">
             <FileText size={36} className="text-ink-300 mb-4" />
-            <p className="text-h3 font-display text-ink-900 mb-1" style={{ fontFamily: 'var(--font-display)' }}>
+            <p className="text-h3 font-display text-ink-900 mb-1">
               No vouchers yet.
             </p>
             <p className="text-body text-ink-500">Approved entries land here.</p>

@@ -145,7 +145,7 @@ function AddBillModal({ vendors, onClose, onSuccess, showToast }: AddBillModalPr
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-xl border border-line-200 bg-surface-card p-6 shadow-xl">
-        <h2 className="text-h3 font-display text-ink-900 mb-5" style={{ fontFamily: 'var(--font-display)' }}>New bill</h2>
+        <h2 className="text-h3 font-display text-ink-900 mb-5">New bill</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="text-caption font-medium text-ink-700 block mb-1">
@@ -345,7 +345,7 @@ function AddVendorModal({ onClose, onSuccess, showToast }: AddVendorModalProps) 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
       <div className="bg-surface-card rounded-xl border border-line-200 shadow-xl w-full max-w-md p-6">
-        <h2 className="text-h3 font-display text-ink-900 mb-5" style={{ fontFamily: 'var(--font-display)' }}>New vendor</h2>
+        <h2 className="text-h3 font-display text-ink-900 mb-5">New vendor</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="text-caption font-medium text-ink-700 block mb-1">Vendor name <span className="text-error-fg">*</span></label>
@@ -470,7 +470,7 @@ export default function PurchasePage() {
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-h1 font-display text-ink-900" style={{ fontFamily: 'var(--font-display)' }}>
+          <h1 className="text-h1 font-display text-ink-900">
             Purchases
           </h1>
           <p className="text-body text-ink-500 mt-1">
@@ -575,7 +575,7 @@ export default function PurchasePage() {
             </div>
           ) : bills.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-24 text-center">
-              <p className="text-h3 font-display text-ink-700 mb-2" style={{ fontFamily: 'var(--font-display)' }}>
+              <p className="text-h3 font-display text-ink-700 mb-2">
                 No purchase bills yet.
               </p>
               <p className="text-body text-ink-500 mb-6">Upload a bill or add one manually.</p>

@@ -99,10 +99,20 @@ const config: Config = {
       },
       fontFamily: {
         display: ['var(--font-display)', 'sans-serif'],
+        // `font-heading` is used in 54 places and was defined nowhere, so every
+        // one of those headings silently fell back to the browser's default
+        // sans — Bricolage never rendered on them. Aliased rather than renamed
+        // across 14 files: both names now resolve to the display face.
+        heading: ['var(--font-display)', 'sans-serif'],
         body: ['var(--font-body)', 'sans-serif'],
         mono: ['var(--font-mono)', 'monospace'],
       },
       fontSize: {
+        // Two sizes above the old ceiling, for the landing page and empty
+        // states. Line-height tightens as size grows, which is what stops a
+        // large headline reading as a scaled-up paragraph.
+        'display-xl': ['clamp(2.75rem, 6vw, 4.5rem)', { lineHeight: '0.98', fontWeight: '700' }],
+        'display-lg': ['clamp(2.25rem, 4.5vw, 3.25rem)', { lineHeight: '1.02', fontWeight: '700' }],
         display: ['2.75rem', { lineHeight: '1.05', fontWeight: '700' }],
         h1: ['2rem', { lineHeight: '1.15', fontWeight: '600' }],
         h2: ['1.5rem', { lineHeight: '1.2', fontWeight: '600' }],

@@ -69,7 +69,7 @@ function Step1({
   return (
     <div className="space-y-5">
       <div>
-        <h2 className="text-h2 font-display text-ink-900" style={{ fontFamily: 'var(--font-display)' }}>
+        <h2 className="text-h2 font-display text-ink-900">
           Tell us about your business
         </h2>
         <p className="text-body text-ink-500 mt-1">
@@ -154,7 +154,7 @@ function Step2({
   return (
     <div className="space-y-5">
       <div>
-        <h2 className="text-h2 font-display text-ink-900" style={{ fontFamily: 'var(--font-display)' }}>
+        <h2 className="text-h2 font-display text-ink-900">
           Set your financial year
         </h2>
         <p className="text-body text-ink-500 mt-1">
@@ -224,7 +224,7 @@ function Step3({
   return (
     <div className="space-y-5">
       <div>
-        <h2 className="text-h2 font-display text-ink-900" style={{ fontFamily: 'var(--font-display)' }}>
+        <h2 className="text-h2 font-display text-ink-900">
           Invite your team
         </h2>
         <p className="text-body text-ink-500 mt-1">
@@ -341,7 +341,7 @@ export default function OnboardingPage() {
     <div className="min-h-screen bg-[#FFFCF6] flex flex-col items-center justify-center p-6">
       {/* Brand */}
       <div className="mb-10 text-center">
-        <span className="text-h2 font-display text-ink-900" style={{ fontFamily: 'var(--font-display)' }}>
+        <span className="text-h2 font-display text-ink-900">
           ◆{' '}
           <span className="text-marigold-400">Ai</span>
           <span className="text-ink-900">Books</span>

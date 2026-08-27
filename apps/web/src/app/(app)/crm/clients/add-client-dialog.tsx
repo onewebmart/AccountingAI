@@ -188,7 +188,7 @@ export function AddClientDialog({ open, onOpenChange, onSubmit, submitting, erro
               {Object.values(FirmService).map((s) => (
                 <label
                   key={s}
-                  className="flex cursor-pointer items-center gap-2 rounded-lg border border-line-200 px-3 py-2 text-sm text-ink-700 transition-colors hover:bg-surface-sink"
+                  className="flex cursor-pointer items-center gap-2 rounded-lg border border-line-200 px-3 py-2 text-body text-ink-700 transition-colors hover:bg-surface-sink"
                 >
                   <Checkbox
                     checked={services.includes(s)}
@@ -201,7 +201,7 @@ export function AddClientDialog({ open, onOpenChange, onSubmit, submitting, erro
           </div>
 
           {error ? (
-            <p className="rounded-lg bg-[#C92A2A]/5 px-3 py-2 text-sm text-[#C92A2A]">
+            <p className="rounded-lg bg-[#C92A2A]/5 px-3 py-2 text-body text-[#C92A2A]">
               {error.message}
             </p>
           ) : null}

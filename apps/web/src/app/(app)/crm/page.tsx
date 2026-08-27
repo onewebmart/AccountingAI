@@ -99,14 +99,14 @@ function StatTile({
       >
         <div className="flex items-center gap-2 text-ink-500">
           {icon}
-          <span className="text-xs">{label}</span>
+          <span className="text-caption">{label}</span>
           <ChevronRight
             size={14}
             className="ml-auto text-ink-400 opacity-0 transition-opacity group-hover:opacity-100"
           />
         </div>
-        <p className={cn('mt-2 font-mono text-2xl font-bold', toneClass)}>{value}</p>
-        {sub ? <p className="mt-0.5 text-xs text-ink-500">{sub}</p> : null}
+        <p className={cn('mt-2 font-mono text-h2 font-bold', toneClass)}>{value}</p>
+        {sub ? <p className="mt-0.5 text-caption text-ink-500">{sub}</p> : null}
       </Link>
     </HoverLift>
   );
@@ -137,8 +137,8 @@ function PracticeSetup() {
         <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#E6F4EA] text-[#1E7B34]">
           <Users size={26} />
         </span>
-        <p className="mt-4 font-heading text-lg font-semibold text-ink-900">Practice created</p>
-        <p className="mx-auto mt-1.5 max-w-md text-sm leading-relaxed text-ink-500">
+        <p className="mt-4 font-heading text-h3 text-ink-900">Practice created</p>
+        <p className="mx-auto mt-1.5 max-w-md text-body leading-relaxed text-ink-500">
           Your access level is part of your sign-in, so you need to sign in again before the
           practice screens will open.
         </p>
@@ -154,10 +154,10 @@ function PracticeSetup() {
       <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-honey-100 text-saffron-700">
         <Users size={26} />
       </span>
-      <p className="mt-4 font-heading text-lg font-semibold text-ink-900">
+      <p className="mt-4 font-heading text-h3 text-ink-900">
         Turn on practice management
       </p>
-      <p className="mx-auto mt-1.5 max-w-md text-sm leading-relaxed text-ink-500">
+      <p className="mx-auto mt-1.5 max-w-md text-body leading-relaxed text-ink-500">
         Track a client book, chase statutory deadlines and documents automatically, qualify
         enquiries, and bill your fees — alongside the books you already keep here.
       </p>
@@ -181,7 +181,7 @@ function PracticeSetup() {
       </form>
 
       {enable.error ? (
-        <p className="mt-3 text-sm text-[#C92A2A]">{(enable.error as Error).message}</p>
+        <p className="mt-3 text-body text-[#C92A2A]">{(enable.error as Error).message}</p>
       ) : null}
     </div>
   );
@@ -204,8 +204,8 @@ export default function CrmDashboardPage() {
       <div>
         <FadeIn>
           <div className="mb-6">
-            <h1 className="font-heading text-2xl font-bold text-ink-900">Practice</h1>
-            <p className="mt-1 text-sm text-ink-500">
+            <h1 className="font-heading text-h1 text-ink-900">Practice</h1>
+            <p className="mt-1 text-body text-ink-500">
               The CA-firm side of the product.
             </p>
           </div>
@@ -232,7 +232,7 @@ export default function CrmDashboardPage() {
     return (
       <div className="rounded-xl border border-[#C92A2A]/30 bg-[#C92A2A]/5 p-6">
         <p className="font-medium text-[#C92A2A]">Couldn&apos;t load the dashboard</p>
-        <p className="mt-1 text-sm text-ink-500">{(error as Error)?.message}</p>
+        <p className="mt-1 text-body text-ink-500">{(error as Error)?.message}</p>
       </div>
     );
   }
@@ -241,8 +241,8 @@ export default function CrmDashboardPage() {
     <div>
       <FadeIn>
         <div className="mb-6">
-          <h1 className="font-heading text-2xl font-bold text-ink-900">Dashboard</h1>
-          <p className="mt-1 text-sm text-ink-500">Where your practice stands today.</p>
+          <h1 className="font-heading text-h1 text-ink-900">Dashboard</h1>
+          <p className="mt-1 text-body text-ink-500">Where your practice stands today.</p>
         </div>
       </FadeIn>
 
@@ -306,16 +306,16 @@ export default function CrmDashboardPage() {
         {/* Upcoming deadlines */}
         <section className="rounded-xl border border-line-200 bg-surface-card">
           <div className="flex items-center justify-between border-b border-line-200 px-4 py-3">
-            <h2 className="font-heading text-sm font-semibold text-ink-900">
+            <h2 className="font-heading text-body font-semibold text-ink-900">
               Upcoming compliance deadlines
             </h2>
-            <Link href="/crm/compliance" className="text-xs font-medium text-saffron-700 hover:underline">
+            <Link href="/crm/compliance" className="text-caption font-medium text-saffron-700 hover:underline">
               View all
             </Link>
           </div>
 
           {data.deadlines.upcoming.length === 0 ? (
-            <p className="px-4 py-10 text-center text-sm text-ink-400">
+            <p className="px-4 py-10 text-center text-body text-ink-400">
               No deadlines ahead. Add clients and their services, then refresh the calendar.
             </p>
           ) : (
@@ -326,13 +326,13 @@ export default function CrmDashboardPage() {
                   className="flex items-center justify-between gap-3 px-4 py-3"
                 >
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-ink-900">
+                    <p className="truncate text-body font-medium text-ink-900">
                       {d.complianceType.replace(/_/g, '-')} · {d.periodLabel}
                     </p>
-                    <p className="text-xs text-ink-500">{d.clientsPending} client(s) pending</p>
+                    <p className="text-caption text-ink-500">{d.clientsPending} client(s) pending</p>
                   </div>
                   <div className="shrink-0 text-right">
-                    <p className="font-mono text-sm text-ink-900">{formatDate(d.dueDate)}</p>
+                    <p className="font-mono text-body text-ink-900">{formatDate(d.dueDate)}</p>
                     <p
                       className={cn(
                         'text-[11px] font-semibold',
@@ -353,9 +353,9 @@ export default function CrmDashboardPage() {
           <section className="rounded-xl border border-line-200 bg-surface-card p-4">
             <div className="mb-3 flex items-center gap-2">
               <Bot size={15} className="text-saffron-600" />
-              <h2 className="font-heading text-sm font-semibold text-ink-900">Agent activity</h2>
+              <h2 className="font-heading text-body font-semibold text-ink-900">Agent activity</h2>
             </div>
-            <dl className="space-y-2 text-sm">
+            <dl className="space-y-2 text-body">
               <div className="flex justify-between">
                 <dt className="text-ink-500">Questions handled</dt>
                 <dd className="font-mono text-ink-900">{data.agent.autoRepliedTotal}</dd>
@@ -382,7 +382,7 @@ export default function CrmDashboardPage() {
             </dl>
             <Link
               href="/crm/agent"
-              className="mt-3 block text-xs font-medium text-saffron-700 hover:underline"
+              className="mt-3 block text-caption font-medium text-saffron-700 hover:underline"
             >
               Open conversations
             </Link>
@@ -391,23 +391,23 @@ export default function CrmDashboardPage() {
           <section className="rounded-xl border border-line-200 bg-surface-card p-4">
             <div className="mb-3 flex items-center gap-2">
               <TrendingUp size={15} className="text-saffron-600" />
-              <h2 className="font-heading text-sm font-semibold text-ink-900">Lead pipeline</h2>
+              <h2 className="font-heading text-body font-semibold text-ink-900">Lead pipeline</h2>
             </div>
             <div className="flex items-end justify-between">
               <div>
-                <p className="font-mono text-2xl font-bold text-ink-900">{data.leads.active}</p>
-                <p className="text-xs text-ink-500">Active leads</p>
+                <p className="font-mono text-h2 font-bold text-ink-900">{data.leads.active}</p>
+                <p className="text-caption text-ink-500">Active leads</p>
               </div>
               <div className="text-right">
-                <p className="font-mono text-2xl font-bold text-saffron-700">
+                <p className="font-mono text-h2 font-bold text-saffron-700">
                   {formatPaise(data.leads.pipelineValuePaise)}
                 </p>
-                <p className="text-xs text-ink-500">Pipeline value</p>
+                <p className="text-caption text-ink-500">Pipeline value</p>
               </div>
             </div>
             <Link
               href="/crm/leads"
-              className="mt-3 block text-xs font-medium text-saffron-700 hover:underline"
+              className="mt-3 block text-caption font-medium text-saffron-700 hover:underline"
             >
               Open pipeline
             </Link>
@@ -416,9 +416,9 @@ export default function CrmDashboardPage() {
           <section className="rounded-xl border border-line-200 bg-surface-card p-4">
             <div className="mb-3 flex items-center gap-2">
               <FileText size={15} className="text-saffron-600" />
-              <h2 className="font-heading text-sm font-semibold text-ink-900">Documents</h2>
+              <h2 className="font-heading text-body font-semibold text-ink-900">Documents</h2>
             </div>
-            <dl className="space-y-2 text-sm">
+            <dl className="space-y-2 text-body">
               <div className="flex justify-between">
                 <dt className="text-ink-500">Still missing</dt>
                 <dd className="font-mono text-ink-900">{data.documents.itemsOutstanding}</dd>
@@ -437,7 +437,7 @@ export default function CrmDashboardPage() {
             </dl>
             <Link
               href="/crm/documents"
-              className="mt-3 block text-xs font-medium text-saffron-700 hover:underline"
+              className="mt-3 block text-caption font-medium text-saffron-700 hover:underline"
             >
               Open document hub
             </Link>
@@ -448,10 +448,10 @@ export default function CrmDashboardPage() {
       {/* Recent activity */}
       <section className="mt-4 rounded-xl border border-line-200 bg-surface-card">
         <div className="border-b border-line-200 px-4 py-3">
-          <h2 className="font-heading text-sm font-semibold text-ink-900">Recent activity</h2>
+          <h2 className="font-heading text-body font-semibold text-ink-900">Recent activity</h2>
         </div>
         {data.recentActivity.length === 0 ? (
-          <p className="px-4 py-8 text-center text-sm text-ink-400">
+          <p className="px-4 py-8 text-center text-body text-ink-400">
             Nothing yet — reminders and agent replies will show up here.
           </p>
         ) : (
@@ -459,8 +459,8 @@ export default function CrmDashboardPage() {
             {data.recentActivity.map((a, i) => (
               <li key={`${a.at}-${i}`} className="flex items-center justify-between gap-3 px-4 py-2.5">
                 <div className="min-w-0">
-                  <p className="truncate text-sm text-ink-900">{a.clientName}</p>
-                  <p className="text-xs text-ink-500">{a.summary}</p>
+                  <p className="truncate text-body text-ink-900">{a.clientName}</p>
+                  <p className="text-caption text-ink-500">{a.summary}</p>
                 </div>
                 <span className="shrink-0 font-mono text-[11px] text-ink-400">
                   {new Date(a.at).toLocaleString('en-IN')}

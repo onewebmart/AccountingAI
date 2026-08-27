@@ -101,7 +101,26 @@
   h1, h2, h3, h4, h5, h6 {
     font-family: var(--font-display);
     color: var(--ink-900);
+    /* Bricolage carries an optical-size axis (12–96) that was loaded and never
+       engaged. Letting it track the rendered size is what makes large type read
+       as drawn for that size rather than scaled up: tighter apertures and
+       joints in a headline, more open ones in a label. */
+    font-optical-sizing: auto;
+    text-wrap: balance;
   }
+
+  /* Large display type wants tighter fitting than a browser's default. The
+     negative tracking is proportional — heavier at poster sizes, absent by the
+     time text is small enough to need the space. */
+  .text-display-xl,
+  .text-display-lg,
+  .text-display {
+    letter-spacing: -0.03em;
+    font-optical-sizing: auto;
+  }
+  .text-h1 { letter-spacing: -0.02em; }
+  .text-h2 { letter-spacing: -0.015em; }
+  .text-h3 { letter-spacing: -0.01em; }
 
   /* Tabular figures for all number-heavy elements */
   table, .tabular-nums {

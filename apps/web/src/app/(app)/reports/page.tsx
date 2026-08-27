@@ -422,7 +422,7 @@ export default function ReportsPage() {
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-h1 font-display text-ink-900" style={{ fontFamily: 'var(--font-display)' }}>
+          <h1 className="text-h1 font-display text-ink-900">
             Reports
           </h1>
           <p className="text-body text-ink-500 mt-1">
@@ -518,7 +518,7 @@ export default function ReportsPage() {
       {reportType === 'pl' && !plQuery.isLoading && (
         <div>
           <div className="flex items-center gap-3 mb-6">
-            <h2 className="text-h2 font-display text-ink-900" style={{ fontFamily: 'var(--font-display)' }}>
+            <h2 className="text-h2 font-display text-ink-900">
               Profit & Loss — FY {financialYear}
             </h2>
           </div>
@@ -550,7 +550,7 @@ export default function ReportsPage() {
             />
           </div>
           <div className="border-t-2 border-ink-900 pt-4 flex justify-between items-center mt-4">
-            <span className="text-h2 font-display text-ink-900" style={{ fontFamily: 'var(--font-display)' }}>
+            <span className="text-h2 font-display text-ink-900">
               {plNet >= 0 ? 'Net profit' : 'Net loss'}
             </span>
             <span className={`text-h2 font-mono font-bold ${plNet >= 0 ? 'text-success-fg' : 'text-error-fg'}`}>
@@ -564,7 +564,7 @@ export default function ReportsPage() {
       {reportType === 'bs' && !bsQuery.isLoading && (
         <div>
           <div className="flex items-center gap-3 mb-6">
-            <h2 className="text-h2 font-display text-ink-900" style={{ fontFamily: 'var(--font-display)' }}>
+            <h2 className="text-h2 font-display text-ink-900">
               Balance Sheet — FY {financialYear}
             </h2>
             <TiedOutBadge ok={bsIsTiedOut} />
@@ -602,7 +602,7 @@ export default function ReportsPage() {
       {/* ── Cash Flow ── */}
       {reportType === 'cashflow' && !cashFlowQuery.isLoading && (
         <div>
-          <h2 className="text-h2 font-display text-ink-900 mb-6" style={{ fontFamily: 'var(--font-display)' }}>
+          <h2 className="text-h2 font-display text-ink-900 mb-6">
             Cash Flow — FY {financialYear}
           </h2>
           <div className="max-w-sm space-y-3">
@@ -628,7 +628,7 @@ export default function ReportsPage() {
       {reportType === 'tb' && !tbQuery.isLoading && (
         <div>
           <div className="flex items-center gap-3 mb-6">
-            <h2 className="text-h2 font-display text-ink-900" style={{ fontFamily: 'var(--font-display)' }}>
+            <h2 className="text-h2 font-display text-ink-900">
               Trial Balance — FY {financialYear}
             </h2>
             <TiedOutBadge ok={true} />
@@ -691,7 +691,7 @@ export default function ReportsPage() {
       {/* ── Ledger ── (static — no dedicated API endpoint yet) */}
       {reportType === 'ledger' && (
         <div>
-          <h2 className="text-h2 font-display text-ink-900 mb-6" style={{ fontFamily: 'var(--font-display)' }}>
+          <h2 className="text-h2 font-display text-ink-900 mb-6">
             Ledger — Accounts Receivable · FY {financialYear}
           </h2>
           <table className="w-full text-left">
@@ -727,7 +727,7 @@ export default function ReportsPage() {
       {/* ── Day Book ── */}
       {reportType === 'daybook' && !dayBookQuery.isLoading && (
         <div>
-          <h2 className="text-h2 font-display text-ink-900 mb-6" style={{ fontFamily: 'var(--font-display)' }}>
+          <h2 className="text-h2 font-display text-ink-900 mb-6">
             Day Book — FY {financialYear}
           </h2>
           <div className="space-y-3">
@@ -770,7 +770,7 @@ export default function ReportsPage() {
       {/* ── Ageing ── */}
       {reportType === 'ageing' && !ageingQuery.isLoading && (
         <div className="space-y-6">
-          <h2 className="text-h2 font-display text-ink-900" style={{ fontFamily: 'var(--font-display)' }}>
+          <h2 className="text-h2 font-display text-ink-900">
             Ageing — FY {financialYear}
           </h2>
           {(['AP (payables)', 'AR (receivables)'] as const).map((label, idx) => {

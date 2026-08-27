@@ -62,11 +62,11 @@ function UrgencyDot({ count }: { count: number }) {
 
 function GstBadge({ days }: { days: number }) {
   if (days > 7) {
-    return <span className="text-xs text-stone-400 font-mono">GST in {days}d</span>;
+    return <span className="text-caption text-stone-400 font-mono">GST in {days}d</span>;
   }
   if (days >= 0) {
     return (
-      <span className="inline-flex items-center gap-1 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-0.5 font-mono">
+      <span className="inline-flex items-center gap-1 text-caption font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-0.5 font-mono">
         <Clock className="h-3 w-3" />
         GST in {days}d
       </span>
@@ -103,13 +103,13 @@ function ClientCard({ client, onOpen }: { client: ClientSummary; onOpen: (orgId:
       <div className="flex items-center gap-4 mt-4 pt-4 border-t border-stone-100">
         <div className="flex items-center gap-1.5">
           <FileCheck className="h-4 w-4 text-stone-400" />
-          <span className="text-sm text-stone-600">Pending review</span>
+          <span className="text-body text-stone-600">Pending review</span>
           <UrgencyDot count={client.pendingReviewCount} />
           {client.pendingReviewCount === 0 && <CheckCircle2 className="h-4 w-4 text-emerald-500" />}
         </div>
         <div className="flex items-center gap-1.5">
           <AlertCircle className="h-4 w-4 text-stone-400" />
-          <span className="text-sm text-stone-600">Overdue AP</span>
+          <span className="text-body text-stone-600">Overdue AP</span>
           <UrgencyDot count={client.overdueApCount} />
           {client.overdueApCount === 0 && <CheckCircle2 className="h-4 w-4 text-emerald-500" />}
         </div>
@@ -166,18 +166,18 @@ function ClientsTab() {
       {/* Summary bar */}
       <div className="grid grid-cols-3 gap-4">
         <div className="rounded-xl border border-stone-200 bg-white p-4">
-          <p className="text-2xl font-bold text-stone-900 font-[Bricolage_Grotesque]">{clients.length}</p>
-          <p className="text-sm text-stone-500 mt-0.5">Total clients</p>
+          <p className="text-h2 font-bold text-stone-900 font-[Bricolage_Grotesque]">{clients.length}</p>
+          <p className="text-body text-stone-500 mt-0.5">Total clients</p>
         </div>
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
-          <p className="text-2xl font-bold text-amber-800 font-[Bricolage_Grotesque]">{urgentCount}</p>
-          <p className="text-sm text-amber-700 mt-0.5">Need attention</p>
+          <p className="text-h2 font-bold text-amber-800 font-[Bricolage_Grotesque]">{urgentCount}</p>
+          <p className="text-body text-amber-700 mt-0.5">Need attention</p>
         </div>
         <div className="rounded-xl border border-stone-200 bg-white p-4">
-          <p className="text-2xl font-bold text-stone-900 font-[Bricolage_Grotesque]">
+          <p className="text-h2 font-bold text-stone-900 font-[Bricolage_Grotesque]">
             {clients.reduce((sum, c) => sum + c.pendingReviewCount, 0)}
           </p>
-          <p className="text-sm text-stone-500 mt-0.5">Entries pending</p>
+          <p className="text-body text-stone-500 mt-0.5">Entries pending</p>
         </div>
       </div>
 
@@ -190,7 +190,7 @@ function ClientsTab() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search clients..."
-            className="w-full pl-9 pr-3 py-2 rounded-lg border border-stone-200 bg-white text-sm text-stone-900 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-[#E8590C]/30 focus:border-[#E8590C]"
+            className="w-full pl-9 pr-3 py-2 rounded-lg border border-stone-200 bg-white text-body text-stone-900 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-[#E8590C]/30 focus:border-[#E8590C]"
           />
         </div>
         <Button
@@ -206,7 +206,7 @@ function ClientsTab() {
       {addingClient && (
         <div className="rounded-xl border-2 border-dashed border-[#E8590C]/40 bg-[#E8590C]/5 p-4">
           <div className="flex items-start justify-between mb-3">
-            <p className="text-sm font-medium text-stone-700">New client</p>
+            <p className="text-body font-medium text-stone-700">New client</p>
             <button onClick={() => { setAddingClient(false); setNewClientName(''); setNewClientGstin(''); }} className="text-stone-400 hover:text-stone-600">
               <X className="h-4 w-4" />
             </button>
@@ -217,7 +217,7 @@ function ClientsTab() {
               value={newClientName}
               onChange={(e) => setNewClientName(e.target.value)}
               placeholder="Company name, e.g. Patel Industries Pvt Ltd"
-              className="flex-1 px-3 py-2 rounded-lg border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#E8590C]/30 focus:border-[#E8590C]"
+              className="flex-1 px-3 py-2 rounded-lg border border-stone-200 text-body focus:outline-none focus:ring-2 focus:ring-[#E8590C]/30 focus:border-[#E8590C]"
               autoFocus
             />
             <input
@@ -226,7 +226,7 @@ function ClientsTab() {
               onChange={(e) => setNewClientGstin(e.target.value.toUpperCase())}
               placeholder="GSTIN (optional)"
               maxLength={15}
-              className="w-48 px-3 py-2 rounded-lg border border-stone-200 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#E8590C]/30 focus:border-[#E8590C]"
+              className="w-48 px-3 py-2 rounded-lg border border-stone-200 text-body font-mono focus:outline-none focus:ring-2 focus:ring-[#E8590C]/30 focus:border-[#E8590C]"
             />
             <Button
               disabled={!newClientName.trim() || addClientMutation.isPending}
@@ -253,7 +253,7 @@ function ClientsTab() {
       ) : (
         <div className="text-center py-16 text-stone-400">
           <Users className="h-10 w-10 mx-auto mb-3 opacity-40" />
-          <p className="text-sm">No clients match your search</p>
+          <p className="text-body">No clients match your search</p>
         </div>
       )}
     </div>
@@ -292,19 +292,19 @@ function BrandingTab() {
         <h3 className="font-semibold text-stone-900 font-[Bricolage_Grotesque]">Client portal branding</h3>
 
         <div className="space-y-1">
-          <label className="text-sm font-medium text-stone-700">Logo URL</label>
+          <label className="text-body font-medium text-stone-700">Logo URL</label>
           <input
             type="url"
             value={display.logoUrl ?? ''}
             onChange={(e) => setForm({ ...form, logoUrl: e.target.value })}
             placeholder="https://cdn.yourfirm.in/logo.png"
-            className="w-full px-3 py-2 rounded-lg border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#E8590C]/30 focus:border-[#E8590C]"
+            className="w-full px-3 py-2 rounded-lg border border-stone-200 text-body focus:outline-none focus:ring-2 focus:ring-[#E8590C]/30 focus:border-[#E8590C]"
           />
-          <p className="text-xs text-stone-400">Shown in the client portal header</p>
+          <p className="text-caption text-stone-400">Shown in the client portal header</p>
         </div>
 
         <div className="space-y-1">
-          <label className="text-sm font-medium text-stone-700">Accent colour</label>
+          <label className="text-body font-medium text-stone-700">Accent colour</label>
           <div className="flex items-center gap-3">
             <input
               type="color"
@@ -317,15 +317,15 @@ function BrandingTab() {
               value={display.accentColor ?? ''}
               onChange={(e) => setForm({ ...form, accentColor: e.target.value })}
               placeholder="#E8590C"
-              className="flex-1 px-3 py-2 rounded-lg border border-stone-200 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#E8590C]/30 focus:border-[#E8590C]"
+              className="flex-1 px-3 py-2 rounded-lg border border-stone-200 text-body font-mono focus:outline-none focus:ring-2 focus:ring-[#E8590C]/30 focus:border-[#E8590C]"
             />
           </div>
         </div>
 
         <div className="flex items-center justify-between pt-1">
           <div>
-            <p className="text-sm font-medium text-stone-700">Client portal</p>
-            <p className="text-xs text-stone-400 mt-0.5">Allow clients to view their books via the portal</p>
+            <p className="text-body font-medium text-stone-700">Client portal</p>
+            <p className="text-caption text-stone-400 mt-0.5">Allow clients to view their books via the portal</p>
           </div>
           <button
             onClick={() => setForm({ ...form, clientPortalEnabled: !display.clientPortalEnabled })}
@@ -360,11 +360,11 @@ function BrandingTab() {
             // eslint-disable-next-line @next/next/no-img-element
             <img src={display.logoUrl} alt="Logo" className="h-6 object-contain" />
           ) : (
-            <span className="text-white font-semibold text-sm font-[Bricolage_Grotesque]">{display.name}</span>
+            <span className="text-white font-semibold text-body font-[Bricolage_Grotesque]">{display.name}</span>
           )}
         </div>
         <div className="p-4 bg-[#FFFCF6]">
-          <p className="text-xs text-stone-400 text-center">Portal preview</p>
+          <p className="text-caption text-stone-400 text-center">Portal preview</p>
         </div>
       </div>
     </div>
@@ -416,12 +416,12 @@ function DomainTab() {
         <h3 className="font-semibold text-stone-900 font-[Bricolage_Grotesque]">Custom domain</h3>
 
         <div className="rounded-lg bg-stone-50 border border-stone-200 p-4">
-          <p className="text-xs font-medium text-stone-500 uppercase tracking-wide mb-1">Default portal URL</p>
-          <p className="text-sm font-mono text-stone-700">{defaultDomain}</p>
+          <p className="text-caption font-medium text-stone-500 uppercase tracking-wide mb-1">Default portal URL</p>
+          <p className="text-body font-mono text-stone-700">{defaultDomain}</p>
         </div>
 
         <div className="space-y-1">
-          <label className="text-sm font-medium text-stone-700">Custom domain</label>
+          <label className="text-body font-medium text-stone-700">Custom domain</label>
           <div className="flex items-center gap-2">
             <Globe className="h-4 w-4 text-stone-400 shrink-0" />
             <input
@@ -429,18 +429,18 @@ function DomainTab() {
               value={displayDomain}
               onChange={(e) => setDomain(e.target.value)}
               placeholder="portal.yourfirm.in"
-              className="flex-1 px-3 py-2 rounded-lg border border-stone-200 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#E8590C]/30 focus:border-[#E8590C]"
+              className="flex-1 px-3 py-2 rounded-lg border border-stone-200 text-body font-mono focus:outline-none focus:ring-2 focus:ring-[#E8590C]/30 focus:border-[#E8590C]"
             />
           </div>
-          <p className="text-xs text-stone-400">
+          <p className="text-caption text-stone-400">
             Add a CNAME record pointing to <span className="font-mono">{defaultDomain}</span>
           </p>
         </div>
 
         {displayDomain && (
           <div className="rounded-lg bg-amber-50 border border-amber-200 p-4 space-y-2">
-            <p className="text-xs font-semibold text-amber-800">DNS setup required</p>
-            <div className="grid grid-cols-[auto,1fr] gap-x-4 gap-y-1 text-xs font-mono">
+            <p className="text-caption font-semibold text-amber-800">DNS setup required</p>
+            <div className="grid grid-cols-[auto,1fr] gap-x-4 gap-y-1 text-caption font-mono">
               <span className="text-stone-500">Type</span>
               <span className="text-stone-800">CNAME</span>
               <span className="text-stone-500">Name</span>
@@ -489,9 +489,9 @@ export default function FirmPortalPage() {
           <div className="h-8 w-8 rounded-lg bg-[#E8590C] flex items-center justify-center">
             <Building2 className="h-4 w-4 text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-stone-900 font-[Bricolage_Grotesque]">{firmName}</h1>
+          <h1 className="text-h2 font-bold text-stone-900 font-[Bricolage_Grotesque]">{firmName}</h1>
         </div>
-        <p className="text-stone-500 text-sm ml-11">Manage your clients and white-label portal settings</p>
+        <p className="text-stone-500 text-body ml-11">Manage your clients and white-label portal settings</p>
       </div>
 
       {/* Tabs */}
@@ -500,7 +500,7 @@ export default function FirmPortalPage() {
           <button
             key={id}
             onClick={() => setActiveTab(id)}
-            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px ${
+            className={`flex items-center gap-2 px-4 py-2.5 text-body font-medium transition-colors border-b-2 -mb-px ${
               activeTab === id
                 ? 'border-[#E8590C] text-[#E8590C]'
                 : 'border-transparent text-stone-500 hover:text-stone-700'

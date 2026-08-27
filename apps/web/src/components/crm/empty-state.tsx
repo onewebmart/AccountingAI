@@ -27,8 +27,8 @@ export function EmptyState({
         <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-honey-100 text-saffron-700">
           {icon}
         </span>
-        <p className="mt-4 font-heading text-lg font-semibold text-ink-900">{title}</p>
-        <p className="mx-auto mt-1.5 max-w-sm text-sm leading-relaxed text-ink-500">{body}</p>
+        <p className="mt-4 font-heading text-h3 text-ink-900">{title}</p>
+        <p className="mx-auto mt-1.5 max-w-sm text-body leading-relaxed text-ink-500">{body}</p>
         {action ? (
           <Button className="mt-6 gap-2" onClick={action.onClick}>
             {action.icon}

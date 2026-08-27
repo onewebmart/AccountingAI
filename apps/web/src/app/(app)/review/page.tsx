@@ -205,7 +205,7 @@ export default function ReviewQueuePage() {
         <div className="w-16 h-16 rounded-full bg-success-bg flex items-center justify-center mb-6">
           <CheckCircle size={32} className="text-success-fg" />
         </div>
-        <h2 className="text-h2 font-display text-ink-900 mb-2" style={{ fontFamily: 'var(--font-display)' }}>
+        <h2 className="text-h2 font-display text-ink-900 mb-2">
           All caught up.
         </h2>
         <p className="text-body text-ink-500">Nothing to review.</p>
@@ -218,7 +218,7 @@ export default function ReviewQueuePage() {
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-h1 font-display text-ink-900" style={{ fontFamily: 'var(--font-display)' }}>
+          <h1 className="text-h1 font-display text-ink-900">
             Review &amp; post
           </h1>
           <p className="text-body text-ink-500 mt-1">

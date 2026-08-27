@@ -44,7 +44,7 @@ export function UserMenu({ workspace }: { workspace?: Workspace }) {
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label="Account menu"
-        className="flex h-9 w-9 items-center justify-center rounded-full bg-saffron-600 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+        className="flex h-9 w-9 items-center justify-center rounded-full bg-saffron-600 text-body font-semibold text-white transition-opacity hover:opacity-90"
       >
         {initials}
       </button>
@@ -55,8 +55,8 @@ export function UserMenu({ workspace }: { workspace?: Workspace }) {
           className="absolute right-0 top-11 z-50 w-60 overflow-hidden rounded-xl border border-line-200 bg-surface-card shadow-lg"
         >
           <div className="border-b border-line-200 px-4 py-3">
-            <p className="truncate text-sm font-medium text-ink-900">{name}</p>
-            <p className="truncate text-xs text-ink-500">{email}</p>
+            <p className="truncate text-body font-medium text-ink-900">{name}</p>
+            <p className="truncate text-caption text-ink-500">{email}</p>
             {workspace?.user.role ? (
               <p className="mt-1 inline-block rounded bg-surface-sink px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-500">
                 {workspace.user.role.replace(/_/g, ' ')}
@@ -67,7 +67,7 @@ export function UserMenu({ workspace }: { workspace?: Workspace }) {
           <Link
             href="/settings"
             onClick={() => setOpen(false)}
-            className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-ink-700 hover:bg-surface-sink"
+            className="flex items-center gap-2.5 px-4 py-2.5 text-body text-ink-700 hover:bg-surface-sink"
           >
             <Settings size={15} className="text-ink-500" />
             Settings
@@ -77,7 +77,7 @@ export function UserMenu({ workspace }: { workspace?: Workspace }) {
             <Link
               href="/crm"
               onClick={() => setOpen(false)}
-              className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-ink-700 hover:bg-surface-sink"
+              className="flex items-center gap-2.5 px-4 py-2.5 text-body text-ink-700 hover:bg-surface-sink"
             >
               <UserIcon size={15} className="text-ink-500" />
               {workspace.firm.name}
@@ -90,7 +90,7 @@ export function UserMenu({ workspace }: { workspace?: Workspace }) {
               setOpen(false);
               void logout();
             }}
-            className="flex w-full items-center gap-2.5 border-t border-line-200 px-4 py-2.5 text-left text-sm text-[#C92A2A] hover:bg-[#C92A2A]/5"
+            className="flex w-full items-center gap-2.5 border-t border-line-200 px-4 py-2.5 text-left text-body text-[#C92A2A] hover:bg-[#C92A2A]/5"
           >
             <LogOut size={15} />
             Sign out

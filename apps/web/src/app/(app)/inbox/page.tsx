@@ -362,7 +362,7 @@ export default function InboxPage() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h1 className="text-h1 font-display text-ink-900" style={{ fontFamily: 'var(--font-display)' }}>
+        <h1 className="text-h1 font-display text-ink-900">
           Inbox
         </h1>
         {readyCount > 0 && (
@@ -410,7 +410,7 @@ export default function InboxPage() {
       ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center rounded-xl border border-line-200 bg-surface-card">
           <FileText size={36} className="text-ink-300 mb-4" />
-          <p className="text-h3 font-display text-ink-900 mb-1" style={{ fontFamily: 'var(--font-display)' }}>
+          <p className="text-h3 font-display text-ink-900 mb-1">
             Your inbox is clear.
           </p>
           <p className="text-body text-ink-500">Drop a document above to begin.</p>

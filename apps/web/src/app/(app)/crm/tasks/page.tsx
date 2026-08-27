@@ -104,7 +104,7 @@ function TaskCard({
       <div className="flex items-start justify-between gap-2">
         <p
           className={cn(
-            'text-sm font-medium text-ink-900',
+            'text-body font-medium text-ink-900',
             task.status === TaskStatus.DONE && 'text-ink-400 line-through',
           )}
         >
@@ -121,7 +121,7 @@ function TaskCard({
       </div>
 
       {task.description ? (
-        <p className="mt-1 text-xs leading-relaxed text-ink-500">{task.description}</p>
+        <p className="mt-1 text-caption leading-relaxed text-ink-500">{task.description}</p>
       ) : null}
 
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
@@ -236,7 +236,7 @@ function NewTaskDialog({
               rows={2}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="w-full rounded-lg border border-line-200 bg-surface-card px-3 py-2 text-sm text-ink-900 outline-none focus:border-saffron-600"
+              className="w-full rounded-lg border border-line-200 bg-surface-card px-3 py-2 text-body text-ink-900 outline-none focus:border-saffron-600"
             />
           </div>
 
@@ -296,7 +296,7 @@ function NewTaskDialog({
           </div>
 
           {error ? (
-            <p className="rounded-lg bg-[#C92A2A]/5 px-3 py-2 text-sm text-[#C92A2A]">
+            <p className="rounded-lg bg-[#C92A2A]/5 px-3 py-2 text-body text-[#C92A2A]">
               {error.message}
             </p>
           ) : null}
@@ -407,8 +407,8 @@ export default function TasksPage() {
       <FadeIn>
         <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h1 className="font-heading text-2xl font-bold text-ink-900">Tasks</h1>
-            <p className="mt-1 text-sm text-ink-500">
+            <h1 className="font-heading text-h1 text-ink-900">Tasks</h1>
+            <p className="mt-1 text-body text-ink-500">
               Your team&apos;s own work list. Deadlines and document chases already track
               themselves — this is for everything else.
             </p>
@@ -430,8 +430,8 @@ export default function TasksPage() {
           ].map((s) => (
             <StaggerItem key={s.label}>
               <div className="rounded-xl border border-line-200 bg-surface-card px-4 py-3">
-                <p className={cn('font-mono text-xl font-bold', s.tone)}>{s.value}</p>
-                <p className="text-xs text-ink-500">{s.label}</p>
+                <p className={cn('font-mono text-h3 font-bold', s.tone)}>{s.value}</p>
+                <p className="text-caption text-ink-500">{s.label}</p>
               </div>
             </StaggerItem>
           ))}
@@ -447,8 +447,8 @@ export default function TasksPage() {
       ) : (tasks ?? []).length === 0 ? (
         <div className="rounded-xl border border-line-200 bg-surface-card px-6 py-16 text-center">
           <CheckSquare size={32} className="mx-auto text-ink-400" />
-          <p className="mt-3 font-heading text-lg font-semibold text-ink-900">No tasks yet</p>
-          <p className="mx-auto mt-1 max-w-sm text-sm text-ink-500">
+          <p className="mt-3 font-heading text-h3 text-ink-900">No tasks yet</p>
+          <p className="mx-auto mt-1 max-w-sm text-body text-ink-500">
             Statutory deadlines and document chases run on their own. Add a task for the work
             that does not.
           </p>
@@ -464,10 +464,10 @@ export default function TasksPage() {
             return (
               <section key={column.status}>
                 <div className="mb-2 flex items-center justify-between px-1">
-                  <h2 className="font-heading text-sm font-semibold text-ink-900">
+                  <h2 className="font-heading text-body font-semibold text-ink-900">
                     {column.label}
                   </h2>
-                  <span className="font-mono text-xs text-ink-400">{items.length}</span>
+                  <span className="font-mono text-caption text-ink-400">{items.length}</span>
                 </div>
                 <ul className="space-y-2">
                   {items.map((task) => (
@@ -480,7 +480,7 @@ export default function TasksPage() {
                     />
                   ))}
                   {items.length === 0 ? (
-                    <li className="rounded-xl border border-dashed border-line-200 px-3 py-8 text-center text-xs text-ink-400">
+                    <li className="rounded-xl border border-dashed border-line-200 px-3 py-8 text-center text-caption text-ink-400">
                       Nothing here
                     </li>
                   ) : null}
@@ -492,7 +492,7 @@ export default function TasksPage() {
       )}
 
       {move.error ? (
-        <p className="mt-4 rounded-lg bg-[#C92A2A]/5 px-3 py-2 text-sm text-[#C92A2A]">
+        <p className="mt-4 rounded-lg bg-[#C92A2A]/5 px-3 py-2 text-body text-[#C92A2A]">
           Couldn&apos;t move that task — {(move.error as Error).message}
         </p>
       ) : null}

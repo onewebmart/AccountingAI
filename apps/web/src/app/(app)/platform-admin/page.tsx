@@ -153,19 +153,19 @@ function CostTab({ orgs }: { orgs: OrgRow[] }) {
       <div className="grid grid-cols-3 gap-4">
         <div className="rounded-lg border border-line-200 bg-surface-card p-4">
           <p className="text-caption text-ink-500">AI spend this month</p>
-          <p className="text-h2 font-display font-semibold text-ink-900 mt-1" style={{ fontFamily: 'var(--font-display)' }}>
+          <p className="text-h2 font-display font-semibold text-ink-900 mt-1">
             {fmt(totalCost)}
           </p>
         </div>
         <div className="rounded-lg border border-line-200 bg-surface-card p-4">
           <p className="text-caption text-ink-500">Active orgs</p>
-          <p className="text-h2 font-display font-semibold text-ink-900 mt-1" style={{ fontFamily: 'var(--font-display)' }}>
+          <p className="text-h2 font-display font-semibold text-ink-900 mt-1">
             {orgs.filter((o) => o.status === 'active').length}
           </p>
         </div>
         <div className={`rounded-lg border p-4 ${alertCount > 0 ? 'border-error-fg/30 bg-error-bg/50' : 'border-line-200 bg-surface-card'}`}>
           <p className="text-caption text-ink-500">Margin alerts</p>
-          <p className={`text-h2 font-display font-semibold mt-1 ${alertCount > 0 ? 'text-error-fg' : 'text-ink-900'}`} style={{ fontFamily: 'var(--font-display)' }}>
+          <p className={`text-h2 font-display font-semibold mt-1 ${alertCount > 0 ? 'text-error-fg' : 'text-ink-900'}`}>
             {alertCount}
           </p>
         </div>
@@ -324,7 +324,7 @@ function OrgDetailPanel({ org, onClose }: { org: OrgRow; onClose: () => void }) 
     <div className="fixed inset-y-0 right-0 z-40 w-full max-w-md overflow-y-auto border-l border-white/10 bg-ink-900 p-6 text-white shadow-2xl">
       <div className="mb-6 flex items-start justify-between gap-4">
         <div>
-          <h2 className="font-heading text-lg font-semibold">{org.name}</h2>
+          <h2 className="font-heading text-h3">{org.name}</h2>
           <p className="mt-0.5 font-mono text-[11px] text-white/40">{org.orgId}</p>
         </div>
         <button onClick={onClose} className="rounded p-1 text-white/50 hover:bg-white/10 hover:text-white">
@@ -554,7 +554,7 @@ export default function PlatformAdminPage() {
   if (!isPlatformAdmin) {
     return (
       <div className="rounded-sm border border-line-200 bg-surface-card p-8">
-        <h1 className="text-h2 font-display text-ink-900" style={{ fontFamily: 'var(--font-display)' }}>
+        <h1 className="text-h2 font-display text-ink-900">
           Platform admin only
         </h1>
         <p className="mt-2 max-w-prose text-body text-ink-500">
@@ -584,7 +584,7 @@ export default function PlatformAdminPage() {
         <header className="border-b border-white/10 px-8 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Shield size={18} className="text-marigold-400" />
-            <span className="text-body font-semibold" style={{ fontFamily: 'var(--font-display)' }}>
+            <span className="text-body font-semibold">
               Platform admin
             </span>
             <span className="text-caption text-white/40 font-mono">Onewebmart-internal</span>

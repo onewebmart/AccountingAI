@@ -138,7 +138,7 @@ function AddInvoiceModal({ customers, onClose, onSuccess, showToast }: AddInvoic
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-xl border border-line-200 bg-surface-card p-6 shadow-xl">
-        <h2 className="text-h3 font-display text-ink-900 mb-5" style={{ fontFamily: 'var(--font-display)' }}>New invoice</h2>
+        <h2 className="text-h3 font-display text-ink-900 mb-5">New invoice</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="text-caption font-medium text-ink-700 block mb-1">
@@ -398,7 +398,7 @@ export default function SalesPage() {
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-h1 font-display text-ink-900" style={{ fontFamily: 'var(--font-display)' }}>
+          <h1 className="text-h1 font-display text-ink-900">
             Sales
           </h1>
           <p className="text-body text-ink-500 mt-1">
@@ -503,7 +503,7 @@ export default function SalesPage() {
             </div>
           ) : invoices.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-24 text-center">
-              <p className="text-h3 font-display text-ink-700 mb-2" style={{ fontFamily: 'var(--font-display)' }}>
+              <p className="text-h3 font-display text-ink-700 mb-2">
                 Create your first invoice.
               </p>
               <Button onClick={() => setShowInvoiceModal(true)}>

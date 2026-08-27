@@ -328,7 +328,7 @@ export default function GstPage() {
         <div>
           <h1
             className="text-h1 font-display text-ink-900"
-            style={{ fontFamily: 'var(--font-display)' }}
+           
           >
             GST
           </h1>
@@ -513,7 +513,7 @@ export default function GstPage() {
               </div>
               <h2
                 className="text-h2 font-display text-ink-900 mb-2"
-                style={{ fontFamily: 'var(--font-display)' }}
+               
               >
                 Import GSTR-2B.
               </h2>
@@ -616,7 +616,7 @@ export default function GstPage() {
           <div className="rounded-lg border border-line-200 bg-surface-card p-5 space-y-4">
             <h2
               className="text-body font-semibold text-ink-900"
-              style={{ fontFamily: 'var(--font-display)' }}
+             
             >
               Input tax credit
             </h2>
@@ -642,7 +642,7 @@ export default function GstPage() {
           <div className="rounded-lg border border-line-200 bg-surface-card p-5 space-y-4">
             <h2
               className="text-body font-semibold text-ink-900"
-              style={{ fontFamily: 'var(--font-display)' }}
+             
             >
               2B reconciliation
             </h2>
@@ -690,7 +690,7 @@ export default function GstPage() {
             <h2 className="text-body font-semibold text-ink-900">Net GST payable</h2>
             <div className="flex items-end justify-between">
               <p className="text-caption text-ink-500">Output GST − ITC claimed</p>
-              <p className="text-h1 font-mono font-bold text-ink-900" style={{ fontFamily: 'var(--font-display)' }}>
+              <p className="text-h1 font-mono font-bold text-ink-900">
                 {formatRupees(
                   salesRows.reduce(
                     (s, e) => s + e.cgstPaise + e.sgstPaise + e.igstPaise,

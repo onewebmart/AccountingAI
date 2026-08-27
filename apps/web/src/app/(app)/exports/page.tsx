@@ -254,7 +254,7 @@ export default function ExportsPage() {
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-h1 font-display text-ink-900" style={{ fontFamily: 'var(--font-display)' }}>
+          <h1 className="text-h1 font-display text-ink-900">
             Exports & Tally
           </h1>
           <p className="text-body text-ink-500 mt-1">

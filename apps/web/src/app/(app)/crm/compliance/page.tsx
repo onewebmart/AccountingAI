@@ -88,13 +88,13 @@ function DeadlineCard({
           <p className="font-heading font-semibold text-ink-900">
             {group.label} — {group.periodLabel}
           </p>
-          <p className="mt-0.5 text-sm text-ink-500">
+          <p className="mt-0.5 text-body text-ink-500">
             {group.pendingCount} pending
             {group.filedCount > 0 ? ` · ${group.filedCount} filed` : ''} · {group.authority}
           </p>
         </div>
         <div className="text-right">
-          <p className="font-mono text-sm font-medium text-ink-900">{formatDate(group.dueDate)}</p>
+          <p className="font-mono text-body font-medium text-ink-900">{formatDate(group.dueDate)}</p>
           <div className="mt-1">
             <UrgencyPill daysLeft={group.daysLeft} />
           </div>
@@ -106,7 +106,7 @@ function DeadlineCard({
           <li key={c.itemId}>
             <span
               className={cn(
-                'inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs',
+                'inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-caption',
                 c.status === ComplianceStatus.FILED
                   ? 'border-[#1E7B34]/20 bg-[#E6F4EA] text-[#1E7B34]'
                   : 'border-line-200 bg-surface-sink text-ink-700',
@@ -132,7 +132,7 @@ function DeadlineCard({
             <button
               type="button"
               onClick={() => setExpanded(true)}
-              className="rounded-lg px-2.5 py-1 text-xs font-medium text-ink-500 hover:text-ink-700"
+              className="rounded-lg px-2.5 py-1 text-caption font-medium text-ink-500 hover:text-ink-700"
             >
               +{hidden} more
             </button>
@@ -172,8 +172,8 @@ function DeadlineList({
     return (
       <div className="rounded-xl border border-line-200 bg-surface-card px-6 py-14 text-center">
         <CalendarClock size={28} className="mx-auto text-ink-400" />
-        <p className="mt-3 font-heading text-lg font-semibold text-ink-900">{emptyTitle}</p>
-        <p className="mx-auto mt-1 max-w-sm text-sm text-ink-500">{emptyBody}</p>
+        <p className="mt-3 font-heading text-h3 text-ink-900">{emptyTitle}</p>
+        <p className="mx-auto mt-1 max-w-sm text-body text-ink-500">{emptyBody}</p>
       </div>
     );
   }
@@ -281,8 +281,8 @@ export default function CompliancePage() {
       <FadeIn>
         <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h1 className="font-heading text-2xl font-bold text-ink-900">Compliance</h1>
-            <p className="mt-1 text-sm text-ink-500">
+            <h1 className="font-heading text-h1 text-ink-900">Compliance</h1>
+            <p className="mt-1 text-body text-ink-500">
               GST, TDS, ITR and ROC deadlines, generated from each client&apos;s services.
               Clients are reminded 7, 3 and 1 days before.
             </p>
@@ -310,7 +310,7 @@ export default function CompliancePage() {
       </FadeIn>
 
       {runReminders.isSuccess ? (
-        <p className="mb-4 rounded-lg bg-[#E6F4EA] px-3 py-2 text-sm text-[#1E7B34]">
+        <p className="mb-4 rounded-lg bg-[#E6F4EA] px-3 py-2 text-body text-[#1E7B34]">
           Queued {runReminders.data.remindersQueued} reminder(s)
           {runReminders.data.skippedNoContact > 0
             ? ` · ${runReminders.data.skippedNoContact} client(s) skipped for missing contact details`
@@ -322,15 +322,15 @@ export default function CompliancePage() {
         <p
           className={
             generateNotice.tone === 'ok'
-              ? 'mb-4 rounded-lg bg-[#E6F4EA] px-3 py-2 text-sm text-[#1E7B34]'
-              : 'mb-4 rounded-lg border border-marigold-400/40 bg-honey-100 px-3 py-2 text-sm text-ink-700'
+              ? 'mb-4 rounded-lg bg-[#E6F4EA] px-3 py-2 text-body text-[#1E7B34]'
+              : 'mb-4 rounded-lg border border-marigold-400/40 bg-honey-100 px-3 py-2 text-body text-ink-700'
           }
         >
           {generateNotice.text}
         </p>
       ) : null}
       {generate.error || runReminders.error ? (
-        <p className="mb-4 rounded-lg bg-[#C92A2A]/5 px-3 py-2 text-sm text-[#C92A2A]">
+        <p className="mb-4 rounded-lg bg-[#C92A2A]/5 px-3 py-2 text-body text-[#C92A2A]">
           {((generate.error ?? runReminders.error) as Error).message}
         </p>
       ) : null}

@@ -128,14 +128,14 @@ function LeadCard({
     <li className="rounded-xl border border-line-200 bg-surface-card p-3">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="truncate font-heading text-sm font-semibold text-ink-900">{lead.name}</p>
-          <p className="mt-0.5 truncate text-xs text-ink-500">
+          <p className="truncate font-heading text-body font-semibold text-ink-900">{lead.name}</p>
+          <p className="mt-0.5 truncate text-caption text-ink-500">
             {lead.services.length
               ? lead.services.map((s) => SERVICE_LABELS[s]).join(' · ')
               : 'No services specified'}
           </p>
         </div>
-        <span className="shrink-0 font-mono text-xs font-semibold text-ink-900">
+        <span className="shrink-0 font-mono text-caption font-semibold text-ink-900">
           {formatPaise(lead.estimatedValuePaise)}
         </span>
       </div>
@@ -161,7 +161,7 @@ function LeadCard({
 
       {done && q.summary ? (
         <div className="mt-2 rounded-lg bg-honey-50 p-2">
-          <p className="text-xs text-ink-700">{q.summary}</p>
+          <p className="text-caption text-ink-700">{q.summary}</p>
           {q.recommendedStage && q.recommendedStage !== lead.stage ? (
             <p className="mt-1.5 text-[11px] text-pending-fg">
               AI suggests moving to <strong>{STAGE_LABELS[q.recommendedStage]}</strong> — your call.
@@ -359,7 +359,7 @@ function AddLeadDialog({
                   }
                   aria-pressed={services.includes(s)}
                   className={cn(
-                    'rounded-lg border px-3 py-2 text-sm transition-colors',
+                    'rounded-lg border px-3 py-2 text-body transition-colors',
                     services.includes(s)
                       ? 'border-saffron-600 bg-saffron-600 text-white'
                       : 'border-line-200 text-ink-700 hover:bg-surface-sink',
@@ -379,12 +379,12 @@ function AddLeadDialog({
               value={enquiryNotes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Paste the WhatsApp message or website enquiry here."
-              className="w-full rounded-lg border border-line-200 bg-surface-card px-3 py-2 text-sm text-ink-900 outline-none focus:border-saffron-600"
+              className="w-full rounded-lg border border-line-200 bg-surface-card px-3 py-2 text-body text-ink-900 outline-none focus:border-saffron-600"
             />
           </div>
 
           {error ? (
-            <p className="rounded-lg bg-[#C92A2A]/5 px-3 py-2 text-sm text-[#C92A2A]">
+            <p className="rounded-lg bg-[#C92A2A]/5 px-3 py-2 text-body text-[#C92A2A]">
               {error.message}
             </p>
           ) : null}
@@ -470,8 +470,8 @@ export default function LeadsPage() {
       <FadeIn>
         <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h1 className="font-heading text-2xl font-bold text-ink-900">Leads</h1>
-            <p className="mt-1 text-sm text-ink-500">
+            <h1 className="font-heading text-h1 text-ink-900">Leads</h1>
+            <p className="mt-1 text-body text-ink-500">
               Enquiries from every channel. The AI scores and summarises them; moving a lead
               is always your call.
             </p>
@@ -495,7 +495,7 @@ export default function LeadsPage() {
       </FadeIn>
 
       {followUps.isSuccess ? (
-        <p className="mb-4 rounded-lg bg-[#E6F4EA] px-3 py-2 text-sm text-[#1E7B34]">
+        <p className="mb-4 rounded-lg bg-[#E6F4EA] px-3 py-2 text-body text-[#1E7B34]">
           Nudged {followUps.data.nudged} lead(s)
           {followUps.data.skippedNoContact > 0
             ? ` · ${followUps.data.skippedNoContact} without contact details`
@@ -506,22 +506,22 @@ export default function LeadsPage() {
 
       <div className="mb-5 flex flex-wrap gap-3">
         <div className="rounded-xl border border-line-200 bg-surface-card px-4 py-3">
-          <p className="font-mono text-xl font-bold text-ink-900">{activeCount}</p>
-          <p className="text-xs text-ink-500">Active leads</p>
+          <p className="font-mono text-h3 font-bold text-ink-900">{activeCount}</p>
+          <p className="text-caption text-ink-500">Active leads</p>
         </div>
         <div className="rounded-xl border border-line-200 bg-surface-card px-4 py-3">
-          <p className="font-mono text-xl font-bold text-saffron-700">
+          <p className="font-mono text-h3 font-bold text-saffron-700">
             {formatPaise(pipelineValue)}
           </p>
-          <p className="text-xs text-ink-500">Pipeline value</p>
+          <p className="text-caption text-ink-500">Pipeline value</p>
         </div>
         <div className="rounded-xl border border-line-200 bg-surface-card px-4 py-3">
-          <p className="font-mono text-xl font-bold text-[#1E7B34]">{won}</p>
-          <p className="text-xs text-ink-500">Won</p>
+          <p className="font-mono text-h3 font-bold text-[#1E7B34]">{won}</p>
+          <p className="text-caption text-ink-500">Won</p>
         </div>
         <div className="rounded-xl border border-line-200 bg-surface-card px-4 py-3">
-          <p className="font-mono text-xl font-bold text-ink-400">{lost}</p>
-          <p className="text-xs text-ink-500">Lost</p>
+          <p className="font-mono text-h3 font-bold text-ink-400">{lost}</p>
+          <p className="text-caption text-ink-500">Lost</p>
         </div>
       </div>
 
@@ -545,10 +545,10 @@ export default function LeadsPage() {
             return (
               <section key={stage}>
                 <div className="mb-2 flex items-center justify-between px-1">
-                  <h2 className="font-heading text-sm font-semibold text-ink-900">
+                  <h2 className="font-heading text-body font-semibold text-ink-900">
                     {STAGE_LABELS[stage]}
                   </h2>
-                  <span className="font-mono text-xs text-ink-400">{column.length}</span>
+                  <span className="font-mono text-caption text-ink-400">{column.length}</span>
                 </div>
                 <ul className="space-y-2">
                   {column.map((lead) => (
@@ -561,7 +561,7 @@ export default function LeadsPage() {
                     />
                   ))}
                   {column.length === 0 ? (
-                    <li className="rounded-xl border border-dashed border-line-200 px-3 py-8 text-center text-xs text-ink-400">
+                    <li className="rounded-xl border border-dashed border-line-200 px-3 py-8 text-center text-caption text-ink-400">
                       Nothing here
                     </li>
                   ) : null}
@@ -573,7 +573,7 @@ export default function LeadsPage() {
       )}
 
       {move.error ? (
-        <p className="mt-4 rounded-lg bg-[#C92A2A]/5 px-3 py-2 text-sm text-[#C92A2A]">
+        <p className="mt-4 rounded-lg bg-[#C92A2A]/5 px-3 py-2 text-body text-[#C92A2A]">
           {(move.error as Error).message}
         </p>
       ) : null}

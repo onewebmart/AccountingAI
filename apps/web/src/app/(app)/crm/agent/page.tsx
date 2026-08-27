@@ -59,22 +59,22 @@ function StatsPanel({ stats }: { stats: Stats }) {
   return (
     <div className="mb-5 flex flex-wrap gap-3">
       <div className="rounded-xl border border-line-200 bg-surface-card px-4 py-3">
-        <p className="font-mono text-xl font-bold text-[#1E7B34]">{stats.autoResolveRate}%</p>
-        <p className="text-xs text-ink-500">Auto-resolve rate</p>
+        <p className="font-mono text-h3 font-bold text-[#1E7B34]">{stats.autoResolveRate}%</p>
+        <p className="text-caption text-ink-500">Auto-resolve rate</p>
       </div>
       <div className="rounded-xl border border-line-200 bg-surface-card px-4 py-3">
-        <p className="font-mono text-xl font-bold text-ink-900">
+        <p className="font-mono text-h3 font-bold text-ink-900">
           {stats.avgResponseSeconds > 0 ? `${stats.avgResponseSeconds}s` : '—'}
         </p>
-        <p className="text-xs text-ink-500">Avg response</p>
+        <p className="text-caption text-ink-500">Avg response</p>
       </div>
       <div className="rounded-xl border border-line-200 bg-surface-card px-4 py-3">
-        <p className="font-mono text-xl font-bold text-ink-900">{stats.inboundTotal}</p>
-        <p className="text-xs text-ink-500">Messages received</p>
+        <p className="font-mono text-h3 font-bold text-ink-900">{stats.inboundTotal}</p>
+        <p className="text-caption text-ink-500">Messages received</p>
       </div>
       <div className="rounded-xl border border-line-200 bg-surface-card px-4 py-3">
-        <p className="font-mono text-xl font-bold text-pending-fg">{stats.escalatedOpen}</p>
-        <p className="text-xs text-ink-500">Waiting on you</p>
+        <p className="font-mono text-h3 font-bold text-pending-fg">{stats.escalatedOpen}</p>
+        <p className="text-caption text-ink-500">Waiting on you</p>
       </div>
     </div>
   );
@@ -142,8 +142,8 @@ export default function AgentPage() {
     <div>
       <FadeIn>
         <div className="mb-6">
-          <h1 className="font-heading text-2xl font-bold text-ink-900">Support agent</h1>
-          <p className="mt-1 text-sm text-ink-500">
+          <h1 className="font-heading text-h1 text-ink-900">Support agent</h1>
+          <p className="mt-1 text-body text-ink-500">
             Client questions answered automatically from their real records. Anything about fees,
             anything sensitive, and anything the agent is unsure of comes to you instead.
           </p>
@@ -165,7 +165,7 @@ export default function AgentPage() {
               ))}
             </div>
           ) : (conversations ?? []).length === 0 ? (
-            <div className="rounded-xl border border-dashed border-line-200 px-3 py-8 text-center text-xs text-ink-400">
+            <div className="rounded-xl border border-dashed border-line-200 px-3 py-8 text-center text-caption text-ink-400">
               No conversations yet
             </div>
           ) : (
@@ -183,7 +183,7 @@ export default function AgentPage() {
                     )}
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <span className="truncate text-sm font-medium text-ink-900">
+                      <span className="truncate text-body font-medium text-ink-900">
                         {c.contactName ?? c.contactAddress}
                       </span>
                       {c.status === ConversationStatus.ESCALATED ? (
@@ -207,12 +207,12 @@ export default function AgentPage() {
           {escalated && current?.escalation ? (
             <div className="flex flex-wrap items-center gap-2 rounded-t-xl border-b border-pending-fg/20 bg-pending-bg px-4 py-2.5">
               <AlertTriangle size={15} className="text-pending-fg" />
-              <span className="text-sm font-medium text-pending-fg">
+              <span className="text-body font-medium text-pending-fg">
                 Waiting on you — {ESCALATION_LABELS[current.escalation.reason]}
               </span>
               <Button
                 variant="secondary"
-                className="ml-auto h-7 gap-1.5 px-2.5 text-xs"
+                className="ml-auto h-7 gap-1.5 px-2.5 text-caption"
                 onClick={() => resolve.mutate(current._id)}
                 disabled={resolve.isPending}
               >
@@ -224,7 +224,7 @@ export default function AgentPage() {
 
           <div className="max-h-[420px] min-h-[240px] overflow-y-auto p-4">
             {!thread ? (
-              <p className="py-16 text-center text-sm text-ink-400">
+              <p className="py-16 text-center text-body text-ink-400">
                 Select a conversation, or send a test message below.
               </p>
             ) : (
@@ -250,7 +250,7 @@ export default function AgentPage() {
                             : 'bg-saffron-600 text-white',
                         )}
                       >
-                        <pre className="whitespace-pre-wrap font-body text-sm">{m.body}</pre>
+                        <pre className="whitespace-pre-wrap font-body text-body">{m.body}</pre>
                         <p
                           className={cn(
                             'mt-1 text-[10px]',
@@ -283,7 +283,7 @@ export default function AgentPage() {
             <Input
               value={sender}
               onChange={(e) => setSender(e.target.value)}
-              className="h-9 w-32 font-mono text-xs"
+              className="h-9 w-32 font-mono text-caption"
               aria-label="Sender number"
             />
             <Input
@@ -303,7 +303,7 @@ export default function AgentPage() {
             </Button>
           </form>
           {sendInbound.error ? (
-            <p className="px-3 pb-3 text-sm text-[#C92A2A]">
+            <p className="px-3 pb-3 text-body text-[#C92A2A]">
               {(sendInbound.error as Error).message}
             </p>
           ) : null}
@@ -312,14 +312,14 @@ export default function AgentPage() {
 
       {stats?.topFaqs.length ? (
         <div className="mt-5 rounded-xl border border-line-200 bg-surface-card p-4">
-          <h2 className="mb-2 font-heading text-sm font-semibold text-ink-900">
+          <h2 className="mb-2 font-heading text-body font-semibold text-ink-900">
             What clients keep asking
           </h2>
           <ul className="flex flex-wrap gap-1.5">
             {stats.topFaqs.map((f) => (
               <li
                 key={f.topic}
-                className="rounded-lg bg-surface-sink px-2.5 py-1 text-xs text-ink-700"
+                className="rounded-lg bg-surface-sink px-2.5 py-1 text-caption text-ink-700"
               >
                 {f.topic}
                 <span className="ml-1.5 font-mono text-[11px] text-ink-400">{f.count}</span>

@@ -177,7 +177,7 @@ function AddAccountModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-900/40">
       <div className="w-full max-w-md rounded-xl border border-line-200 bg-surface-card p-6 shadow-xl">
         <div className="flex items-center justify-between mb-5">
-          <h2 className="text-h3 font-display text-ink-900" style={{ fontFamily: 'var(--font-display)' }}>
+          <h2 className="text-h3 font-display text-ink-900">
             Add account
           </h2>
           <button onClick={onClose} className="text-ink-400 hover:text-ink-700">
@@ -245,7 +245,7 @@ function AccountDetail({
     <div className="space-y-5">
       <div>
         <p className="text-caption font-medium text-ink-500 uppercase tracking-wide mb-1">Account</p>
-        <h2 className="text-h2 font-display text-ink-900" style={{ fontFamily: 'var(--font-display)' }}>
+        <h2 className="text-h2 font-display text-ink-900">
           {account.name}
         </h2>
       </div>
@@ -315,7 +315,7 @@ export default function AccountsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-h1 font-display text-ink-900" style={{ fontFamily: 'var(--font-display)' }}>
+          <h1 className="text-h1 font-display text-ink-900">
             Chart of accounts
           </h1>
           <p className="text-body text-ink-500 mt-1">

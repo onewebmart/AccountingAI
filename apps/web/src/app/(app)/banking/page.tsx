@@ -293,7 +293,7 @@ export default function BankingPage() {
       <div className="space-y-6">
         <div className="flex items-start justify-between">
           <div>
-            <h1 className="text-h1 font-display text-ink-900" style={{ fontFamily: 'var(--font-display)' }}>
+            <h1 className="text-h1 font-display text-ink-900">
               Bank reconciliation
             </h1>
             <p className="text-body text-ink-500 mt-1">Match your bank statement to your books.</p>
@@ -303,7 +303,7 @@ export default function BankingPage() {
           <div className="w-16 h-16 rounded-full bg-surface-sink flex items-center justify-center mb-6 border border-line-200">
             <Upload size={28} className="text-ink-400" />
           </div>
-          <h2 className="text-h2 font-display text-ink-900 mb-2" style={{ fontFamily: 'var(--font-display)' }}>
+          <h2 className="text-h2 font-display text-ink-900 mb-2">
             Import a statement to reconcile.
           </h2>
           <p className="text-body text-ink-500 mb-6">Upload your bank statement and we&apos;ll match the lines.</p>
@@ -344,7 +344,7 @@ export default function BankingPage() {
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-h1 font-display text-ink-900" style={{ fontFamily: 'var(--font-display)' }}>
+          <h1 className="text-h1 font-display text-ink-900">
             Bank reconciliation
           </h1>
           <p className="text-body text-ink-500 mt-1">

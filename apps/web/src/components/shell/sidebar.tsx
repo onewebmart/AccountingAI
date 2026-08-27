@@ -182,7 +182,7 @@ export function Sidebar({ inboxCount = 0, reviewCount = 0, firmName, role }: Sid
       <div className="flex h-16 items-center px-6 border-b border-white/10">
         <span
           className="text-h3 font-display text-white"
-          style={{ fontFamily: 'var(--font-display)' }}
+         
         >
           ◆{' '}
           <span className="text-marigold-400">Ai</span>

@@ -115,29 +115,29 @@ function AgeingStrip({ ageing }: { ageing: Ageing }) {
     <div>
       <div className="mb-3 flex flex-wrap gap-3">
         <div className="rounded-xl border border-line-200 bg-surface-card px-4 py-3">
-          <p className="font-mono text-xl font-bold text-ink-900">
+          <p className="font-mono text-h3 font-bold text-ink-900">
             {formatPaise(ageing.totalBilledPaise)}
           </p>
-          <p className="text-xs text-ink-500">Billed</p>
+          <p className="text-caption text-ink-500">Billed</p>
         </div>
         <div className="rounded-xl border border-line-200 bg-surface-card px-4 py-3">
-          <p className="font-mono text-xl font-bold text-[#1E7B34]">
+          <p className="font-mono text-h3 font-bold text-[#1E7B34]">
             {formatPaise(ageing.collectedPaise)}
           </p>
-          <p className="text-xs text-ink-500">Collected</p>
+          <p className="text-caption text-ink-500">Collected</p>
         </div>
         <div className="rounded-xl border border-line-200 bg-surface-card px-4 py-3">
-          <p className="font-mono text-xl font-bold text-saffron-700">
+          <p className="font-mono text-h3 font-bold text-saffron-700">
             {formatPaise(ageing.outstandingPaise)}
           </p>
-          <p className="text-xs text-ink-500">Outstanding</p>
+          <p className="text-caption text-ink-500">Outstanding</p>
         </div>
       </div>
 
       <div className="mb-5 grid gap-2 rounded-xl border border-line-200 bg-surface-card p-3 sm:grid-cols-5">
         {cells.map((c) => (
           <div key={c.label}>
-            <p className={cn('font-mono text-sm font-semibold', c.tone)}>{formatPaise(c.value)}</p>
+            <p className={cn('font-mono text-body font-semibold', c.tone)}>{formatPaise(c.value)}</p>
             <p className="text-[11px] text-ink-500">{c.label}</p>
           </div>
         ))}
@@ -285,7 +285,7 @@ function NewInvoiceDialog({
           </div>
 
           {error ? (
-            <p className="rounded-lg bg-[#C92A2A]/5 px-3 py-2 text-sm text-[#C92A2A]">
+            <p className="rounded-lg bg-[#C92A2A]/5 px-3 py-2 text-body text-[#C92A2A]">
               {error.message}
             </p>
           ) : null}
@@ -377,8 +377,8 @@ export default function InvoicesPage() {
       <FadeIn>
         <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h1 className="font-heading text-2xl font-bold text-ink-900">Invoices</h1>
-            <p className="mt-1 text-sm text-ink-500">
+            <h1 className="font-heading text-h1 text-ink-900">Invoices</h1>
+            <p className="mt-1 text-body text-ink-500">
               Your own fee billing and what is still owed. Reminders climb a ladder: seven days
               before, on the due date, then a week and a fortnight late.
             </p>
@@ -402,7 +402,7 @@ export default function InvoicesPage() {
       </FadeIn>
 
       {collections.isSuccess ? (
-        <p className="mb-4 rounded-lg bg-[#E6F4EA] px-3 py-2 text-sm text-[#1E7B34]">
+        <p className="mb-4 rounded-lg bg-[#E6F4EA] px-3 py-2 text-body text-[#1E7B34]">
           Queued {collections.data.remindersQueued} reminder(s)
           {collections.data.escalated > 0
             ? ` · ${collections.data.escalated} flagged for legal escalation`
@@ -414,7 +414,7 @@ export default function InvoicesPage() {
         </p>
       ) : null}
       {pay.error || issue.error ? (
-        <p className="mb-4 rounded-lg bg-[#C92A2A]/5 px-3 py-2 text-sm text-[#C92A2A]">
+        <p className="mb-4 rounded-lg bg-[#C92A2A]/5 px-3 py-2 text-body text-[#C92A2A]">
           {((pay.error ?? issue.error) as Error).message}
         </p>
       ) : null}
@@ -462,20 +462,20 @@ export default function InvoicesPage() {
                 const late = daysLate(inv.dueDate);
                 return (
                   <TableRow key={inv._id}>
-                    <TableCell className="font-mono text-xs text-ink-900">
+                    <TableCell className="font-mono text-caption text-ink-900">
                       {inv.invoiceNumber}
                     </TableCell>
-                    <TableCell className="text-sm text-ink-900">{inv.clientName}</TableCell>
-                    <TableCell className="text-sm text-ink-700">
+                    <TableCell className="text-body text-ink-900">{inv.clientName}</TableCell>
+                    <TableCell className="text-body text-ink-700">
                       {formatDate(inv.dueDate)}
                       {late > 0 && inv.status !== PracticeInvoiceStatus.DRAFT ? (
                         <span className="ml-1 text-[11px] text-[#C92A2A]">({late}d late)</span>
                       ) : null}
                     </TableCell>
-                    <TableCell className="font-mono text-sm text-ink-700">
+                    <TableCell className="font-mono text-body text-ink-700">
                       {formatPaise(inv.totalPaise)}
                     </TableCell>
-                    <TableCell className="font-mono text-sm font-semibold text-ink-900">
+                    <TableCell className="font-mono text-body font-semibold text-ink-900">
                       {formatPaise(balance)}
                     </TableCell>
                     <TableCell>
@@ -492,7 +492,7 @@ export default function InvoicesPage() {
                       {inv.status === PracticeInvoiceStatus.DRAFT ? (
                         <Button
                           variant="secondary"
-                          className="h-7 px-2 text-xs"
+                          className="h-7 px-2 text-caption"
                           onClick={() => issue.mutate(inv._id)}
                           disabled={issue.isPending}
                         >
@@ -505,10 +505,10 @@ export default function InvoicesPage() {
                             value={payAmount}
                             onChange={(e) => setPayAmount(e.target.value)}
                             placeholder={String(balance / 100)}
-                            className="h-7 w-24 font-mono text-xs"
+                            className="h-7 w-24 font-mono text-caption"
                           />
                           <Button
-                            className="h-7 px-2 text-xs"
+                            className="h-7 px-2 text-caption"
                             disabled={pay.isPending}
                             onClick={() => {
                               const value = Number(payAmount.replace(/[^0-9.]/g, ''));
@@ -522,7 +522,7 @@ export default function InvoicesPage() {
                       ) : (
                         <Button
                           variant="secondary"
-                          className="h-7 px-2 text-xs"
+                          className="h-7 px-2 text-caption"
                           onClick={() => setPayingId(inv._id)}
                         >
                           Record payment

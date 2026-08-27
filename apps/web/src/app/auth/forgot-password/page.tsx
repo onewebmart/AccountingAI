@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { api, ApiError } from '@/lib/api';
+import { AuthShell } from '@/components/auth/auth-shell';
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
@@ -33,79 +34,58 @@ export default function ForgotPasswordPage() {
     }
   };
 
+  if (sent) {
+    return (
+      <AuthShell
+        title="Check your email"
+        subtitle={`If an account exists for ${email}, a reset link is on its way. It expires in an hour.`}
+        footer={
+          <Link href="/auth/login" className="font-medium text-saffron-600 hover:underline">
+            ← Back to sign in
+          </Link>
+        }
+      >
+        <div className="rounded-sm border border-success-fg/25 bg-success-bg px-4 py-3.5 text-body text-ink-700">
+          Nothing arrived? Check spam, or try again in a minute — the link is sent once per request.
+        </div>
+      </AuthShell>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-surface-page flex items-center justify-center px-4">
-      <div className="w-full max-w-[400px]">
-        <div className="text-center mb-8">
-          <span
-            className="text-h2 font-display text-ink-900"
-            style={{ fontFamily: 'var(--font-display)' }}
-          >
-            ◆ <span className="text-saffron-600">Ai</span>Books
-          </span>
-        </div>
-
-        <div className="rounded-lg border border-line-200 bg-surface-card shadow-e2 p-8">
-          {sent ? (
-            <>
-              <h1
-                className="text-h2 font-display text-ink-900 mb-1"
-                style={{ fontFamily: 'var(--font-display)' }}
-              >
-                Check your email
-              </h1>
-              <p className="text-body text-ink-500 mb-6">
-                If an account exists for <span className="text-ink-900">{email}</span>, a reset link
-                is on its way. It expires in an hour.
-              </p>
-              <Button variant="secondary" className="w-full" asChild>
-                <Link href="/auth/login">Back to sign in</Link>
-              </Button>
-            </>
-          ) : (
-            <>
-              <h1
-                className="text-h2 font-display text-ink-900 mb-1"
-                style={{ fontFamily: 'var(--font-display)' }}
-              >
-                Reset your password
-              </h1>
-              <p className="text-body text-ink-500 mb-6">
-                Enter your email and we&apos;ll send you a link to set a new one.
-              </p>
-
-              <form className="space-y-5" onSubmit={handleSubmit}>
-                <Input
-                  type="email"
-                  label="Email"
-                  placeholder="you@example.com"
-                  autoComplete="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                />
-
-                {error && (
-                  <p className="text-caption text-error-fg bg-error-bg border border-error-fg/20 rounded px-3 py-2">
-                    {error}
-                  </p>
-                )}
-
-                <Button type="submit" variant="primary" className="w-full" disabled={loading}>
-                  {loading ? 'Sending…' : 'Send reset link'}
-                </Button>
-              </form>
-            </>
-          )}
-        </div>
-
-        <p className="text-center text-body text-ink-500 mt-6">
+    <AuthShell
+      title="Reset your password"
+      subtitle="Enter your email and we'll send you a link to set a new one."
+      footer={
+        <>
           Remembered it?{' '}
-          <Link href="/auth/login" className="text-saffron-600 hover:underline font-medium">
+          <Link href="/auth/login" className="font-medium text-saffron-600 hover:underline">
             Sign in
           </Link>
-        </p>
-      </div>
-    </div>
+        </>
+      }
+    >
+      <form className="space-y-5" onSubmit={handleSubmit}>
+        <Input
+          type="email"
+          label="Email"
+          placeholder="you@example.com"
+          autoComplete="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          required
+        />
+
+        {error && (
+          <p className="rounded-sm border border-error-fg/20 bg-error-bg px-3 py-2 text-caption text-error-fg">
+            {error}
+          </p>
+        )}
+
+        <Button type="submit" variant="primary" className="w-full" disabled={loading}>
+          {loading ? 'Sending…' : 'Send reset link'}
+        </Button>
+      </form>
+    </AuthShell>
   );
 }

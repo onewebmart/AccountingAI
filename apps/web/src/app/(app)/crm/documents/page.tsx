@@ -88,7 +88,7 @@ function ItemPill({
     <span
       title={item.documentName ?? undefined}
       className={cn(
-        'inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs',
+        'inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-caption',
         verified && 'border-[#1E7B34]/20 bg-[#E6F4EA] text-[#1E7B34]',
         received && 'border-pending-fg/20 bg-pending-bg text-pending-fg',
         !received && !verified && 'border-line-200 bg-surface-card text-ink-500',
@@ -131,7 +131,7 @@ function RequestCard({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="font-heading font-semibold text-ink-900">{request.clientName}</p>
-          <p className="mt-0.5 text-sm text-ink-500">
+          <p className="mt-0.5 text-body text-ink-500">
             {request.purpose} · due {formatDate(request.dueDate)}
             {!complete ? ` · ${request.progress.missingLabels.length} missing` : ''}
           </p>
@@ -143,7 +143,7 @@ function RequestCard({
         ) : (
           <Button
             variant="secondary"
-            className="h-8 gap-1.5 px-3 text-xs"
+            className="h-8 gap-1.5 px-3 text-caption"
             onClick={() => onRemind(request._id)}
             disabled={reminding}
           >
@@ -262,7 +262,7 @@ function NewRequestDialog({
           </div>
 
           {error ? (
-            <p className="rounded-lg bg-[#C92A2A]/5 px-3 py-2 text-sm text-[#C92A2A]">
+            <p className="rounded-lg bg-[#C92A2A]/5 px-3 py-2 text-body text-[#C92A2A]">
               {error.message}
             </p>
           ) : null}
@@ -349,8 +349,8 @@ export default function DocumentsPage() {
       <FadeIn>
         <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h1 className="font-heading text-2xl font-bold text-ink-900">Document hub</h1>
-            <p className="mt-1 text-sm text-ink-500">
+            <h1 className="font-heading text-h1 text-ink-900">Document hub</h1>
+            <p className="mt-1 text-body text-ink-500">
               Track what each client still owes you. Uploads are matched to the checklist
               automatically — you confirm each one before it counts as verified.
             </p>
@@ -377,7 +377,7 @@ export default function DocumentsPage() {
       </FadeIn>
 
       {remind.isSuccess ? (
-        <p className="mb-4 rounded-lg bg-[#E6F4EA] px-3 py-2 text-sm text-[#1E7B34]">
+        <p className="mb-4 rounded-lg bg-[#E6F4EA] px-3 py-2 text-body text-[#1E7B34]">
           Queued {remind.data.remindersQueued} reminder(s)
           {remind.data.skippedComplete > 0 ? ` · ${remind.data.skippedComplete} already complete` : ''}
           {remind.data.skippedNoContact > 0
@@ -395,7 +395,7 @@ export default function DocumentsPage() {
             onClick={() => setFilter(f.key)}
             aria-pressed={filter === f.key}
             className={cn(
-              'rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors',
+              'rounded-lg border px-3 py-1.5 text-caption font-medium transition-colors',
               filter === f.key
                 ? 'border-saffron-600 bg-saffron-600 text-white'
                 : 'border-line-200 bg-surface-card text-ink-700 hover:bg-surface-sink',

@@ -21,6 +21,12 @@ import {
   Stagger,
   StaggerItem,
 } from '@/components/motion/primitives';
+import { useState } from 'react';
+import { motion, useMotionValueEvent, useReducedMotion, useScroll } from 'motion/react';
+import { cn } from '@/lib/utils';
+import { FinanceBackdrop } from '@/components/motion/finance-backdrop';
+import { NoiseTexture } from '@/components/ui/noise-texture';
+import { TextAnimate } from '@/components/ui/text-animate';
 import { useAuth } from '@/lib/auth-context';
 
 /**
@@ -105,27 +111,72 @@ const TRUST = [
   },
 ];
 
+/**
+ * A floating glass bar that contracts once you leave the top of the page.
+ *
+ * Two states rather than a continuous scrub: pinned to the page at rest, and a
+ * narrower inset pill once scrolled. A continuously interpolated width chases
+ * the scroll position and never settles, which reads as jitter; snapping
+ * between two settled states at 8px of travel reads as intent.
+ *
+ * The blur only applies in the scrolled state — over the page background at
+ * rest there is nothing behind it to blur, and the cost is real on long pages.
+ */
 function Nav() {
   const { user } = useAuth();
+  const { scrollY } = useScroll();
+  const [scrolled, setScrolled] = useState(false);
+  const reduced = useReducedMotion();
+
+  useMotionValueEvent(scrollY, 'change', (y) => {
+    // A dead band: without it, a trackpad resting near the threshold flickers
+    // the bar between both states.
+    setScrolled((was) => (was ? y > 8 : y > 24));
+  });
+
+  const linkClass =
+    'text-body text-ink-700 transition-colors hover:text-ink-900';
 
   return (
-    <header className="sticky top-0 z-40 border-b border-line-200/60 bg-surface-page/80 backdrop-blur">
-      <nav className="mx-auto flex max-w-6xl items-center gap-6 px-6 py-3.5">
+    <header className="pointer-events-none fixed inset-x-0 top-0 z-50 flex justify-center px-4">
+      <motion.nav
+        initial={false}
+        animate={{
+          marginTop: scrolled ? 12 : 0,
+          maxWidth: scrolled ? 880 : 1152,
+          paddingTop: scrolled ? 8 : 14,
+          paddingBottom: scrolled ? 8 : 14,
+          borderRadius: scrolled ? 999 : 0,
+        }}
+        transition={
+          reduced
+            ? { duration: 0 }
+            : // Slightly overdamped: it arrives without the bounce that would
+              // make a navigation bar feel like a toy.
+              { type: 'spring', stiffness: 320, damping: 34, mass: 0.7 }
+        }
+        className={cn(
+          'pointer-events-auto flex w-full items-center gap-6 px-6',
+          scrolled
+            ? 'border border-line-200/70 bg-surface-page/70 shadow-e2 backdrop-blur-xl backdrop-saturate-150'
+            : 'border border-transparent border-b-line-200/60 bg-surface-page/85',
+        )}
+      >
         <Link href="/" className="flex items-center gap-2">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-saffron-600 font-heading text-xs font-bold text-white">
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-saffron-600 font-heading text-caption font-bold text-white">
             CA
           </span>
-          <span className="font-heading text-sm font-semibold text-ink-900">Practice</span>
+          <span className="font-heading text-body font-semibold text-ink-900">Practice</span>
         </Link>
 
         <div className="ml-auto hidden items-center gap-6 sm:flex">
-          <Link href="#modules" className="text-sm text-ink-700 hover:text-ink-900">
+          <Link href="#modules" className={linkClass}>
             What it does
           </Link>
-          <Link href="#how" className="text-sm text-ink-700 hover:text-ink-900">
+          <Link href="#how" className={linkClass}>
             How it works
           </Link>
-          <Link href="#trust" className="text-sm text-ink-700 hover:text-ink-900">
+          <Link href="#trust" className={linkClass}>
             Safeguards
           </Link>
         </div>
@@ -148,7 +199,7 @@ function Nav() {
             </>
           )}
         </div>
-      </nav>
+      </motion.nav>
     </header>
   );
 }
@@ -161,36 +212,62 @@ export default function LandingPage() {
       <Nav />
 
       {/* ── Hero ──────────────────────────────────────────────────────── */}
-      <section className="relative overflow-hidden px-6 pb-20 pt-20 sm:pt-28">
+      <section className="relative overflow-hidden px-6 pb-24 pt-32 sm:pt-40">
         <AuroraBackdrop />
+        <FinanceBackdrop />
+        {/* A little grain over the wash. Flat gradients read as cheap at this
+            scale; the texture is what stops the background looking like a
+            default. Barely visible on purpose — 3.5% is the point. */}
+        <NoiseTexture
+          className="absolute inset-0 opacity-[0.035] mix-blend-multiply"
+          frequency={0.8}
+          noiseOpacity={1}
+        />
 
         <div className="relative mx-auto max-w-4xl text-center">
           <FadeIn>
-            <span className="inline-flex items-center gap-2 rounded-full border border-line-200 bg-surface-card px-3 py-1 text-xs font-medium text-ink-700">
+            <span className="inline-flex items-center gap-2 rounded-full border border-line-200 bg-surface-card/80 px-3.5 py-1.5 text-[11px] font-medium uppercase tracking-[0.14em] text-ink-700 shadow-e1 backdrop-blur">
               <span className="h-1.5 w-1.5 rounded-full bg-saffron-600" />
               Built for Indian CA firms
             </span>
           </FadeIn>
 
-          <FadeIn delay={0.08}>
-            <h1 className="mt-6 font-heading text-4xl font-bold leading-[1.1] text-ink-900 sm:text-6xl">
+          {/* Word-by-word blur-up. Slow enough to read as deliberate rather
+              than decorative, and it settles before anyone finishes the line. */}
+          <h1 className="mt-8 font-heading text-display-xl text-ink-900">
+            <TextAnimate
+              as="span"
+              by="word"
+              animation="blurInUp"
+              duration={0.5}
+              delay={0.1}
+              className="block"
+            >
               Stop chasing.
-              <br />
-              <span className="text-saffron-600">Start closing the month.</span>
-            </h1>
-          </FadeIn>
+            </TextAnimate>
+            <TextAnimate
+              as="span"
+              by="word"
+              animation="blurInUp"
+              duration={0.5}
+              delay={0.35}
+              className="block text-saffron-600"
+            >
+              Start closing the month.
+            </TextAnimate>
+          </h1>
 
-          <FadeIn delay={0.16}>
-            <p className="mx-auto mt-6 max-w-2xl text-lg text-ink-500">
+          <FadeIn delay={0.7}>
+            <p className="mx-auto mt-7 max-w-2xl text-body-lg text-ink-500">
               Practice management for chartered accountants. Deadlines, documents and fees chase
               themselves — in Hinglish your clients actually read — so your team spends its day on
               the work only a CA can do.
             </p>
           </FadeIn>
 
-          <FadeIn delay={0.24}>
-            <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
-              <Button size="lg" className="gap-2" asChild>
+          <FadeIn delay={0.8}>
+            <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
+              <Button size="lg" className="gap-2 shadow-e2" asChild>
                 <Link href="/auth/signup">
                   Start free
                   <ArrowRight size={16} />
@@ -200,26 +277,28 @@ export default function LandingPage() {
                 <Link href="#how">See how it works</Link>
               </Button>
             </div>
-            <p className="mt-3 text-xs text-ink-400">
+            <p className="mt-4 text-caption text-ink-400">
               No card required · Your data stays scoped to your firm
             </p>
           </FadeIn>
         </div>
 
         {/* Numbers that describe the product, not invented traction. */}
-        <FadeIn delay={0.32}>
-          <div className="relative mx-auto mt-16 grid max-w-3xl grid-cols-2 gap-px overflow-hidden rounded-2xl border border-line-200 bg-line-200 sm:grid-cols-4">
+        <FadeIn delay={0.9}>
+          <div className="relative mx-auto mt-20 grid max-w-3xl grid-cols-2 gap-px overflow-hidden rounded-lg border border-line-200 bg-line-200 shadow-e1 sm:grid-cols-4">
             {[
               { value: 6, suffix: '', label: 'Statutory filings tracked' },
               { value: 3, suffix: '', label: 'Reminders before each due date' },
               { value: 4, suffix: '', label: 'Rungs on the fee ladder' },
               { value: 100, suffix: '%', label: 'Of AI actions logged' },
             ].map((s) => (
-              <div key={s.label} className="bg-surface-card px-4 py-5 text-center">
-                <p className="font-mono text-2xl font-bold text-ink-900">
+              <div key={s.label} className="group bg-surface-card px-4 py-6 text-center transition-colors hover:bg-honey-50">
+                <p className="font-mono text-h2 font-bold tabular-nums text-ink-900">
                   <CountUp to={s.value} suffix={s.suffix} />
                 </p>
-                <p className="mt-1 text-[11px] leading-tight text-ink-500">{s.label}</p>
+                <p className="mx-auto mt-1.5 max-w-[14ch] text-[11px] leading-tight text-ink-500">
+                  {s.label}
+                </p>
               </div>
             ))}
           </div>
@@ -230,7 +309,7 @@ export default function LandingPage() {
       <section id="modules" className="px-6 py-20">
         <div className="mx-auto max-w-6xl">
           <FadeIn>
-            <h2 className="font-heading text-3xl font-bold text-ink-900">
+            <h2 className="font-heading text-display-lg text-ink-900">
               What your firm stops doing by hand
             </h2>
             <p className="mt-2 max-w-2xl text-ink-500">
@@ -246,10 +325,10 @@ export default function LandingPage() {
                     <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-honey-100 text-saffron-700">
                       {m.icon}
                     </span>
-                    <h3 className="mt-4 font-heading text-base font-semibold text-ink-900">
+                    <h3 className="mt-4 font-heading text-h3 text-ink-900">
                       {m.title}
                     </h3>
-                    <p className="mt-2 text-sm leading-relaxed text-ink-500">{m.body}</p>
+                    <p className="mt-2 text-body text-ink-500">{m.body}</p>
                   </article>
                 </HoverLift>
               </StaggerItem>
@@ -262,7 +341,7 @@ export default function LandingPage() {
       <section id="how" className="bg-surface-sink px-6 py-20">
         <div className="mx-auto max-w-5xl">
           <FadeIn>
-            <h2 className="font-heading text-3xl font-bold text-ink-900">
+            <h2 className="font-heading text-display-lg text-ink-900">
               Set up in an afternoon
             </h2>
             <p className="mt-2 max-w-2xl text-ink-500">
@@ -274,11 +353,11 @@ export default function LandingPage() {
             {STEPS.map((s) => (
               <StaggerItem key={s.n}>
                 <div className="h-full rounded-2xl border border-line-200 bg-surface-card p-5">
-                  <span className="font-mono text-xs font-bold text-saffron-600">{s.n}</span>
-                  <h3 className="mt-2 font-heading text-base font-semibold text-ink-900">
+                  <span className="font-mono text-caption font-bold text-saffron-600">{s.n}</span>
+                  <h3 className="mt-2 font-heading text-h3 text-ink-900">
                     {s.title}
                   </h3>
-                  <p className="mt-2 text-sm leading-relaxed text-ink-500">{s.body}</p>
+                  <p className="mt-2 text-body text-ink-500">{s.body}</p>
                 </div>
               </StaggerItem>
             ))}
@@ -290,7 +369,7 @@ export default function LandingPage() {
       <section className="px-6 py-20">
         <div className="mx-auto grid max-w-5xl items-center gap-10 lg:grid-cols-2">
           <FadeIn>
-            <h2 className="font-heading text-3xl font-bold text-ink-900">
+            <h2 className="font-heading text-display-lg text-ink-900">
               Written the way your clients write
             </h2>
             <p className="mt-3 text-ink-500">
@@ -308,11 +387,11 @@ export default function LandingPage() {
           <FadeIn delay={0.1}>
             <div className="rounded-2xl border border-line-200 bg-surface-card p-4 shadow-sm">
               <div className="mb-3 flex items-center gap-2 border-b border-line-200 pb-3">
-                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-surface-sink text-xs font-semibold text-ink-700">
+                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-surface-sink text-caption font-semibold text-ink-700">
                   RM
                 </span>
                 <div>
-                  <p className="text-sm font-medium text-ink-900">Ramesh Mehta</p>
+                  <p className="text-body font-medium text-ink-900">Ramesh Mehta</p>
                   <p className="font-mono text-[11px] text-ink-400">WhatsApp</p>
                 </div>
               </div>
@@ -320,14 +399,14 @@ export default function LandingPage() {
               <Stagger className="space-y-2.5" gap={0.35}>
                 <StaggerItem>
                   <div className="max-w-[85%] rounded-xl bg-surface-sink px-3 py-2">
-                    <p className="text-sm text-ink-900">
+                    <p className="text-body text-ink-900">
                       Namaste, GSTR-3B August ka kab tak bharna hai?
                     </p>
                   </div>
                 </StaggerItem>
                 <StaggerItem>
                   <div className="ml-auto max-w-[85%] rounded-xl bg-saffron-600 px-3 py-2">
-                    <p className="text-sm text-white">
+                    <p className="text-body text-white">
                       Namaste Ramesh ji! Aapka August ka GSTR-3B 20 September tak bharna hai. Bank
                       statement abhi pending hai — bhej dijiye to hum time par file kar denge.
                     </p>
@@ -335,15 +414,15 @@ export default function LandingPage() {
                 </StaggerItem>
                 <StaggerItem>
                   <div className="max-w-[85%] rounded-xl bg-surface-sink px-3 py-2">
-                    <p className="text-sm text-ink-900">Fees kitni hogi?</p>
+                    <p className="text-body text-ink-900">Fees kitni hogi?</p>
                   </div>
                 </StaggerItem>
                 <StaggerItem>
                   <div className="rounded-xl border border-pending-fg/20 bg-pending-bg px-3 py-2">
-                    <p className="text-xs font-semibold text-pending-fg">
+                    <p className="text-caption font-semibold text-pending-fg">
                       Handed to you — fee question
                     </p>
-                    <p className="mt-0.5 text-xs text-pending-fg/80">
+                    <p className="mt-0.5 text-caption text-pending-fg/80">
                       The assistant never quotes a price. Client told someone will reply.
                     </p>
                   </div>
@@ -358,7 +437,7 @@ export default function LandingPage() {
       <section id="trust" className="bg-roast-900 px-6 py-20 text-white">
         <div className="mx-auto max-w-5xl">
           <FadeIn>
-            <h2 className="font-heading text-3xl font-bold">
+            <h2 className="font-heading text-display-lg">
               Built so you can defend every entry
             </h2>
             <p className="mt-2 max-w-2xl text-white/60">
@@ -374,8 +453,8 @@ export default function LandingPage() {
                   <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-marigold-400/15 text-marigold-300">
                     {t.icon}
                   </span>
-                  <h3 className="mt-3 font-heading text-base font-semibold">{t.title}</h3>
-                  <p className="mt-2 text-sm leading-relaxed text-white/60">{t.body}</p>
+                  <h3 className="mt-3 font-heading text-h3">{t.title}</h3>
+                  <p className="mt-2 text-body text-white/60">{t.body}</p>
                 </div>
               </StaggerItem>
             ))}
@@ -387,7 +466,7 @@ export default function LandingPage() {
       <section className="px-6 py-24">
         <FadeIn>
           <div className="mx-auto max-w-3xl rounded-3xl border border-line-200 bg-surface-card px-8 py-14 text-center">
-            <h2 className="font-heading text-3xl font-bold text-ink-900">
+            <h2 className="font-heading text-display-lg text-ink-900">
               Give your evenings back
             </h2>
             <p className="mx-auto mt-3 max-w-lg text-ink-500">
@@ -421,12 +500,12 @@ export default function LandingPage() {
       </section>
 
       <footer className="border-t border-line-200 px-6 py-8">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-4 text-sm text-ink-500">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-4 text-body text-ink-500">
           <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-saffron-600 font-heading text-[10px] font-bold text-white">
             CA
           </span>
           <span>Practice management for Indian chartered accountants.</span>
-          <span className="ml-auto font-mono text-xs text-ink-400">
+          <span className="ml-auto font-mono text-caption text-ink-400">
             © {new Date().getFullYear()}
           </span>
         </div>
