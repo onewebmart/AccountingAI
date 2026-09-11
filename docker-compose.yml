@@ -9,7 +9,11 @@ services:
     container_name: ai_accounting_mongo
     command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
     ports:
-      - "27017:27017"
+      # 27019, not the default. This machine also runs a host-installed mongod
+      # on 27017 and another project's replica set on 27018, each bound to
+      # 127.0.0.1 — and an IPv4 loopback bind beats Docker's mapping for the
+      # same port, so the API silently connected to the wrong database.
+      - "27019:27017"
     volumes:
       - mongo_data:/data/db
       - ./scripts/mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro

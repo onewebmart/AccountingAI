@@ -32,7 +32,7 @@ They are not separate apps. A firm's staff move between "my client's books" and
 |---|---|---|
 | Web | Next.js 14 App Router, TypeScript, Tailwind, shadcn/ui, TanStack Query | `apps/web` — port 3000 |
 | API | NestJS, TypeScript strict | `apps/api` — port 3001, all routes under `/api/v1` |
-| Database | MongoDB **as a replica set** | host port 27018 |
+| Database | MongoDB **as a replica set** | host port 27019 |
 | Queue | BullMQ on Redis | port 6379 |
 | Files | S3-compatible (MinIO locally) | ports 9000/9001 |
 | AI | Gemini (`gemini-2.5-flash`) for vision OCR, extraction, lead scoring, the support agent | — |
@@ -755,8 +755,15 @@ caller can provoke at will, so it reveals nothing.
   refresh path is what should renew it silently.
 - **Postings fail with "Transaction numbers are only allowed on a replica set
   member".** The API is pointed at a standalone `mongod`. On this machine a
-  host-installed mongod squats on 27017, which is why the project's replica set is
-  published on **27018** with `directConnection=true`.
+  host-installed mongod squats on 27017, and a second project's replica set
+  sits on 27019 — both bound to `127.0.0.1`, which beats Docker's mapping for
+  the same port. The project's container is therefore published on **27019**
+  with `directConnection=true`.
+- **Logins fail for users you can see in the database.** Almost certainly the
+  API connected to a *different* mongod on the same port — see the line above.
+  Compare `mongosh mongodb://127.0.0.1:<port>` (host) against
+  `docker exec ai_accounting_mongo mongosh` (container); if they disagree,
+  the port is shadowed.
 - **Anything AI-shaped is slow or absent.** Look at the queue and its processor,
   not the request handler — no AI work happens inline.
 - **A Gemini call returns truncated or unparseable JSON.** `gemini-2.5-flash` is
