@@ -33,6 +33,7 @@ import { SalesInvoice, SalesInvoiceSchema, SalesInvoiceDocument } from '../sales
 import { Customer, CustomerSchema } from '../sales/schemas/customer.schema';
 import { PurchaseBill, PurchaseBillSchema, PurchaseBillDocument } from '../purchase/schemas/purchase-bill.schema';
 import { Vendor, VendorSchema } from '../purchase/schemas/vendor.schema';
+import { ProposedEntry, ProposedEntrySchema } from '../proposals/schemas/proposed-entry.schema';
 import { PostingService } from '../gl/posting.service';
 import { AccountsService } from '../gl/accounts.service';
 import { AuditService } from '../gl/audit.service';
@@ -73,6 +74,7 @@ beforeAll(async () => {
         { name: Customer.name, schema: CustomerSchema },
         { name: PurchaseBill.name, schema: PurchaseBillSchema },
         { name: Vendor.name, schema: VendorSchema },
+        { name: ProposedEntry.name, schema: ProposedEntrySchema },
       ]),
     ],
     providers: [

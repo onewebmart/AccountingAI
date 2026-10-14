@@ -6,6 +6,7 @@ import { BankStatementLine, BankStatementLineSchema } from './schemas/bank-state
 import { Journal, JournalSchema } from '../gl/schemas/journal.schema';
 import { SalesInvoice, SalesInvoiceSchema } from '../sales/schemas/sales-invoice.schema';
 import { PurchaseBill, PurchaseBillSchema } from '../purchase/schemas/purchase-bill.schema';
+import { ProposedEntry, ProposedEntrySchema } from '../proposals/schemas/proposed-entry.schema';
 import { GlModule } from '../gl/gl.module';
 import { SalesModule } from '../sales/sales.module';
 import { PurchaseModule } from '../purchase/purchase.module';
@@ -22,6 +23,8 @@ import { BankingController } from './banking.controller';
       // Read here to find the open invoice or bill a bank line settles.
       { name: SalesInvoice.name, schema: SalesInvoiceSchema },
       { name: PurchaseBill.name, schema: PurchaseBillSchema },
+      // Read to show which lines are waiting in the review queue.
+      { name: ProposedEntry.name, schema: ProposedEntrySchema },
     ]),
     GlModule, // PostingService (transactions) and AuditService
     SalesModule, // settles a matched invoice

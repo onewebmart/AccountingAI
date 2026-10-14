@@ -55,6 +55,7 @@ interface ApiProposal {
   };
   documentUrl?: string;
   status?: string;
+  category?: ProposedEntryData['category'];
 }
 
 function mapApiProposal(p: ApiProposal): ProposedEntryData {
@@ -81,6 +82,7 @@ function mapApiProposal(p: ApiProposal): ProposedEntryData {
     rawWarnings: p.rawWarnings ?? p.warnings ?? [],
     amountsPaise: amounts,
     documentUrl: p.documentUrl,
+    category: p.category ?? null,
     suggestedLines: (p.suggestedLines ?? []).map((l) => ({
       accountId: String(l.accountId),
       accountName: l.accountName,

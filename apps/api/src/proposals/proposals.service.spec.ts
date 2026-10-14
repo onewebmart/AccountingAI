@@ -37,8 +37,11 @@ import { PurchaseBill, PurchaseBillSchema } from '../purchase/schemas/purchase-b
 import { Customer, CustomerSchema } from '../sales/schemas/customer.schema';
 import { SalesInvoice, SalesInvoiceSchema } from '../sales/schemas/sales-invoice.schema';
 import { Document as UploadedDocument, DocumentSchema } from '../documents/schemas/document.schema';
-import { ProposedEntryStatus, VoucherType } from '@ai-accounting/shared';
+import { AccountType, ProposedEntryStatus, VoucherType } from '@ai-accounting/shared';
 import { REDIS_CLIENT } from '../redis/redis.module';
+import { ExpenseCategorizerService } from './categorisation/expense-categorizer.service';
+import { CATEGORY_MODEL } from './categorisation/category-model';
+import { BankStatementLine, BankStatementLineSchema } from '../banking/schemas/bank-statement-line.schema';
 
 const redisMock = {
   get: jest.fn().mockResolvedValue(null),
@@ -99,6 +102,7 @@ beforeAll(async () => {
         { name: Customer.name, schema: CustomerSchema },
         { name: SalesInvoice.name, schema: SalesInvoiceSchema },
         { name: UploadedDocument.name, schema: DocumentSchema },
+        { name: BankStatementLine.name, schema: BankStatementLineSchema },
       ]),
     ],
     providers: [
@@ -108,6 +112,9 @@ beforeAll(async () => {
       AccountsService,
       SubledgerSyncService,
       AuditService,
+      ExpenseCategorizerService,
+      // No model in these tests: categorisation falls back to rules, past choices and Purchases.
+      { provide: CATEGORY_MODEL, useValue: { available: false, choose: jest.fn() } },
       { provide: REDIS_CLIENT, useValue: redisMock },
     ],
   }).compile();
@@ -325,7 +332,9 @@ describe('approveHighConfidence', () => {
 
 describe('learning loop (Phase 9)', () => {
   it('correcting vendor account once causes next proposal to pre-fill learned account', async () => {
-    const correctedAccountId = new Types.ObjectId().toString();
+    // A real account: a learned choice is only suggested while the account exists.
+    const food = await moduleRef.get(AccountsService).create({ orgId: ORG_ID, name: 'Food Expense', type: AccountType.EXPENSE });
+    const correctedAccountId = food._id.toString();
     const payableAccountId = new Types.ObjectId().toString();
 
     // Step 1: first document from vendor — approve with human-corrected expense account

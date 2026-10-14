@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { ClientSession, Model, Types } from 'mongoose';
-import { DocumentStatus, ProposedEntryStatus, VoucherType } from '@ai-accounting/shared';
+import { DocumentStatus, MatchStatus, ProposedEntryStatus, VoucherType } from '@ai-accounting/shared';
 import { ProposedEntry, ProposedEntryDocument } from './schemas/proposed-entry.schema';
 import { ExtractedDocument, ExtractedDocumentDocument } from '../extraction/schemas/extracted-document.schema';
 import { Document as UploadedDocument, DocumentDocument } from '../documents/schemas/document.schema';
@@ -16,9 +16,11 @@ import { AccountsService } from '../gl/accounts.service';
 import { SystemAccountKey } from '../gl/schemas/ledger-account.schema';
 import { LearningService } from './learning.service';
 import { SubledgerSyncService } from './subledger-sync.service';
+import { ExpenseCategorizerService } from './categorisation/expense-categorizer.service';
 import { withOrg } from '../database/tenant.plugin';
 import { dueDateFromTerms } from '../extraction/invoice-checks';
 import { Vendor, VendorDocument } from '../purchase/schemas/vendor.schema';
+import { BankStatementLine, BankStatementLineDocument } from '../banking/schemas/bank-statement-line.schema';
 import { TdsSection, defaultTdsRateBps, tdsOn } from '../gl/tds';
 
 export interface ApproveInput {
@@ -64,6 +66,9 @@ interface SuggestedLineDraft {
 }
 
 /** Map extracted documentType to VoucherType for the journal. */
+/** Document types whose main account is worth remembering per party. */
+const LEARNABLE = new Set(['purchase_invoice', 'bill', 'receipt', 'bank_payment', 'bank_receipt']);
+
 function toVoucherType(docType: string): VoucherType {
   switch (docType) {
     // A bill is a supplier's invoice by another name and is booked like one.
@@ -74,6 +79,9 @@ function toVoucherType(docType: string): VoucherType {
     // Dr expense / Cr bank. It used to post as a RECEIPT voucher (money in),
     // which bank matching then paired with a deposit.
     case 'receipt':          return VoucherType.PAYMENT;
+    // Bank lines filed straight to an account, with no bill or invoice behind them.
+    case 'bank_payment':     return VoucherType.PAYMENT;
+    case 'bank_receipt':     return VoucherType.RECEIPT;
     default:                 return VoucherType.JOURNAL;
   }
 }
@@ -88,11 +96,14 @@ export class ProposalsService {
     @InjectModel(UploadedDocument.name) private documentModel: Model<DocumentDocument>,
     // Read-only: a known vendor's TDS section shapes the suggested lines.
     @InjectModel(Vendor.name) private vendorModel: Model<VendorDocument>,
+    // A bank-line proposal matches its line when approved.
+    @InjectModel(BankStatementLine.name) private bankLineModel: Model<BankStatementLineDocument>,
     private postingService: PostingService,
     private learningService: LearningService,
     private accountsService: AccountsService,
     private subledgerSync: SubledgerSyncService,
     private auditService: AuditService,
+    private categorizer: ExpenseCategorizerService,
   ) {}
 
   /**
@@ -213,23 +224,30 @@ export class ProposalsService {
     const tds = isPurchase ? await this.vendorTds(orgId, extracted) : null;
     const suggestedLines = await this.buildSuggestedLines(orgId, extracted, tds);
 
-    // Apply learned vendor mapping to the primary expense debit line if one exists.
-    if (extracted.vendor?.name) {
-      const learned = await this.learningService.getMapping(orgId, extracted.vendor.name);
-      if (learned) {
-        // Primary expense line: largest debit that is not a GST line.
-        const primaryIdx = suggestedLines
-          .map((l, i) => ({ l, i }))
-          .filter(({ l }) => l.debitPaise > 0 && !l.accountName.toLowerCase().includes('gst'))
-          .sort((a, b) => b.l.debitPaise - a.l.debitPaise)[0]?.i;
-
-        if (primaryIdx !== undefined) {
-          suggestedLines[primaryIdx].accountName = learned.accountName;
-          suggestedLines[primaryIdx].accountId = Types.ObjectId.isValid(learned.ledgerAccountId)
-            ? new Types.ObjectId(learned.ledgerAccountId)
-            : suggestedLines[primaryIdx].accountId;
-          suggestedLines[primaryIdx].isAiSuggested = false;
-        }
+    // File the main cost under the right account: a past choice for this
+    // vendor, an HSN/SAC or keyword rule, or the model — not always Purchases.
+    // It is a suggestion like every other line; the reviewer approves it.
+    let category: ProposedEntry['category'] = null;
+    if (isPurchase || extracted.documentType === 'receipt') {
+      // Primary expense line: largest debit that is not a GST line.
+      const primaryIdx = suggestedLines
+        .map((l, i) => ({ l, i }))
+        .filter(({ l }) => l.debitPaise > 0 && !l.accountName.toLowerCase().includes('gst'))
+        .sort((a, b) => b.l.debitPaise - a.l.debitPaise)[0]?.i;
+      if (primaryIdx !== undefined) {
+        const pick = await this.categorizer.suggest(orgId, {
+          kind: 'bill',
+          partyName: extracted.vendor?.name ?? null,
+          lines: (extracted.lineItems ?? []).map((l) => ({ description: l.description, hsnSac: l.hsnSac })),
+          amountPaise: suggestedLines[primaryIdx].debitPaise,
+        });
+        const line = suggestedLines[primaryIdx];
+        line.accountName = pick.accountName;
+        line.accountCode = pick.accountCode;
+        line.accountId = new Types.ObjectId(pick.accountId);
+        line.confidence = pick.confidence;
+        line.isAiSuggested = pick.source !== 'learned';
+        category = { source: pick.source, reason: pick.reason, accountName: pick.accountName, confidence: pick.confidence };
       }
     }
 
@@ -261,6 +279,7 @@ export class ProposalsService {
       },
       rawWarnings: extracted.rawWarnings ?? [],
       suggestedLines,
+      category,
       financialYear: fy,
     });
 
@@ -345,22 +364,6 @@ export class ProposalsService {
       creditPaise: l.creditPaise,
     }));
 
-    // When the human provides override lines, learn the expense account for this vendor.
-    if (overrideLines && proposal.vendorName) {
-      const expenseDebit = overrideLines
-        .filter((l) => l.debitPaise > 0 && !l.accountName.toLowerCase().includes('gst'))
-        .sort((a, b) => b.debitPaise - a.debitPaise)[0];
-
-      if (expenseDebit) {
-        await this.learningService.upsertMapping(
-          orgId,
-          proposal.vendorName,
-          expenseDebit.accountId,
-          expenseDebit.accountName,
-        );
-      }
-    }
-
     const { journal, updated, sync } = await this.postingService.inTransaction(async (session) => {
       // Claim PROPOSED → APPROVED before posting, in the same transaction. A
       // double-click, the bulk approve, or a reject racing this one finds
@@ -393,6 +396,10 @@ export class ProposalsService {
       const withJournal = await this.proposalModel
         .findByIdAndUpdate(proposalId, { $set: { journalId: posted._id } }, { new: true, session })
         .exec();
+
+      // A bank-line proposal accounts for that line: match it to the voucher
+      // in the same transaction, so the line is never in the books twice.
+      if (proposal.bankLineId) await this.matchBankLine(proposal, linesToPost, posted._id, session);
 
       // Mirror the posting into the purchase/sales sub-ledgers so the Purchase,
       // Sales, GST and ageing screens reflect this document without re-entry —
@@ -437,6 +444,8 @@ export class ProposalsService {
 
       return { journal: posted, updated: withJournal, sync: mirrored };
     });
+
+    await this.learnFromApproval(proposal, overrideLines);
 
     this.logger.log(
       `Proposal ${proposalId} approved by ${actorId} → Journal ${journal._id}` +
@@ -494,6 +503,80 @@ export class ProposalsService {
 
     this.logger.log(`Proposal ${proposalId} rejected by ${actorId}`);
     return updated;
+  }
+
+  /**
+   * Marks the bank line this proposal was made from as matched to its voucher.
+   * The bank side of the lines must still be the statement amount: a reviewer
+   * may split the account side, but the bank moved what it moved.
+   */
+  private async matchBankLine(
+    proposal: ProposedEntryDocument,
+    lines: Array<{ accountId: string; debitPaise: number; creditPaise: number }>,
+    journalId: Types.ObjectId,
+    session: ClientSession,
+  ): Promise<void> {
+    const orgId = proposal.orgId;
+    const line = await this.bankLineModel.findOne({ _id: proposal.bankLineId, orgId }).session(session).exec();
+    if (!line) throw new BadRequestException('The bank line behind this proposal no longer exists.');
+    const bank = await this.accountsService.resolveSystemAccount(orgId, SystemAccountKey.BANK);
+    const outgoing = line.debitPaise > 0;
+    const bankMoved = lines
+      .filter((l) => String(l.accountId) === String(bank._id))
+      .reduce((s, l) => s + (outgoing ? l.creditPaise - l.debitPaise : l.debitPaise - l.creditPaise), 0);
+    const statement = outgoing ? line.debitPaise : line.creditPaise;
+    if (bankMoved !== statement) {
+      throw new BadRequestException(
+        `The ${bank.name} line must stay ${(statement / 100).toFixed(2)} ${outgoing ? 'credit' : 'debit'}, ` +
+          'the amount on the bank statement.',
+      );
+    }
+    const claimed = await this.bankLineModel
+      .findOneAndUpdate(
+        { _id: line._id, orgId, matchStatus: MatchStatus.UNMATCHED, excluded: { $ne: true } },
+        { $set: { matchStatus: MatchStatus.CONFIRMED, matchedJournalId: journalId } },
+        { session },
+      )
+      .exec();
+    if (!claimed) {
+      throw new BadRequestException('This bank line has been matched or excluded since. Reject this proposal instead.');
+    }
+  }
+
+  /**
+   * Remembers where this party's money goes, for next time. A correction
+   * always teaches. Approving the suggestion as it stood teaches only when it
+   * was a real categorisation (a rule or the model): waving through the
+   * Purchases default says nothing about the vendor.
+   */
+  private async learnFromApproval(
+    proposal: ProposedEntryDocument,
+    overrideLines?: Array<{ accountId: string; accountName: string; debitPaise: number; creditPaise: number }>,
+  ): Promise<void> {
+    if (!proposal.vendorName || !LEARNABLE.has(proposal.documentType)) return;
+    const confirmed = proposal.category?.source === 'rule' || proposal.category?.source === 'ai';
+    if (!overrideLines && !confirmed) return;
+
+    const lines =
+      overrideLines ??
+      proposal.suggestedLines.map((l) => ({
+        accountId: l.accountId.toString(),
+        accountName: l.accountName,
+        debitPaise: l.debitPaise,
+        creditPaise: l.creditPaise,
+      }));
+    // Money in is filed on the credit side; everything else on the debit side.
+    const main =
+      proposal.documentType === 'bank_receipt'
+        ? lines.filter((l) => l.creditPaise > 0).sort((a, b) => b.creditPaise - a.creditPaise)[0]
+        : lines
+            .filter((l) => l.debitPaise > 0 && !l.accountName.toLowerCase().includes('gst'))
+            .sort((a, b) => b.debitPaise - a.debitPaise)[0];
+    if (!main) return;
+    // Suspense is a placeholder, not a category.
+    const suspense = await this.accountsService.resolveSystemAccount(proposal.orgId, SystemAccountKey.SUSPENSE);
+    if (String(main.accountId) === String(suspense._id)) return;
+    await this.learningService.upsertMapping(proposal.orgId, proposal.vendorName, String(main.accountId), main.accountName);
   }
 
   /** Approve all proposals with confidenceOverall >= threshold. */

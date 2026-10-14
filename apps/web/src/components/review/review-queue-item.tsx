@@ -38,7 +38,21 @@ export interface ProposedEntryData {
   documentUrl?: string;
   /** The journal the AI proposes to post. */
   suggestedLines: JournalLineDraft[];
+  /** Why the main account was chosen, when the categoriser chose it. */
+  category?: {
+    source: 'learned' | 'rule' | 'ai' | 'default';
+    reason: string;
+    accountName: string;
+    confidence: number;
+  } | null;
 }
+
+const CATEGORY_SOURCE: Record<NonNullable<ProposedEntryData['category']>['source'], { label: string; className: string }> = {
+  learned: { label: 'Your past choice', className: 'bg-success-bg text-success-fg' },
+  rule: { label: 'From the HSN/SAC or wording', className: 'bg-honey-100 text-pending-fg' },
+  ai: { label: 'AI suggestion', className: 'bg-honey-100 text-pending-fg' },
+  default: { label: 'Nothing matched — check this', className: 'bg-surface-sink text-ink-700' },
+};
 
 interface ReviewQueueItemProps {
   entry: ProposedEntryData;
@@ -204,10 +218,22 @@ export function ReviewQueueItem({ entry, accounts, onApprove, onReject }: Review
 
         {/* The journal that will post */}
         <div className="space-y-1.5">
-          {!editing && mainLine && (
-            <p className="text-caption text-ink-400 italic">
-              I&apos;ve booked this to {mainLine.accountName} — change it if I&apos;m wrong.
-            </p>
+          {!editing && entry.category ? (
+            <div className="flex flex-wrap items-center gap-2 text-caption">
+              <span className="text-ink-500">Filed under</span>
+              <span className="font-medium text-ink-900">{entry.category.accountName}</span>
+              <span className={cn('rounded-full px-2 py-0.5 font-medium', CATEGORY_SOURCE[entry.category.source].className)}>
+                {CATEGORY_SOURCE[entry.category.source].label}
+              </span>
+              <span className="text-ink-500">{entry.category.reason}</span>
+            </div>
+          ) : (
+            !editing &&
+            mainLine && (
+              <p className="text-caption text-ink-400 italic">
+                I&apos;ve booked this to {mainLine.accountName} — change it if I&apos;m wrong.
+              </p>
+            )
           )}
           <JournalLinesEditor
             lines={lines}

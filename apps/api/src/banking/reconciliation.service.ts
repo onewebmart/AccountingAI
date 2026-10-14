@@ -6,6 +6,7 @@ import {
   InvoiceStatus,
   JournalStatus,
   MatchStatus,
+  ProposedEntryStatus,
   StatementStatus,
   VoucherType,
 } from '@ai-accounting/shared';
@@ -15,6 +16,7 @@ import { BankStatementLine, BankStatementLineDocument } from './schemas/bank-sta
 import { Journal, JournalDocument } from '../gl/schemas/journal.schema';
 import { SalesInvoice, SalesInvoiceDocument } from '../sales/schemas/sales-invoice.schema';
 import { PurchaseBill, PurchaseBillDocument } from '../purchase/schemas/purchase-bill.schema';
+import { ProposedEntry, ProposedEntryDocument } from '../proposals/schemas/proposed-entry.schema';
 import { PostingService } from '../gl/posting.service';
 import { AuditService } from '../gl/audit.service';
 import { SalesInvoicesService } from '../sales/sales-invoices.service';
@@ -98,6 +100,8 @@ export interface DiffReport {
     matchLabel: string | null;
     possibleDuplicate: boolean;
     excluded: boolean;
+    /** Sent to be categorised: a proposal for it waits in the review queue. */
+    inReview: boolean;
   }>;
 }
 
@@ -160,6 +164,7 @@ export class ReconciliationService {
     @InjectModel(Journal.name) private journalModel: Model<JournalDocument>,
     @InjectModel(SalesInvoice.name) private invoiceModel: Model<SalesInvoiceDocument>,
     @InjectModel(PurchaseBill.name) private billModel: Model<PurchaseBillDocument>,
+    @InjectModel(ProposedEntry.name) private proposalModel: Model<ProposedEntryDocument>,
     private postingService: PostingService,
     private auditService: AuditService,
     private salesInvoices: SalesInvoicesService,
@@ -617,6 +622,13 @@ export class ReconciliationService {
     );
 
     const labels = await this.matchLabels(allLines, orgId);
+    const inReview = new Set(
+      (
+        await this.proposalModel
+          .distinct('bankLineId', { orgId, status: ProposedEntryStatus.PROPOSED, bankLineId: { $in: allLines.map((l) => l._id) } })
+          .exec()
+      ).map(String),
+    );
     const active = allLines.filter((l) => !l.excluded);
     const inBooks = (l: BankStatementLineDocument) =>
       l.matchStatus === MatchStatus.CONFIRMED ||
@@ -660,6 +672,7 @@ export class ReconciliationService {
         matchLabel: labels.get(l._id.toString()) ?? null,
         possibleDuplicate: !!l.possibleDuplicate,
         excluded: !!l.excluded,
+        inReview: inReview.has(l._id.toString()),
       })),
     };
   }

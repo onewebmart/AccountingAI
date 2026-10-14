@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Upload, CheckCircle, AlertCircle, Minus, Sparkles, Copy, Undo2, EyeOff } from 'lucide-react';
@@ -44,6 +45,8 @@ interface ReportLine {
   matchLabel: string | null;
   possibleDuplicate: boolean;
   excluded: boolean;
+  /** Sent to be categorised: a proposal for it waits in the review queue. */
+  inReview: boolean;
 }
 
 interface DiffReport {
@@ -128,6 +131,16 @@ function LineChip({ line }: { line: ReportLine }) {
       <span className="inline-flex items-center gap-1 rounded-full bg-pending-bg px-2 py-0.5 text-caption font-medium text-pending-fg border border-pending-fg/30">
         <Sparkles size={10} /> {line.matchStatus === 'auto_matched' ? 'Suggested' : 'Matched'} — confirm to post
       </span>
+    );
+  }
+  if (line.inReview) {
+    return (
+      <Link
+        href="/review"
+        className="inline-flex items-center gap-1 rounded-full bg-pending-bg px-2 py-0.5 text-caption font-medium text-pending-fg border border-pending-fg/30 hover:underline"
+      >
+        <Sparkles size={10} /> In the review queue
+      </Link>
     );
   }
   if (line.possibleDuplicate) {
@@ -259,6 +272,24 @@ export default function BankingPage() {
   });
   const lineAction = (lineId: string, action: string, body?: unknown) => lineMutation.mutate({ lineId, action, body });
 
+  // Lines with no invoice or bill behind them: the AI suggests an account for
+  // each and the proposal waits in the review queue. Nothing posts until approved.
+  const categoriseMutation = useMutation({
+    mutationFn: (lineIds: string[]) =>
+      api.post<{ queued: number; skipped: Array<{ lineId: string; reason: string }> }>('/banking/lines/categorise', { lineIds }),
+    onSuccess: (res) => {
+      showToast(
+        res.queued
+          ? `Sent ${res.queued} ${res.queued === 1 ? 'line' : 'lines'} to the review queue`
+          : `Nothing sent: ${res.skipped[0]?.reason ?? 'no lines to categorise'}`,
+        res.queued === 0,
+      );
+      // The proposals are written by a background job; look again shortly.
+      setTimeout(() => refresh(), 3000);
+    },
+    onError: (err) => showToast(failureMessage(err, "Couldn't send those lines"), true),
+  });
+
   /**
    * Uploading a statement goes through the ordinary document pipeline: the
    * spreadsheet ingest classifies a bank statement sheet and creates the
@@ -338,7 +369,8 @@ export default function BankingPage() {
     (l) => !l.excluded && (l.matchStatus === 'auto_matched' || l.matchStatus === 'manually_matched'),
   ).length;
   const canMatch = lines.some((l) => !l.excluded && !l.possibleDuplicate && l.matchStatus === 'unmatched');
-  const busy = autoMatchMutation.isPending || confirmMutation.isPending || lineMutation.isPending;
+  const toCategorise = lines.filter((l) => !l.excluded && !l.possibleDuplicate && !l.inReview && l.matchStatus === 'unmatched');
+  const busy = autoMatchMutation.isPending || confirmMutation.isPending || lineMutation.isPending || categoriseMutation.isPending;
 
   return (
     <div className="space-y-6">
@@ -361,6 +393,18 @@ export default function BankingPage() {
             >
               <Sparkles size={14} className="text-marigold-400" />
               {autoMatchMutation.isPending ? 'Matching…' : 'Run reconciliation'}
+            </Button>
+          )}
+          {latestStatement && toCategorise.length > 0 && (
+            <Button
+              variant="secondary"
+              onClick={() => categoriseMutation.mutate(toCategorise.map((l) => l.id))}
+              disabled={busy}
+              className="flex items-center gap-2"
+              title="For lines with no invoice or bill: the AI suggests an account, and you approve each in the review queue"
+            >
+              <Sparkles size={14} className="text-marigold-400" />
+              {categoriseMutation.isPending ? 'Sending…' : `Categorise ${toCategorise.length} unmatched`}
             </Button>
           )}
           {latestStatement && toConfirm > 0 && (
@@ -501,6 +545,10 @@ export default function BankingPage() {
                             <button type="button" className={linkButton} disabled={busy} onClick={() => lineAction(line.id, 'exclude', { excluded: false })}>
                               Bring back
                             </button>
+                          ) : line.inReview ? (
+                            <Link href="/review" className={linkButton}>
+                              Review the suggested entry
+                            </Link>
                           ) : suggested ? (
                             <button type="button" className={`${linkButton} inline-flex items-center gap-1`} disabled={busy} onClick={() => lineAction(line.id, 'unmatch')}>
                               <Undo2 size={12} /> Not this one
@@ -531,6 +579,16 @@ export default function BankingPage() {
                                     </option>
                                   ))}
                                 </select>
+                              )}
+                              {!line.possibleDuplicate && (
+                                <button
+                                  type="button"
+                                  className={`${linkButton} inline-flex items-center gap-1`}
+                                  disabled={busy}
+                                  onClick={() => categoriseMutation.mutate([line.id])}
+                                >
+                                  <Sparkles size={12} /> Categorise
+                                </button>
                               )}
                               <button type="button" className={linkButton} disabled={busy} onClick={() => lineAction(line.id, 'exclude', { excluded: true })}>
                                 Set aside

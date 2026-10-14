@@ -50,8 +50,12 @@ export class ProposedEntry {
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'ExtractedDocument', default: null })
   extractedDocumentId: Types.ObjectId | null;
 
-  /** 'document' (default) | 'gst2b' — determines which source the entry came from. */
+  /** 'document' (default) | 'gst2b' | 'bank' — determines which source the entry came from. */
   @Prop({ type: String, default: 'document' }) sourceType: string;
+
+  /** Set when sourceType === 'bank': the statement line this entry would account for. */
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'BankStatementLine', default: null, index: true })
+  bankLineId: Types.ObjectId | null;
 
   /** Set when sourceType === 'gst2b'. */
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Gstr2bLine', default: null })
@@ -82,6 +86,13 @@ export class ProposedEntry {
   @Prop({ type: FieldConfidence, required: true }) fieldConfidence: FieldConfidence;
   @Prop({ type: [String], default: [] }) rawWarnings: string[];
 
+  /**
+   * Why the main account was chosen: a past choice, an HSN/SAC or keyword
+   * rule, the model, or nothing fitting. Shown to the reviewer beside it.
+   */
+  @Prop({ type: Object, default: null })
+  category: { source: 'learned' | 'rule' | 'ai' | 'default'; reason: string; accountName: string; confidence: number } | null;
+
   // ── AI-suggested journal lines ────────────────────────────────────────
   @Prop({ type: [SuggestedLine], required: true }) suggestedLines: SuggestedLine[];
 
@@ -99,4 +110,9 @@ export class ProposedEntry {
 
 export const ProposedEntrySchema = SchemaFactory.createForClass(ProposedEntry);
 ProposedEntrySchema.index({ orgId: 1, status: 1 });
+// One proposal in review per bank line, however many times it is sent to be categorised.
+ProposedEntrySchema.index(
+  { orgId: 1, bankLineId: 1 },
+  { unique: true, partialFilterExpression: { bankLineId: { $type: 'objectId' }, status: ProposedEntryStatus.PROPOSED } },
+);
 ProposedEntrySchema.plugin(tenantIsolationPlugin);
