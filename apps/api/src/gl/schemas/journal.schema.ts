@@ -25,7 +25,11 @@ export class Journal {
   @Prop({ type: String, enum: Object.values(JournalStatus), default: JournalStatus.POSTED })
   status: JournalStatus;
 
-  /** Links a reversal back to the original journal */
+  /**
+   * Set on a reversal (contra) entry, pointing at the journal it cancels. The
+   * original is never modified, so "has this been reversed?" is answered by
+   * looking for a journal whose reversalOf is its id.
+   */
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Journal', index: true })
   reversalOf?: MongooseSchema.Types.ObjectId;
 
@@ -51,6 +55,13 @@ export const JournalSchema = SchemaFactory.createForClass(Journal);
 // Compound index for uniqueness and efficient queries
 JournalSchema.index({ orgId: 1, voucherType: 1, financialYear: 1, voucherNumber: 1 }, { unique: true });
 JournalSchema.index({ orgId: 1, status: 1 });
+// A journal can be reversed at most once. Keyed on (orgId, reversalOf) rather
+// than reversalOf alone, which would clash with the plain reversalOf index
+// existing databases already carry.
+JournalSchema.index(
+  { orgId: 1, reversalOf: 1 },
+  { unique: true, partialFilterExpression: { reversalOf: { $type: 'objectId' } } },
+);
 
 // ── Invariant 2: enforce Σdebit = Σcredit (balanced journal) ─────────────
 JournalSchema.pre('validate', function (this: Journal) {

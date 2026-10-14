@@ -87,7 +87,7 @@ afterEach(async () => {
   await orgModel.deleteMany({});
   await proposalModel.deleteMany({});
   await billModel.deleteMany({});
-  await auditLogModel.deleteMany({});
+  await auditLogModel.collection.deleteMany({}); // raw: the model refuses deletes (append-only)
 });
 
 // ── Helpers ────────────────────────────────────────────────────────────────────

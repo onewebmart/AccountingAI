@@ -6,6 +6,7 @@ import { AuditLog, AuditLogSchema } from './schemas/audit-log.schema';
 import { LedgerAccount, LedgerAccountSchema } from './schemas/ledger-account.schema';
 import { PostingService } from './posting.service';
 import { AccountsService } from './accounts.service';
+import { AuditService } from './audit.service';
 import { GlController } from './gl.controller';
 
 @Module({
@@ -18,7 +19,7 @@ import { GlController } from './gl.controller';
     ]),
   ],
   controllers: [GlController],
-  providers: [PostingService, AccountsService],
-  exports: [PostingService, AccountsService, MongooseModule],
+  providers: [PostingService, AccountsService, AuditService],
+  exports: [PostingService, AccountsService, AuditService, MongooseModule],
 })
 export class GlModule {}

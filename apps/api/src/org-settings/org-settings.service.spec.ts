@@ -76,7 +76,7 @@ afterEach(async () => {
   await settingsModel.deleteMany({});
   await membershipModel.deleteMany({});
   await userModel.deleteMany({});
-  await auditLogModel.deleteMany({});
+  await auditLogModel.collection.deleteMany({}); // raw: the model refuses deletes (append-only)
 });
 
 // ── Helpers ────────────────────────────────────────────────────────────────────

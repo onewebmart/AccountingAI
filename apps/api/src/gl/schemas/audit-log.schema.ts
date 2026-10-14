@@ -25,8 +25,24 @@ export class AuditLog {
   @Prop({ required: true })
   performedBy: string;
 
+  /** The entity's relevant fields before and after the change (Invariant 6). */
+  @Prop({ type: Object, default: null })
+  before?: Record<string, unknown> | null;
+
+  @Prop({ type: Object, default: null })
+  after?: Record<string, unknown> | null;
+
   @Prop({ type: Object })
   meta?: Record<string, unknown>;
 }
 
 export const AuditLogSchema = SchemaFactory.createForClass(AuditLog);
+
+// Append-only: an audit trail that can be edited proves nothing.
+AuditLogSchema.pre(
+  ['updateOne', 'updateMany', 'findOneAndUpdate', 'replaceOne', 'findOneAndReplace',
+    'deleteOne', 'deleteMany', 'findOneAndDelete'],
+  function () {
+    throw new Error('Audit log entries are append-only and cannot be changed or deleted.');
+  },
+);

@@ -82,18 +82,7 @@ export class JournalsService {
     );
 
     const accountNames = await this.accountNameMap(orgId);
-
-    // A reversal points back at its original via reversalOf; build the inverse
-    // lookup so the original row can show which voucher reversed it.
-    const reversedByMap = new Map<string, string>();
-    for (const j of journals) {
-      if (j.reversalOf) {
-        reversedByMap.set(
-          j.reversalOf.toString(),
-          formatVoucherNumber(j.voucherType, j.financialYear, j.voucherNumber),
-        );
-      }
-    }
+    const reversedByMap = await this.reversedByMap(orgId, journals);
 
     return journals.map((j) => this.toListItem(j, accountNames, reversedByMap));
   }
@@ -102,7 +91,30 @@ export class JournalsService {
     const journal = await withOrg(orgId, () => this.journalModel.findById(id).exec());
     if (!journal) throw new NotFoundException('Voucher not found.');
     const accountNames = await this.accountNameMap(orgId);
-    return this.toListItem(journal, accountNames, new Map());
+    const reversedByMap = await this.reversedByMap(orgId, [journal]);
+    return this.toListItem(journal, accountNames, reversedByMap);
+  }
+
+  /**
+   * original id → voucher number of the reversal that cancels it. A reversal
+   * points back at its original via reversalOf; it is looked up by id rather
+   * than within the page, because it is dated the day it was made and often
+   * falls outside the original's date range or financial year.
+   */
+  private async reversedByMap(
+    orgId: string,
+    journals: JournalDocument[],
+  ): Promise<Map<string, string>> {
+    if (!journals.length) return new Map();
+    const reversals = await withOrg(orgId, () =>
+      this.journalModel.find({ reversalOf: { $in: journals.map((j) => j._id) } }).exec(),
+    );
+    return new Map(
+      reversals.map((r) => [
+        r.reversalOf!.toString(),
+        formatVoucherNumber(r.voucherType, r.financialYear, r.voucherNumber),
+      ]),
+    );
   }
 
   private toListItem(
@@ -112,6 +124,7 @@ export class JournalsService {
   ): JournalListItem {
     const totalDebitPaise = j.lines.reduce((s, l) => s + l.debitPaise, 0);
     const totalCreditPaise = j.lines.reduce((s, l) => s + l.creditPaise, 0);
+    const reversedBy = reversedByMap.get(j._id.toString());
 
     return {
       _id: j._id.toString(),
@@ -121,9 +134,11 @@ export class JournalsService {
       description: j.narration ?? '—',
       totalDebitPaise,
       totalCreditPaise,
-      status: j.status,
+      // A reversed original stays "posted" in the ledger (Invariant 3); it is
+      // shown as reversed because a contra entry now cancels it.
+      status: reversedBy ? JournalStatus.REVERSED : j.status,
       financialYear: j.financialYear,
-      reversedBy: reversedByMap.get(j._id.toString()),
+      reversedBy,
       lines: j.lines.map((l) => ({
         accountId: l.accountId?.toString() ?? '',
         accountName: accountNames.get(l.accountId?.toString() ?? '') ?? l.description ?? 'Unmapped',

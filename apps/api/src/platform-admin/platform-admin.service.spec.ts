@@ -82,7 +82,7 @@ afterAll(async () => {
 
 afterEach(async () => {
   await usageMeterModel.deleteMany({});
-  await auditLogModel.deleteMany({});
+  await auditLogModel.collection.deleteMany({}); // raw: the model refuses deletes (append-only)
   await subscriptionModel.deleteMany({});
   await featureFlagModel.deleteMany({});
   await orgModel.deleteMany({});

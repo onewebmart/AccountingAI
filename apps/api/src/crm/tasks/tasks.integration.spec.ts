@@ -68,7 +68,7 @@ beforeAll(async () => {
 beforeEach(async () => {
   await taskModel.deleteMany({}).exec();
   await orgModel.deleteMany({}).exec();
-  await auditModel.deleteMany({}).exec();
+  await auditModel.collection.deleteMany({}); // raw: the model refuses deletes (append-only)
 });
 
 afterAll(async () => {

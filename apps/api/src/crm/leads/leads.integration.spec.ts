@@ -113,7 +113,7 @@ beforeEach(async () => {
   fakeQualifier.qualify.mockResolvedValue(GOOD_VERDICT);
   await leadModel.deleteMany({}).exec();
   await messageModel.deleteMany({}).exec();
-  await auditModel.deleteMany({}).exec();
+  await auditModel.collection.deleteMany({}); // raw: the model refuses deletes (append-only)
 });
 
 afterAll(async () => {

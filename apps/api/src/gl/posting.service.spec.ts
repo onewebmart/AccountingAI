@@ -6,6 +6,8 @@
  *  2. Posted journal cannot be updated (append-only)
  *  3. Concurrent postings get gapless sequential voucher numbers
  *  4. reverse() produces a balanced contra entry, original unchanged
+ *  5. A reversal nets to zero, happens at most once, and is filed by its own date
+ *  6. inTransaction() commits or rolls back a caller's posting as one unit
  *
  * All assertions run against a real MongoDB RS (transactions required).
  */
@@ -17,7 +19,8 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { ConfigModule } from '@nestjs/config';
 import configuration from '../config/configuration';
 import { GlModule } from './gl.module';
-import { PostingService } from './posting.service';
+import { PostingService, financialYearOf } from './posting.service';
+import { Counter, CounterDocument } from './schemas/counter.schema';
 import { VoucherType, JournalStatus } from '@ai-accounting/shared';
 import { Journal, JournalSchema } from './schemas/journal.schema';
 import { getModelToken } from '@nestjs/mongoose';
@@ -27,6 +30,7 @@ import { JournalDocument } from './schemas/journal.schema';
 let moduleRef: TestingModule;
 let postingService: PostingService;
 let journalModel: Model<JournalDocument>;
+let counterModel: Model<CounterDocument>;
 
 const ORG_ID = new Types.ObjectId().toString();
 const USER_ID = new Types.ObjectId().toString();
@@ -62,6 +66,9 @@ beforeAll(async () => {
 
   postingService = moduleRef.get(PostingService);
   journalModel = moduleRef.get<Model<JournalDocument>>(getModelToken(Journal.name));
+  counterModel = moduleRef.get<Model<CounterDocument>>(getModelToken(Counter.name));
+  // The one-reversal-per-journal guarantee is a unique index; wait for it.
+  await journalModel.init();
 }, 60_000);
 
 afterAll(async () => {
@@ -216,20 +223,104 @@ describe('Test 4 — reverse() produces a balanced contra entry', () => {
     }
   });
 
-  it('original journal status becomes REVERSED', async () => {
+  it('original journal is left untouched — still POSTED, no link added', async () => {
     const original = await journalModel.findById(originalId).exec();
-    expect(original?.status).toBe(JournalStatus.REVERSED);
+    expect(original?.status).toBe(JournalStatus.POSTED);
+    expect(original?.reversalOf).toBeUndefined();
   });
 
   it('reversal journal references the original via reversalOf', async () => {
-    // reversalOf is on the original pointing to the reversal — check the reversal's narration references the original number
     const reversal = await journalModel.findById(reversalId).exec();
-    expect(reversal?.narration).toMatch(/reversal/i);
+    expect(reversal?.status).toBe(JournalStatus.POSTED);
+    expect(reversal?.reversalOf?.toString()).toBe(originalId);
   });
 
   it('cannot reverse an already-reversed journal', async () => {
     await expect(postingService.reverse(originalId, USER_ID)).rejects.toThrow(
-      /only posted journals/i,
+      /already been reversed/i,
     );
+  });
+
+  it('cannot reverse a reversal', async () => {
+    await expect(postingService.reverse(reversalId, USER_ID)).rejects.toThrow(
+      /itself a reversal/i,
+    );
+  });
+});
+
+// ── Test 5 ────────────────────────────────────────────────────────────────
+describe('Test 5 — a reversal cancels its original exactly once', () => {
+  it('nets every account to zero across posted journals', async () => {
+    // Reports sum journals with status "posted". Reversing used to flip the
+    // original out of that set, so the books showed the contra entry alone.
+    const orgId = new Types.ObjectId().toString();
+    const original = await postingService.post({ ...balancedInput(ACCOUNT_CASH, ACCOUNT_SALES, 10_000_00), orgId });
+    await postingService.reverse(original._id.toString(), USER_ID);
+
+    const posted = await journalModel.find({ orgId, status: JournalStatus.POSTED }).exec();
+    expect(posted).toHaveLength(2);
+
+    const net = new Map<string, number>();
+    for (const j of posted) {
+      for (const l of j.lines) {
+        const key = l.accountId.toString();
+        net.set(key, (net.get(key) ?? 0) + l.debitPaise - l.creditPaise);
+      }
+    }
+    expect([...net.values()]).toEqual([0, 0]);
+  });
+
+  it('allows only one of several simultaneous reversals', async () => {
+    const orgId = new Types.ObjectId().toString();
+    const original = await postingService.post({ ...balancedInput(), orgId });
+
+    const results = await Promise.allSettled(
+      Array.from({ length: 5 }, () => postingService.reverse(original._id.toString(), USER_ID)),
+    );
+
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+    for (const r of results.filter((r): r is PromiseRejectedResult => r.status === 'rejected')) {
+      expect(String(r.reason)).toMatch(/already been reversed/i);
+    }
+    expect(await journalModel.countDocuments({ reversalOf: original._id })).toBe(1);
+  });
+
+  it('files the reversal under the financial year of its own date', async () => {
+    // The original is dated 2024-04-01 (FY 2024-25); the reversal is dated
+    // today, so it must not be filed under 2024-25 with a date outside it.
+    const original = await postingService.post(balancedInput());
+    const reversal = await postingService.reverse(original._id.toString(), USER_ID);
+    expect(reversal.financialYear).toBe(financialYearOf(reversal.date));
+  });
+});
+
+describe('financialYearOf', () => {
+  it.each([
+    ['2026-04-01', '2026-27'],
+    ['2026-03-31', '2025-26'],
+    ['2027-01-15', '2026-27'],
+    ['1999-12-31', '1999-00'],
+  ])('%s is in FY %s', (date, fy) => {
+    expect(financialYearOf(date)).toBe(fy);
+  });
+});
+
+// ── Test 6 ────────────────────────────────────────────────────────────────
+describe('Test 6 — inTransaction() makes a caller\'s posting all-or-nothing', () => {
+  it('rolls back the journal and its voucher number if the caller fails', async () => {
+    const orgId = new Types.ObjectId().toString();
+
+    await expect(
+      postingService.inTransaction(async (session) => {
+        await postingService.post({ ...balancedInput(), orgId }, session);
+        throw new Error('status claim failed after posting');
+      }),
+    ).rejects.toThrow(/status claim failed/);
+
+    expect(await journalModel.countDocuments({ orgId })).toBe(0);
+    // The counter rolled back too, so the next voucher is still number 1 — no gap.
+    expect(await counterModel.findById(`${orgId}:${VoucherType.JOURNAL}:${FY}`).exec()).toBeNull();
+    const next = await postingService.post({ ...balancedInput(), orgId });
+    expect(next.voucherNumber).toBe(1);
   });
 });

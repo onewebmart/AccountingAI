@@ -117,7 +117,7 @@ beforeEach(async () => {
   jest.clearAllMocks();
   await invoiceModel.deleteMany({}).exec();
   await messageModel.deleteMany({}).exec();
-  await auditModel.deleteMany({}).exec();
+  await auditModel.collection.deleteMany({}); // raw: the model refuses deletes (append-only)
   await orgModel.deleteMany({}).exec();
   // Use the app's own connection — the global mongoose.connection is not it.
   await counterModel.deleteMany({}).exec();
