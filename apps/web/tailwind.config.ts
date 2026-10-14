@@ -24,14 +24,31 @@ const config: Config = {
           50: '#FFFBF2',
           100: '#FFF4DC',
         },
+        // `brand` is what most pages wrote (focus rings, active tabs, primary
+        // cards), but it was never defined, so those classes rendered nothing.
+        // It is the saffron scale under the name the pages use.
+        brand: {
+          50: '#FFF4E6',
+          200: '#FFC078',
+          400: '#FF922B',
+          500: '#F76707',
+          600: '#E8590C',
+          700: '#C84A06',
+        },
         // Neutrals
         ink: {
+          // 300 and 600 are used across the pages and were missing.
+          300: '#C9BDB0',
           400: '#A8998A',
           500: '#7A6E60',
+          600: '#5A5045',
           700: '#3A322A',
           900: '#1F1A15',
         },
         line: {
+          // Row dividers: a step lighter than borders. Used on 30-odd tables
+          // but never defined, so the dividers were missing.
+          100: '#F3EDE3',
           200: '#EBE3D7',
         },
         surface: {
