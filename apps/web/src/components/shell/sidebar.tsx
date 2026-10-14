@@ -14,6 +14,7 @@ import {
   BarChart3,
   Lightbulb,
   Settings,
+  Repeat,
   BookOpen,
   Briefcase,
   Users,
@@ -74,6 +75,7 @@ const NAV_GROUPS: NavGroup[] = [
       { href: '/sales', label: 'Sales', icon: <TrendingUp size={18} /> },
       { href: '/purchase', label: 'Purchase', icon: <ShoppingCart size={18} /> },
       { href: '/banking', label: 'Banking', icon: <Building2 size={18} /> },
+      { href: '/recurring', label: 'Recurring', icon: <Repeat size={18} /> },
     ],
   },
   {

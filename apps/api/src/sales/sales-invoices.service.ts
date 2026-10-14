@@ -43,6 +43,7 @@ export interface InvoiceListItem {
   financialYear: string | null;
   journalId: string | null;
   sourceDocumentId: string | null;
+  recurringTemplateId: string | null;
 }
 
 export interface CreateInvoiceInput {
@@ -70,6 +71,8 @@ export interface CreateInvoiceInput {
     taxRatePct?: number;
   }>;
   notes?: string | null;
+  /** Set when a recurring template drafts this invoice. */
+  recurringTemplateId?: string | null;
 }
 
 function getFY(dateStr: string): string {
@@ -108,6 +111,7 @@ export class SalesInvoicesService {
       amountsPaise: input.amountsPaise,
       lineItems: input.lineItems ?? [],
       notes: input.notes ?? null,
+      recurringTemplateId: input.recurringTemplateId ? new Types.ObjectId(input.recurringTemplateId) : null,
     });
     await this.auditService.record({
       orgId: input.orgId,
@@ -162,6 +166,7 @@ export class SalesInvoicesService {
         financialYear: i.financialYear ?? null,
         journalId: i.journalId?.toString() ?? null,
         sourceDocumentId: i.sourceDocumentId?.toString() ?? null,
+        recurringTemplateId: i.recurringTemplateId?.toString() ?? null,
       };
     });
   }
@@ -310,8 +315,16 @@ export class SalesInvoicesService {
         session,
       );
 
+      // An invoice typed without a number, or made from a recurring template,
+      // takes the next serial for its year. The series is its own, not the
+      // SALES voucher numbers, which scanned invoices also use, so it has no
+      // gaps. A reversed and re-posted invoice keeps the number it had.
+      const invoiceNumber =
+        invoice.invoiceNumber ??
+        `INV/${fy}/${String(await this.postingService.nextDocumentNumber(orgId, 'INVOICE_SERIAL', fy, session)).padStart(4, '0')}`;
+
       return this.invoiceModel
-        .findByIdAndUpdate(id, { $set: { journalId: journal._id } }, { new: true, session })
+        .findByIdAndUpdate(id, { $set: { journalId: journal._id, invoiceNumber } }, { new: true, session })
         .exec();
     });
 

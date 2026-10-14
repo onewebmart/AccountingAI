@@ -48,6 +48,7 @@ export interface BillListItem {
   financialYear: string | null;
   journalId: string | null;
   sourceDocumentId: string | null;
+  recurringTemplateId: string | null;
 }
 
 export interface CreateBillInput {
@@ -80,6 +81,8 @@ export interface CreateBillInput {
   /** Overrides the vendor's TDS section; 'none' deducts nothing. */
   tdsSection?: string;
   tdsRateBps?: number;
+  /** Set when a recurring template drafts this bill. */
+  recurringTemplateId?: string | null;
 }
 
 function getFY(dateStr: string): string {
@@ -144,6 +147,7 @@ export class PurchaseBillsService {
       notes: input.notes ?? null,
       isReverseCharge: input.isReverseCharge ?? false,
       tds,
+      recurringTemplateId: input.recurringTemplateId ? new Types.ObjectId(input.recurringTemplateId) : null,
     });
     await this.auditService.record({
       orgId: input.orgId,
@@ -210,6 +214,7 @@ export class PurchaseBillsService {
         journalId: b.journalId?.toString() ?? null,
         // Null for a manual entry; set when the bill was read off an upload.
         sourceDocumentId: b.sourceDocumentId?.toString() ?? null,
+        recurringTemplateId: b.recurringTemplateId?.toString() ?? null,
       };
     });
   }

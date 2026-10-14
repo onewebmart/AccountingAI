@@ -1,0 +1,270 @@
+/**
+ * Integration tests — recurring documents and payment reminders.
+ *
+ *  ✓ A recurring bill drafts each missed month, dated and due as set, never posted
+ *  ✓ Two runs at once draft each month once
+ *  ✓ An end date ends the template; resuming skips the paused months
+ *  ✓ A failed draft hands its date back for tomorrow, with the reason
+ *  ✓ A recurring invoice drafts, and takes its serial when posted
+ *  ✓ The ladder is off until switched on, sends each rung once, and jumps to the latest rung
+ *  ✓ A customer with no email or phone is reported, not skipped silently
+ *  ✓ Chasing one invoice works with the ladder off, but not twice in a day nor once paid
+ *  ✓ Delivery marks the reminder sent through the mock adapter
+ */
+import 'reflect-metadata';
+import mongoose, { Model, Types } from 'mongoose';
+import { Test, TestingModule } from '@nestjs/testing';
+import { ConfigModule } from '@nestjs/config';
+import { MongooseModule, getModelToken } from '@nestjs/mongoose';
+import { getQueueToken } from '@nestjs/bullmq';
+import { BillStatus, InvoiceStatus } from '@ai-accounting/shared';
+import configuration from '../config/configuration';
+import { testMongoUri } from '../test-utils/mongo';
+import { RecurringService } from './recurring.service';
+import { BOOKS_AUTOMATION_QUEUE, composeReminder, RemindersService } from './reminders.service';
+import { RecurringTemplate, RecurringTemplateSchema } from './schemas/recurring-template.schema';
+import { PaymentReminder, PaymentReminderSchema } from './schemas/payment-reminder.schema';
+import { ReminderSettings, ReminderSettingsSchema } from './schemas/reminder-settings.schema';
+import { PurchaseBillsService } from '../purchase/purchase-bills.service';
+import { SalesInvoicesService } from '../sales/sales-invoices.service';
+import { PostingService } from '../gl/posting.service';
+import { AccountsService } from '../gl/accounts.service';
+import { AuditService } from '../gl/audit.service';
+import { Vendor, VendorSchema } from '../purchase/schemas/vendor.schema';
+import { PurchaseBill, PurchaseBillSchema } from '../purchase/schemas/purchase-bill.schema';
+import { Customer, CustomerSchema } from '../sales/schemas/customer.schema';
+import { SalesInvoice, SalesInvoiceSchema } from '../sales/schemas/sales-invoice.schema';
+import { OrgSettings, OrgSettingsSchema } from '../org-settings/schemas/org-settings.schema';
+import { Journal, JournalSchema } from '../gl/schemas/journal.schema';
+import { Counter, CounterSchema } from '../gl/schemas/counter.schema';
+import { AuditLog, AuditLogSchema } from '../gl/schemas/audit-log.schema';
+import { LedgerAccount, LedgerAccountSchema } from '../gl/schemas/ledger-account.schema';
+import { MESSAGING_PROVIDER } from '../crm/messaging/messaging.provider.interface';
+import { MockMessagingProvider } from '../crm/messaging/mock-messaging.provider';
+
+const ACTOR = new Types.ObjectId().toString();
+const queue = { add: jest.fn().mockResolvedValue(undefined) };
+
+let moduleRef: TestingModule;
+let recurring: RecurringService;
+let reminders: RemindersService;
+let invoicesSvc: SalesInvoicesService;
+let vendors: Model<unknown>;
+let customers: Model<unknown>;
+let bills: Model<{ status: string; billDate: string; dueDate: string | null; recurringTemplateId: unknown; notes: string | null }>;
+let invoices: Model<{ status: string; invoiceNumber: string | null; recurringTemplateId: unknown }>;
+let templates: Model<{ status: string; nextRunDate: string | null; lastError: string | null; generated: unknown[] }>;
+let reminderModel: Model<{ rung: string; status: string; isMock: boolean; to: string; channel: string }>;
+
+beforeAll(async () => {
+  moduleRef = await Test.createTestingModule({
+    imports: [
+      ConfigModule.forRoot({ isGlobal: true, load: [configuration] }),
+      MongooseModule.forRoot(testMongoUri()),
+      MongooseModule.forFeature([
+        { name: RecurringTemplate.name, schema: RecurringTemplateSchema },
+        { name: PaymentReminder.name, schema: PaymentReminderSchema },
+        { name: ReminderSettings.name, schema: ReminderSettingsSchema },
+        { name: Vendor.name, schema: VendorSchema },
+        { name: PurchaseBill.name, schema: PurchaseBillSchema },
+        { name: Customer.name, schema: CustomerSchema },
+        { name: SalesInvoice.name, schema: SalesInvoiceSchema },
+        { name: OrgSettings.name, schema: OrgSettingsSchema },
+        { name: Journal.name, schema: JournalSchema },
+        { name: Counter.name, schema: CounterSchema },
+        { name: AuditLog.name, schema: AuditLogSchema },
+        { name: LedgerAccount.name, schema: LedgerAccountSchema },
+      ]),
+    ],
+    providers: [
+      RecurringService,
+      RemindersService,
+      PurchaseBillsService,
+      SalesInvoicesService,
+      PostingService,
+      AccountsService,
+      AuditService,
+      { provide: MESSAGING_PROVIDER, useClass: MockMessagingProvider },
+      { provide: getQueueToken(BOOKS_AUTOMATION_QUEUE), useValue: queue },
+    ],
+  }).compile();
+
+  recurring = moduleRef.get(RecurringService);
+  reminders = moduleRef.get(RemindersService);
+  invoicesSvc = moduleRef.get(SalesInvoicesService);
+  vendors = moduleRef.get(getModelToken(Vendor.name));
+  customers = moduleRef.get(getModelToken(Customer.name));
+  bills = moduleRef.get(getModelToken(PurchaseBill.name));
+  invoices = moduleRef.get(getModelToken(SalesInvoice.name));
+  templates = moduleRef.get(getModelToken(RecurringTemplate.name));
+  reminderModel = moduleRef.get(getModelToken(PaymentReminder.name));
+  await reminderModel.init();
+}, 60_000);
+
+afterAll(async () => {
+  await moduleRef.close();
+  await mongoose.disconnect();
+});
+
+const RENT = { taxableValue: 5000000, cgst: 450000, sgst: 450000, igst: 0, cess: 0, total: 5900000 };
+
+async function org() {
+  const orgId = new Types.ObjectId().toString();
+  const vendor = await vendors.create({ orgId, name: 'Landlord LLP', gstin: '27AAACR5055K1Z5' });
+  const customer = await customers.create({ orgId, name: 'Rao Traders', email: 'accounts@rao.example', phone: null });
+  return { orgId, vendorId: String(vendor._id), customerId: String(customer._id) };
+}
+
+function rent(orgId: string, vendorId: string, extra: Record<string, unknown> = {}) {
+  return recurring.create(orgId, ACTOR, {
+    kind: 'bill', name: 'Office rent', partyId: vendorId, frequency: 'monthly', dayOfMonth: 31,
+    startDate: '2026-07-01', dueInDays: 10, amountsPaise: RENT, ...extra,
+  });
+}
+
+describe('recurring bills', () => {
+  it('drafts each missed month, dated and due as set, and stops there', async () => {
+    const { orgId, vendorId } = await org();
+    const template = await rent(orgId, vendorId);
+    expect(template.nextRunDate).toBe('2026-07-31');
+
+    const run = await recurring.runDue(orgId, '2026-09-15');
+    expect(run.drafted.map((d) => d.documentDate)).toEqual(['2026-07-31', '2026-08-31']);
+    const drafted = await bills.find({ orgId }).sort({ billDate: 1 }).lean().exec();
+    expect(drafted.map((b) => [b.status, b.billDate, b.dueDate, String(b.recurringTemplateId), b.notes])).toEqual([
+      [BillStatus.DRAFT, '2026-07-31', '2026-08-10', String(template._id), 'Office rent'],
+      [BillStatus.DRAFT, '2026-08-31', '2026-09-10', String(template._id), 'Office rent'],
+    ]);
+    expect((await templates.findById(template._id).lean().exec())?.nextRunDate).toBe('2026-09-30');
+    expect((await recurring.runDue(orgId, '2026-09-15')).drafted).toHaveLength(0);
+  });
+
+  it('drafts each month once when two runs race', async () => {
+    const { orgId, vendorId } = await org();
+    await rent(orgId, vendorId);
+    const [a, b] = await Promise.all([recurring.runDue(orgId, '2026-08-31'), recurring.runDue(orgId, '2026-08-31')]);
+    expect(a.drafted.length + b.drafted.length).toBe(2);
+    expect(await bills.countDocuments({ orgId })).toBe(2);
+  });
+
+  it('ends at the end date, and resuming skips the paused months', async () => {
+    const { orgId, vendorId } = await org();
+    const ending = await rent(orgId, vendorId, { endDate: '2026-08-31' });
+    await recurring.runDue(orgId, '2026-09-15');
+    expect(await templates.findById(ending._id).lean().exec()).toMatchObject({ status: 'ended', nextRunDate: null });
+
+    const paused = await rent(orgId, vendorId, { name: 'Internet' });
+    await recurring.setStatus(orgId, String(paused._id), ACTOR, 'paused');
+    expect((await recurring.runDue(orgId, '2026-12-10')).drafted.filter((d) => d.name === 'Internet')).toHaveLength(0);
+    const resumed = await recurring.setStatus(orgId, String(paused._id), ACTOR, 'active', '2026-12-10');
+    expect(resumed.nextRunDate).toBe('2026-12-31');
+  });
+
+  it('hands the date back when a draft fails, with the reason', async () => {
+    const { orgId, vendorId } = await org();
+    const template = await rent(orgId, vendorId);
+    await vendors.deleteOne({ _id: vendorId });
+    const run = await recurring.runDue(orgId, '2026-08-05');
+    expect(run.failed.map((f) => f.error)).toEqual(['Vendor not found']);
+    expect(await templates.findById(template._id).lean().exec()).toMatchObject({
+      status: 'active', nextRunDate: '2026-07-31', lastError: 'Vendor not found',
+    });
+  });
+
+  it('refuses a total that is not the sum of its parts, and another org’s vendor', async () => {
+    const { orgId, vendorId } = await org();
+    await expect(rent(orgId, vendorId, { amountsPaise: { ...RENT, total: 1 } })).rejects.toThrow(/taxable value plus the taxes/);
+    const other = await org();
+    await expect(rent(orgId, other.vendorId)).rejects.toThrow(/Vendor not found/);
+  });
+});
+
+describe('recurring invoices', () => {
+  it('drafts an invoice that takes its serial when posted', async () => {
+    const { orgId, customerId } = await org();
+    await recurring.create(orgId, ACTOR, {
+      kind: 'invoice', name: 'Monthly retainer', partyId: customerId, frequency: 'monthly', dayOfMonth: 1,
+      startDate: '2026-10-01', amountsPaise: { taxableValue: 2000000, cgst: 180000, sgst: 180000, igst: 0, cess: 0, total: 2360000 },
+    });
+    const run = await recurring.runDue(orgId, '2026-10-01');
+    expect(run.drafted).toHaveLength(1);
+    const draft = await invoices.findById(run.drafted[0].documentId).lean().exec();
+    expect(draft).toMatchObject({ status: InvoiceStatus.DRAFT, invoiceNumber: null });
+
+    await invoicesSvc.post(run.drafted[0].documentId, orgId, ACTOR);
+    expect((await invoices.findById(run.drafted[0].documentId).lean().exec())?.invoiceNumber).toBe('INV/2026-27/0001');
+  });
+});
+
+describe('payment reminders', () => {
+  async function openInvoice(orgId: string, customerId: string, dueDate = '2026-10-10') {
+    const inv = await invoicesSvc.create({
+      orgId, customerId, invoiceNumber: `INV-${new Types.ObjectId().toString().slice(-5)}`, invoiceDate: '2026-09-25', dueDate,
+      amountsPaise: { taxableValue: 100000, cgst: 9000, sgst: 9000, igst: 0, cess: 0, total: 118000 },
+    });
+    await invoicesSvc.send(String(inv._id), orgId, ACTOR);
+    return String(inv._id);
+  }
+
+  it('does nothing until switched on, then climbs the ladder a rung at a time', async () => {
+    const { orgId, customerId } = await org();
+    const invoiceId = await openInvoice(orgId, customerId);
+    expect(await reminders.runDue(orgId, '2026-10-07')).toMatchObject({ enabled: false, queued: 0 });
+
+    await reminders.updateSettings(orgId, ACTOR, { enabled: true });
+    expect((await reminders.runDue(orgId, '2026-10-05')).queued).toBe(0); // five days early: nothing yet
+    expect((await reminders.runDue(orgId, '2026-10-07')).queued).toBe(1);
+    expect((await reminders.runDue(orgId, '2026-10-08')).queued).toBe(0); // same rung, already sent
+    expect((await reminders.runDue(orgId, '2026-10-10')).queued).toBe(1);
+    // Six weeks late, having missed 7 and 15: one 30-day reminder, not three.
+    expect((await reminders.runDue(orgId, '2026-11-25')).queued).toBe(1);
+    expect((await reminders.runDue(orgId, '2026-11-26')).queued).toBe(0);
+
+    const sent = await reminderModel.find({ orgId, invoiceId }).sort({ createdAt: 1 }).lean().exec();
+    expect(sent.map((r) => [r.rung, r.channel, r.to])).toEqual([
+      ['before_due', 'email', 'accounts@rao.example'],
+      ['on_due', 'email', 'accounts@rao.example'],
+      ['late_30', 'email', 'accounts@rao.example'],
+    ]);
+    expect(queue.add).toHaveBeenCalledWith('send-reminder', expect.objectContaining({ orgId }), expect.objectContaining({ attempts: 3 }));
+  });
+
+  it('reports customers it cannot reach', async () => {
+    const { orgId } = await org();
+    const silent = await customers.create({ orgId, name: 'No Contact Co', email: null, phone: null });
+    await openInvoice(orgId, String(silent._id), '2026-10-01');
+    await reminders.updateSettings(orgId, ACTOR, { enabled: true });
+    const run = await reminders.runDue(orgId, '2026-10-01');
+    expect(run.queued).toBe(0);
+    expect(run.noContact.map((c) => c.customerName)).toEqual(['No Contact Co']);
+  });
+
+  it('chases one invoice on request, once a day, and never a paid one', async () => {
+    const { orgId, customerId } = await org();
+    const invoiceId = await openInvoice(orgId, customerId);
+    const reminder = await reminders.sendNow(orgId, invoiceId, ACTOR, '2026-10-20');
+    expect(reminder.rung).toBe('manual');
+    expect(reminder.body).toContain('was due on 10 Oct 2026');
+    await expect(reminders.sendNow(orgId, invoiceId, ACTOR, '2026-10-20')).rejects.toThrow(/within the last day/);
+
+    await invoicesSvc.post(invoiceId, orgId, ACTOR);
+    await invoicesSvc.markPaid(invoiceId, orgId, ACTOR, '2026-10-21');
+    await expect(reminders.sendNow(orgId, invoiceId, ACTOR)).rejects.toThrow(/already paid/);
+  });
+
+  it('marks a delivered reminder sent, through the mock adapter', async () => {
+    const { orgId, customerId } = await org();
+    const invoiceId = await openInvoice(orgId, customerId);
+    const reminder = await reminders.sendNow(orgId, invoiceId, ACTOR, '2026-10-20');
+    await reminders.deliver(String(reminder._id));
+    expect(await reminderModel.findById(reminder._id).lean().exec()).toMatchObject({ status: 'sent', isMock: true });
+  });
+
+  it('words a late reminder firmly and an early one politely', () => {
+    const base = { customerName: 'Rao Traders', orgName: 'Sharma & Co', invoiceNumber: 'INV-9', outstandingPaise: 118000, dueDate: '2026-10-10' };
+    expect(composeReminder({ ...base, rung: 'late_7', daysLate: 7 }).subject).toBe('Invoice INV-9 is 7 days overdue');
+    const early = composeReminder({ ...base, rung: 'before_due', daysLate: -3 });
+    expect(early.subject).toBe('Invoice INV-9 is due on 10 Oct 2026');
+    expect(early.body).toContain('₹1,180.00');
+  });
+});

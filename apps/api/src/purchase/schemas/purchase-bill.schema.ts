@@ -120,6 +120,10 @@ export class PurchaseBill {
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Document', default: null, index: true })
   sourceDocumentId?: MongooseSchema.Types.ObjectId | null;
 
+  /** The recurring template that drafted this, when one did. */
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'RecurringTemplate', default: null })
+  recurringTemplateId?: MongooseSchema.Types.ObjectId | null;
+
 }
 
 export const PurchaseBillSchema = SchemaFactory.createForClass(PurchaseBill);

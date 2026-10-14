@@ -33,6 +33,8 @@ interface Bill {
   amountsPaise: { taxableValue: number; cgst: number; sgst: number; igst: number; cess: number; total: number };
   /** Set when this row was read off an upload; null when typed in by hand. */
   sourceDocumentId?: string | null;
+  /** Set when a recurring schedule drafted this bill. */
+  recurringTemplateId?: string | null;
 }
 
 interface Vendor {
@@ -401,7 +403,18 @@ function AddVendorModal({ onClose, onSuccess, showToast }: AddVendorModalProps) 
  * a figure looks wrong the first question is always "where did this come from",
  * and the answer was not on the screen.
  */
-function SourceChip({ documentId }: { documentId?: string | null }) {
+function SourceChip({ documentId, recurring }: { documentId?: string | null; recurring?: boolean }) {
+  if (recurring) {
+    return (
+      <Link
+        href="/recurring"
+        title="Drafted from a recurring schedule"
+        className="rounded bg-info-bg px-1.5 py-0.5 text-[10px] font-medium text-info-fg hover:underline"
+      >
+        Recurring
+      </Link>
+    );
+  }
   if (!documentId) {
     return (
       <span title="Entered by hand" className="rounded bg-surface-sink px-1.5 py-0.5 text-[10px] font-medium text-ink-500">
@@ -613,7 +626,7 @@ export default function PurchasePage() {
                         <td className="px-4 py-3 font-mono text-ink-600 text-caption">
                           <span className="flex items-center gap-2">
                             {bill.billNumber ?? <span className="text-ink-400">—</span>}
-                            <SourceChip documentId={bill.sourceDocumentId} />
+                            <SourceChip documentId={bill.sourceDocumentId} recurring={!!bill.recurringTemplateId} />
                           </span>
                         </td>
                         <td className="px-4 py-3 text-ink-600">

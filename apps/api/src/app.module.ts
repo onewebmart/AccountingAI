@@ -27,6 +27,7 @@ import { WorkspaceModule } from './workspace/workspace.module';
 import { IngestModule } from './ingest/ingest.module';
 import { TdsModule } from './tds/tds.module';
 import { ClosingModule } from './closing/closing.module';
+import { AutomationModule } from './automation/automation.module';
 
 @Module({
   imports: [
@@ -67,6 +68,7 @@ import { ClosingModule } from './closing/closing.module';
     IngestModule,
     TdsModule,
     ClosingModule,
+    AutomationModule,
     CrmModule,
     WorkspaceModule,
   ],

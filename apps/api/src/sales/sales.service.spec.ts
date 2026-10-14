@@ -401,3 +401,22 @@ describe('SalesInvoicesService — part payments', () => {
     expect(listed?.receivablePaise).toBe(2450000);
   });
 });
+
+describe('SalesInvoicesService — invoice serials', () => {
+  it('numbers an unnumbered invoice from its own gapless series when posted', async () => {
+    const orgId = new Types.ObjectId().toString();
+    const customer = await customersSvc.create({ orgId, name: 'Serial Customer' });
+    const make = (invoiceNumber: string | null) =>
+      invoicesSvc.create({
+        orgId, customerId: customer._id.toString(), invoiceNumber, invoiceDate: '2026-05-02',
+        amountsPaise: { taxableValue: 10000, cgst: 900, sgst: 900, igst: 0, cess: 0, total: 11800 },
+      });
+    const first = await make(null);
+    const typed = await make('MANUAL-7');
+    const second = await make(null);
+
+    for (const inv of [first, typed, second]) await invoicesSvc.post(inv._id.toString(), orgId, ACTOR_ID);
+    const numbers = await Promise.all([first, typed, second].map((i) => invoiceModel.findById(i._id).lean().exec()));
+    expect(numbers.map((i) => i?.invoiceNumber)).toEqual(['INV/2026-27/0001', 'MANUAL-7', 'INV/2026-27/0002']);
+  });
+});

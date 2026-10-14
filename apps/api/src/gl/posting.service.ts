@@ -83,6 +83,25 @@ export class PostingService {
    * Pass `session` to post as part of a caller's transaction (see inTransaction);
    * the caller then owns commit, retry and error handling.
    */
+  /**
+   * The next number in a document series, such as sales invoice serials, from
+   * the same counters as voucher numbers. It runs inside the caller's
+   * transaction, so a number is used only if the document it numbers is saved,
+   * and the series has no gaps (Invariant 7; GST rule 46).
+   */
+  async nextDocumentNumber(
+    orgId: string,
+    series: 'INVOICE_SERIAL',
+    financialYear: string,
+    session: ClientSession,
+  ): Promise<number> {
+    const counter = await this.counterModel
+      .findByIdAndUpdate(`${orgId}:${series}:${financialYear}`, { $inc: { seq: 1 } }, { upsert: true, new: true, session })
+      .exec();
+    if (!counter) throw new Error(`Failed to allocate the next ${series} number.`);
+    return counter.seq;
+  }
+
   async post(input: PostJournalInput, session?: ClientSession): Promise<JournalDocument> {
     if (session) return this.postInSession(input, session);
 

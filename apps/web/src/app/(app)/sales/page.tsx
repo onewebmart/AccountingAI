@@ -36,6 +36,8 @@ interface Invoice {
   amountsPaise: { taxableValue: number; cgst: number; sgst: number; igst: number; cess: number; total: number };
   /** Set when this row was read off an upload; null when typed in by hand. */
   sourceDocumentId?: string | null;
+  /** Set when a recurring schedule drafted this invoice. */
+  recurringTemplateId?: string | null;
 }
 
 interface Customer {
@@ -474,7 +476,18 @@ function AddInvoiceModal({ customers, onClose, onSuccess, showToast }: AddInvoic
  * a figure looks wrong the first question is always "where did this come from",
  * and the answer was not on the screen.
  */
-function SourceChip({ documentId }: { documentId?: string | null }) {
+function SourceChip({ documentId, recurring }: { documentId?: string | null; recurring?: boolean }) {
+  if (recurring) {
+    return (
+      <Link
+        href="/recurring"
+        title="Drafted from a recurring schedule"
+        className="rounded bg-info-bg px-1.5 py-0.5 text-[10px] font-medium text-info-fg hover:underline"
+      >
+        Recurring
+      </Link>
+    );
+  }
   if (!documentId) {
     return (
       <span title="Entered by hand" className="rounded bg-surface-sink px-1.5 py-0.5 text-[10px] font-medium text-ink-500">
@@ -540,6 +553,13 @@ export default function SalesPage() {
       showToast('Invoice sent');
       void queryClient.invalidateQueries({ queryKey: ['sales'] });
     },
+    onError: (e) => showToast((e as Error).message, 'info'),
+  });
+
+  // Chase one invoice now. The API words it, logs it and queues it.
+  const remindMutation = useMutation({
+    mutationFn: (id: string) => api.post<{ to: string }>(`/reminders/invoices/${id}`),
+    onSuccess: (reminder) => showToast(`Reminder sent to ${reminder.to}`),
     onError: (e) => showToast((e as Error).message, 'info'),
   });
 
@@ -697,7 +717,7 @@ export default function SalesPage() {
                       <td className="px-4 py-3 font-mono text-caption text-ink-600">
                         <span className="flex items-center gap-2">
                           {inv.invoiceNumber ?? <span className="text-ink-400">—</span>}
-                          <SourceChip documentId={inv.sourceDocumentId} />
+                          <SourceChip documentId={inv.sourceDocumentId} recurring={!!inv.recurringTemplateId} />
                         </span>
                       </td>
                       <td className="px-4 py-3 text-ink-600">
@@ -867,15 +887,16 @@ export default function SalesPage() {
                   <th className="px-4 py-3 text-left text-caption font-medium text-ink-500">Invoice no.</th>
                   <th className="px-4 py-3 text-left text-caption font-medium text-ink-500">Status</th>
                   <th className="px-4 py-3 text-right text-caption font-medium text-ink-500">Amount</th>
+                  <th className="px-4 py-3" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-line-100">
                 {invoicesQuery.isLoading ? (
                   <tr>
-                    <td colSpan={4} className="px-4 py-8 text-center text-caption text-ink-400">Loading…</td>
+                    <td colSpan={5} className="px-4 py-8 text-center text-caption text-ink-400">Loading…</td>
                   </tr>
                 ) : invoicesQuery.isError ? (
-                  <TableError error={invoicesQuery.error} colSpan={4} onRetry={() => void invoicesQuery.refetch()} />
+                  <TableError error={invoicesQuery.error} colSpan={5} onRetry={() => void invoicesQuery.refetch()} />
                 ) : (
                   invoices.filter((i) => i.status === 'posted' || i.status === 'sent').map((inv) => (
                     <tr key={inv._id} className="bg-surface-card">
@@ -888,6 +909,18 @@ export default function SalesPage() {
                       </td>
                       <td className="px-4 py-3 text-right font-mono font-medium text-ink-900">
                         {formatRupees(inv.outstandingPaise)}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        {inv.outstandingPaise > 0 && (
+                          <button
+                            type="button"
+                            disabled={remindMutation.isPending}
+                            onClick={() => remindMutation.mutate(inv._id)}
+                            className="inline-flex items-center gap-1 text-caption font-medium text-brand-600 hover:underline disabled:opacity-50"
+                          >
+                            <Send size={12} /> Send reminder
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))
