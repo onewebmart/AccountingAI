@@ -20,6 +20,8 @@ interface ApiRecord {
   journalId?: string | null;
   amountPaidPaise?: number;
   payments?: Array<{ _id: string; journalId: string; amountPaise: number; paidOn: string }>;
+  adjustedPaise?: number;
+  adjustments?: Array<{ noteId: string; journalId: string; amountPaise: number; noteDate: string }>;
   sourceDocumentId?: string | null;
   notes?: string | null;
 }
@@ -109,9 +111,16 @@ export function DocumentDetailDialog({
                   <VoucherNumber id={p.journalId} />
                 </Row>
               ))}
+              {(record.adjustments ?? []).map((n) => (
+                <Row key={n.noteId} label={`${kind === 'invoice' ? 'Credit note' : 'Debit note'} ${formatRupees(n.amountPaise)}`}>
+                  <VoucherNumber id={n.journalId} />
+                </Row>
+              ))}
               {record.status !== 'paid' && (
                 <Row label="Still owed">
-                  <span className="font-mono font-semibold">{formatRupees(a.total - (record.amountPaidPaise ?? 0))}</span>
+                  <span className="font-mono font-semibold">
+                    {formatRupees(a.total - (record.amountPaidPaise ?? 0) - (record.adjustedPaise ?? 0))}
+                  </span>
                 </Row>
               )}
             </div>

@@ -7,15 +7,19 @@ import { GlModule } from '../gl/gl.module';
 import { SalesInvoice, SalesInvoiceSchema } from '../sales/schemas/sales-invoice.schema';
 import { PurchaseBill, PurchaseBillSchema } from '../purchase/schemas/purchase-bill.schema';
 import { BankStatementLine, BankStatementLineSchema } from '../banking/schemas/bank-statement-line.schema';
+import { CreditNote, CreditNoteSchema } from '../sales/schemas/credit-note.schema';
+import { DebitNote, DebitNoteSchema } from '../purchase/schemas/debit-note.schema';
 
 @Module({
   imports: [
     GlModule,
-    // A reversal reopens the invoice, bill or bank line that pointed at the voucher.
+    // A reversal reopens the invoice, bill, note or bank line that pointed at the voucher.
     MongooseModule.forFeature([
       { name: SalesInvoice.name, schema: SalesInvoiceSchema },
       { name: PurchaseBill.name, schema: PurchaseBillSchema },
       { name: BankStatementLine.name, schema: BankStatementLineSchema },
+      { name: CreditNote.name, schema: CreditNoteSchema },
+      { name: DebitNote.name, schema: DebitNoteSchema },
     ]),
   ],
   controllers: [JournalsController],

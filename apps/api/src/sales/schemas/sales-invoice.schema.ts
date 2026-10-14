@@ -2,7 +2,13 @@ import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument, Types, Schema as MongooseSchema } from 'mongoose';
 import { InvoiceStatus } from '@ai-accounting/shared';
 import { tenantIsolationPlugin } from '../../database/tenant.plugin';
-import { Settlement, SettlementSchema, settledAmountProp } from '../../gl/schemas/settlement.schema';
+import {
+  Adjustment,
+  AdjustmentSchema,
+  Settlement,
+  SettlementSchema,
+  settledAmountProp,
+} from '../../gl/schemas/settlement.schema';
 
 export type SalesInvoiceDocument = HydratedDocument<SalesInvoice>;
 
@@ -63,6 +69,12 @@ export class SalesInvoice {
 
   /** Each receipt against this document — part payments add one each. */
   @Prop({ type: [SettlementSchema], default: [] }) payments: Settlement[];
+
+  /** Reduced by credit notes, in integer paise — counted against what is owed. */
+  @Prop(settledAmountProp) adjustedPaise: number;
+
+  /** Each credit note against this document. */
+  @Prop({ type: [AdjustmentSchema], default: [] }) adjustments: Adjustment[];
 
   @Prop({ type: String, default: null }) postedBy: string | null;
   /** Timestamp when the invoice was sent to the customer. */

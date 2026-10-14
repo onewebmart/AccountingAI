@@ -37,6 +37,8 @@ import {
   BankStatementLineSchema,
   BankStatementLineDocument,
 } from '../banking/schemas/bank-statement-line.schema';
+import { CreditNote, CreditNoteSchema } from '../sales/schemas/credit-note.schema';
+import { DebitNote, DebitNoteSchema } from '../purchase/schemas/debit-note.schema';
 
 const ACTOR_ID = new Types.ObjectId().toString();
 const amounts = { taxableValue: 847458, cgst: 76271, sgst: 76271, igst: 0, cess: 0, total: 1000000 };
@@ -67,6 +69,8 @@ beforeAll(async () => {
         { name: PurchaseBill.name, schema: PurchaseBillSchema },
         { name: Vendor.name, schema: VendorSchema },
         { name: BankStatementLine.name, schema: BankStatementLineSchema },
+        { name: CreditNote.name, schema: CreditNoteSchema },
+        { name: DebitNote.name, schema: DebitNoteSchema },
       ]),
     ],
     providers: [
@@ -134,7 +138,7 @@ describe('reversing a sale', () => {
     const paid = await invoices.markPaid(invoice._id.toString(), orgId, ACTOR_ID, '2026-10-10');
 
     await expect(reversals.reverse(String(invoice.journalId), orgId, ACTOR_ID)).rejects.toThrow(
-      /has payments against it — reverse its receipts first/,
+      /has receipts or credit notes against it — reverse those first/,
     );
     expect(await journalModel.countDocuments({ orgId, reversalOf: { $exists: true } })).toBe(0);
 

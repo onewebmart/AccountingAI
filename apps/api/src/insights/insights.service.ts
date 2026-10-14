@@ -112,8 +112,15 @@ export class InsightsService {
           $group: {
             _id: null,
             count: { $sum: 1 },
-            // What is still owed, not the bill total — a part-paid bill owes less.
-            totalPaise: { $sum: { $subtract: ['$amountsPaise.total', { $ifNull: ['$amountPaidPaise', 0] }] } },
+            // What is still owed, not the bill total — payments and debit notes reduce it.
+            totalPaise: {
+              $sum: {
+                $subtract: [
+                  '$amountsPaise.total',
+                  { $add: [{ $ifNull: ['$amountPaidPaise', 0] }, { $ifNull: ['$adjustedPaise', 0] }] },
+                ],
+              },
+            },
           },
         },
       ])

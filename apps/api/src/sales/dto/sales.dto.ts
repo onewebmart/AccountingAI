@@ -148,3 +148,18 @@ export class PayInvoiceDto {
   @Min(1)
   amountPaise?: number;
 }
+
+/** Body for raising a credit or debit note against a posted document. */
+export class CreateCreditNoteDto {
+  @IsISO8601({}, { message: 'noteDate must be a date like 2026-10-20' })
+  noteDate: string;
+
+  @IsString()
+  @Length(3, 300, { message: 'Say why the note is raised (3–300 characters)' })
+  reason: string;
+
+  /** Taxable value to take off; tax follows in the original's proportions. */
+  @IsInt({ message: 'taxableValuePaise must be an integer number of paise' })
+  @Min(1)
+  taxableValuePaise: number;
+}

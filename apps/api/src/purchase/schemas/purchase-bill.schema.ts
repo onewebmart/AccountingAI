@@ -2,7 +2,13 @@ import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument, Types, Schema as MongooseSchema } from 'mongoose';
 import { BillStatus } from '@ai-accounting/shared';
 import { tenantIsolationPlugin } from '../../database/tenant.plugin';
-import { Settlement, SettlementSchema, settledAmountProp } from '../../gl/schemas/settlement.schema';
+import {
+  Adjustment,
+  AdjustmentSchema,
+  Settlement,
+  SettlementSchema,
+  settledAmountProp,
+} from '../../gl/schemas/settlement.schema';
 
 export type PurchaseBillDocument = HydratedDocument<PurchaseBill>;
 
@@ -66,6 +72,12 @@ export class PurchaseBill {
 
   /** Each payment against this document — part payments add one each. */
   @Prop({ type: [SettlementSchema], default: [] }) payments: Settlement[];
+
+  /** Reduced by debit notes, in integer paise — counted against what is owed. */
+  @Prop(settledAmountProp) adjustedPaise: number;
+
+  /** Each debit note against this document. */
+  @Prop({ type: [AdjustmentSchema], default: [] }) adjustments: Adjustment[];
 
   /** Actor who posted this bill to the ledger. */
   @Prop({ type: String, default: null }) postedBy: string | null;

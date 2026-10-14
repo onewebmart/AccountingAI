@@ -14,7 +14,8 @@ import { PermissionGuard } from '../auth/guards/permission.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { VendorsService } from './vendors.service';
 import { PurchaseBillsService } from './purchase-bills.service';
-import { CreateVendorDto, CreateBillDto, PayBillDto } from './dto/purchase.dto';
+import { CreateVendorDto, CreateBillDto, PayBillDto, CreateDebitNoteDto } from './dto/purchase.dto';
+import { DebitNotesService } from './debit-notes.service';
 
 interface AuthRequest {
   user: { orgId: string; sub: string };
@@ -26,6 +27,7 @@ export class PurchaseController {
   constructor(
     private readonly vendorsService: VendorsService,
     private readonly billsService: PurchaseBillsService,
+    private readonly debitNotesService: DebitNotesService,
   ) {}
 
   // ── Vendors ───────────────────────────────────────────────────────────────
@@ -90,5 +92,18 @@ export class PurchaseController {
   @RequirePermission(Permission.POST_JOURNAL)
   payBill(@Request() req: AuthRequest, @Param('id') id: string, @Body() body: PayBillDto) {
     return this.billsService.markPaid(id, req.user.orgId, req.user.sub, body?.paidOn, body?.amountPaise);
+  }
+
+  /** Raise and post a debit note against a posted bill — Dr/Cr in proportion, numbered by its voucher. */
+  @Post('bills/:id/debit-notes')
+  @RequirePermission(Permission.POST_JOURNAL)
+  createDebitNote(@Request() req: AuthRequest, @Param('id') id: string, @Body() body: CreateDebitNoteDto) {
+    return this.debitNotesService.create(id, req.user.orgId, req.user.sub, body);
+  }
+
+  @Get('debit-notes')
+  @RequirePermission(Permission.MANAGE_PURCHASE)
+  listDebitNotes(@Request() req: AuthRequest, @Query('billId') billId?: string) {
+    return this.debitNotesService.list(req.user.orgId, billId);
   }
 }

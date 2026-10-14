@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { DocumentUploadButton } from '@/components/shell/document-upload-button';
 import { DocumentDetailDialog, PartyDetailDialog } from '@/components/shell/record-detail-dialogs';
 import { RecordPaymentDialog } from '@/components/shell/record-payment-dialog';
+import { AdjustmentNoteDialog } from '@/components/shell/adjustment-note-dialog';
 import { Plus, ChevronRight } from 'lucide-react';
 import { api } from '@/lib/api';
 import { GST_RATES, GstRate, splitGst, rupeesToPaise, formatPaise } from '@/lib/gst';
@@ -28,6 +29,7 @@ interface Bill {
   /** Paid so far, and still owed — part payments leave both non-zero. */
   amountPaidPaise: number;
   outstandingPaise: number;
+  amountsPaise: { taxableValue: number; cgst: number; sgst: number; igst: number; cess: number; total: number };
   /** Set when this row was read off an upload; null when typed in by hand. */
   sourceDocumentId?: string | null;
 }
@@ -423,6 +425,7 @@ export default function PurchasePage() {
   const [showBillModal, setShowBillModal] = useState(false);
   const [openBill, setOpenBill] = useState<Bill | null>(null);
   const [payingBill, setPayingBill] = useState<Bill | null>(null);
+  const [notingBill, setNotingBill] = useState<Bill | null>(null);
   const [openVendor, setOpenVendor] = useState<Vendor | null>(null);
   const [showVendorModal, setShowVendorModal] = useState(false);
 
@@ -654,6 +657,15 @@ export default function PurchasePage() {
                               Mark paid
                             </button>
                           )}
+                          {bill.status === 'posted' && (
+                            <button
+                              type="button"
+                              onClick={() => setNotingBill(bill)}
+                              className="rounded border border-line-200 px-2 py-0.5 text-caption font-medium text-ink-600 transition-colors hover:bg-surface-sink"
+                            >
+                              Debit note
+                            </button>
+                          )}
                           <button
                             type="button"
                             className="text-ink-400 hover:text-ink-700 transition-colors"
@@ -808,6 +820,24 @@ export default function PurchasePage() {
       )}
 
       {/* Toast */}
+      <AdjustmentNoteDialog
+        kind="debit"
+        document={
+          notingBill && {
+            id: notingBill._id,
+            number: notingBill.billNumber,
+            partyName: notingBill.vendorName,
+            date: notingBill.billDate,
+            outstandingPaise: notingBill.outstandingPaise,
+            amountsPaise: notingBill.amountsPaise,
+          }
+        }
+        onClose={() => setNotingBill(null)}
+        onRaised={(message) => {
+          showToast(message);
+          afterLedgerChange();
+        }}
+      />
       <RecordPaymentDialog
         kind="bill"
         document={

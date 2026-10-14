@@ -8,7 +8,19 @@ import { JournalDocument } from '../gl/schemas/journal.schema';
 import { SalesInvoice, SalesInvoiceDocument } from '../sales/schemas/sales-invoice.schema';
 import { PurchaseBill, PurchaseBillDocument } from '../purchase/schemas/purchase-bill.schema';
 import { BankStatementLine, BankStatementLineDocument } from '../banking/schemas/bank-statement-line.schema';
+import { CreditNote, CreditNoteDocument } from '../sales/schemas/credit-note.schema';
+import { DebitNote, DebitNoteDocument } from '../purchase/schemas/debit-note.schema';
 import { withOrg } from '../database/tenant.plugin';
+
+/** An invoice or bill as a reversal of one of its payments or notes reads it. */
+interface SettledDocument {
+  _id: unknown;
+  status: string;
+  amountPaidPaise?: number;
+  adjustedPaise?: number;
+  payments?: Array<{ journalId: unknown; amountPaise: number }>;
+  adjustments?: Array<{ journalId: unknown; amountPaise: number }>;
+}
 
 /**
  * Reversing a voucher, with everything that points at it brought into line.
@@ -21,17 +33,10 @@ import { withOrg } from '../database/tenant.plugin';
  *   - the invoice or bill the voucher posted goes back to draft — refused
  *     while it is paid, since its receipt or payment would then point at
  *     nothing (reverse that first);
- *   - the invoice or bill the voucher settled goes back to unpaid;
+ *   - a receipt, payment, credit note or debit note comes back off the
+ *     invoice or bill it settled or adjusted — just that one;
  *   - a bank line confirmed against the voucher goes back to unmatched.
  */
-/** The fields of an invoice or bill that a payment reversal reads. */
-interface PaidDocument {
-  _id: unknown;
-  status: string;
-  amountPaidPaise?: number;
-  payments: Array<{ journalId: unknown; amountPaise: number }>;
-}
-
 @Injectable()
 export class JournalReversalService {
   constructor(
@@ -40,6 +45,8 @@ export class JournalReversalService {
     @InjectModel(SalesInvoice.name) private invoiceModel: Model<SalesInvoiceDocument>,
     @InjectModel(PurchaseBill.name) private billModel: Model<PurchaseBillDocument>,
     @InjectModel(BankStatementLine.name) private lineModel: Model<BankStatementLineDocument>,
+    @InjectModel(CreditNote.name) private creditNoteModel: Model<CreditNoteDocument>,
+    @InjectModel(DebitNote.name) private debitNoteModel: Model<DebitNoteDocument>,
   ) {}
 
   async reverse(journalId: string, orgId: string, actorId: string): Promise<JournalDocument> {
@@ -62,25 +69,33 @@ export class JournalReversalService {
             .findOneAndUpdate({ journalId: id, status: BillStatus.POSTED }, { $set: set }, { session })
             .lean()
             .exec());
-        const takeBack = { $pull: { payments: { journalId: id } }, $set: { paidBy: null } };
-        await this.takeBackPayment('SalesInvoice', InvoiceStatus.POSTED, id, orgId, actorId, session,
-          () => this.invoiceModel.findOne({ 'payments.journalId': id }).session(session).lean().exec(),
-          (docId, amount) => this.invoiceModel
-            .updateOne(
-              { _id: docId, 'payments.journalId': id },
-              { ...takeBack, $inc: { amountPaidPaise: -amount }, $set: { ...takeBack.$set, status: InvoiceStatus.POSTED } },
-              { session },
-            )
-            .exec());
-        await this.takeBackPayment('PurchaseBill', BillStatus.POSTED, id, orgId, actorId, session,
-          () => this.billModel.findOne({ 'payments.journalId': id }).session(session).lean().exec(),
-          (docId, amount) => this.billModel
-            .updateOne(
-              { _id: docId, 'payments.journalId': id },
-              { ...takeBack, $inc: { amountPaidPaise: -amount }, $set: { ...takeBack.$set, status: BillStatus.POSTED } },
-              { session },
-            )
-            .exec());
+        // A receipt or payment, or a credit or debit note: take that one back off
+        // the invoice or bill it settled or adjusted.
+        for (const [field, amountField] of [['payments', 'amountPaidPaise'], ['adjustments', 'adjustedPaise']] as const) {
+          const entryKey = `${field}.journalId`;
+          const undo = (status: string, amount: number) => ({
+            $pull: { [field]: { journalId: id } },
+            $inc: { [amountField]: -amount },
+            $set: field === 'payments' ? { status, paidBy: null } : { status },
+          });
+          await this.takeBack('SalesInvoice', field, InvoiceStatus.POSTED, id, orgId, actorId, session,
+            () => this.invoiceModel.findOne({ [entryKey]: id }).session(session).lean().exec(),
+            (docId, amount) => this.invoiceModel
+              .updateOne({ _id: docId, [entryKey]: id }, undo(InvoiceStatus.POSTED, amount), { session })
+              .exec());
+          await this.takeBack('PurchaseBill', field, BillStatus.POSTED, id, orgId, actorId, session,
+            () => this.billModel.findOne({ [entryKey]: id }).session(session).lean().exec(),
+            (docId, amount) => this.billModel
+              .updateOne({ _id: docId, [entryKey]: id }, undo(BillStatus.POSTED, amount), { session })
+              .exec());
+        }
+        // The note itself is kept, marked reversed — it was issued, then cancelled.
+        await withOrg(orgId, () =>
+          this.creditNoteModel.updateOne({ journalId: id }, { $set: { status: 'reversed' } }, { session }).exec(),
+        );
+        await withOrg(orgId, () =>
+          this.debitNoteModel.updateOne({ journalId: id }, { $set: { status: 'reversed' } }, { session }).exec(),
+        );
 
         const lines = await withOrg(orgId, () =>
           this.lineModel.find({ matchedJournalId: id, matchStatus: MatchStatus.CONFIRMED }).session(session).exec(),
@@ -105,56 +120,64 @@ export class JournalReversalService {
     }
   }
 
-  /** A sale or purchase with any payment against it cannot be undone underneath that payment. */
+  /**
+   * A sale or purchase with any payment or note against it cannot be undone
+   * underneath them.
+   */
   private async refuseWhilePaid(journalId: Types.ObjectId, orgId: string, session: ClientSession): Promise<void> {
-    const paidAtAll = { journalId, $or: [{ amountPaidPaise: { $gt: 0 } }, { status: 'paid' }] };
+    const paidAtAll = {
+      journalId,
+      $or: [{ amountPaidPaise: { $gt: 0 } }, { adjustedPaise: { $gt: 0 } }, { status: 'paid' }],
+    };
     const invoice = await withOrg(orgId, () => this.invoiceModel.findOne(paidAtAll).session(session).exec());
     if (invoice) {
       throw new BadRequestException(
-        `Invoice ${invoice.invoiceNumber ?? invoice._id} has payments against it — reverse its receipts first, then the sale.`,
+        `Invoice ${invoice.invoiceNumber ?? invoice._id} has receipts or credit notes against it — reverse those first, then the sale.`,
       );
     }
     const bill = await withOrg(orgId, () => this.billModel.findOne(paidAtAll).session(session).exec());
     if (bill) {
       throw new BadRequestException(
-        `Bill ${bill.billNumber ?? bill._id} has payments against it — reverse its payments first, then the purchase.`,
+        `Bill ${bill.billNumber ?? bill._id} has payments or debit notes against it — reverse those first, then the purchase.`,
       );
     }
   }
 
   /**
-   * Reversing a receipt or payment takes that one payment back off the invoice
-   * or bill it settled: the amount paid drops by it, and a paid document is
-   * open again. Other part payments stand.
+   * Reversing a receipt, payment or note takes that one back off the invoice
+   * or bill: its amount comes off what was paid or adjusted, and a closed
+   * document is open again. The others stand.
    */
-  private async takeBackPayment(
+  private async takeBack(
     entityType: string,
+    field: 'payments' | 'adjustments',
     openStatus: string,
     journalId: Types.ObjectId,
     orgId: string,
     actorId: string,
     session: ClientSession,
-    find: () => Promise<PaidDocument | null>,
+    find: () => Promise<SettledDocument | null>,
     update: (docId: unknown, amountPaise: number) => Promise<unknown>,
   ): Promise<void> {
     const doc = await withOrg(orgId, find);
     if (!doc) return;
-    const payment = doc.payments.find((p) => String(p.journalId) === String(journalId));
-    if (!payment) return;
+    const entry = (doc[field] ?? []).find((p) => String(p.journalId) === String(journalId));
+    if (!entry) return;
 
-    await withOrg(orgId, () => update(doc._id, payment.amountPaise));
+    await withOrg(orgId, () => update(doc._id, entry.amountPaise));
+    const amountField = field === 'payments' ? 'amountPaidPaise' : 'adjustedPaise';
     await this.audit.record(
       {
         orgId,
         entityType,
         entityId: String(doc._id),
-        action: 'REVERSE_PAYMENT',
+        action: field === 'payments' ? 'REVERSE_PAYMENT' : 'REVERSE_NOTE',
         performedBy: actorId,
-        before: { status: doc.status, amountPaidPaise: doc.amountPaidPaise ?? 0 },
+        before: { status: doc.status, [amountField]: doc[amountField] ?? 0 },
         after: {
           status: openStatus,
-          amountPaidPaise: (doc.amountPaidPaise ?? 0) - payment.amountPaise,
-          reversedPaymentJournalId: String(journalId),
+          [amountField]: (doc[amountField] ?? 0) - entry.amountPaise,
+          reversedJournalId: String(journalId),
         },
       },
       session,

@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { DocumentUploadButton } from '@/components/shell/document-upload-button';
 import { DocumentDetailDialog, PartyDetailDialog } from '@/components/shell/record-detail-dialogs';
 import { RecordPaymentDialog } from '@/components/shell/record-payment-dialog';
+import { AdjustmentNoteDialog } from '@/components/shell/adjustment-note-dialog';
 import { Plus, ChevronRight, Send } from 'lucide-react';
 import { InvoiceStatus as SharedInvoiceStatus } from '@ai-accounting/shared';
 import { api } from '@/lib/api';
@@ -31,6 +32,7 @@ interface Invoice {
   /** Paid so far, and still owed — part payments leave both non-zero. */
   amountPaidPaise: number;
   outstandingPaise: number;
+  amountsPaise: { taxableValue: number; cgst: number; sgst: number; igst: number; cess: number; total: number };
   /** Set when this row was read off an upload; null when typed in by hand. */
   sourceDocumentId?: string | null;
 }
@@ -339,6 +341,7 @@ export default function SalesPage() {
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [openInvoice, setOpenInvoice] = useState<Invoice | null>(null);
   const [payingInvoice, setPayingInvoice] = useState<Invoice | null>(null);
+  const [notingInvoice, setNotingInvoice] = useState<Invoice | null>(null);
   const [openCustomer, setOpenCustomer] = useState<Customer | null>(null);
 
   const queryClient = useQueryClient();
@@ -587,6 +590,15 @@ export default function SalesPage() {
                               Mark paid
                             </button>
                           )}
+                          {inv.status === 'posted' && (
+                            <button
+                              type="button"
+                              onClick={() => setNotingInvoice(inv)}
+                              className="rounded border border-line-200 px-2 py-0.5 text-caption font-medium text-ink-600 transition-colors hover:bg-surface-sink"
+                            >
+                              Credit note
+                            </button>
+                          )}
                           <button
                             type="button"
                             className="text-ink-400 hover:text-ink-700 transition-colors"
@@ -719,6 +731,24 @@ export default function SalesPage() {
       )}
 
       {/* Toast */}
+      <AdjustmentNoteDialog
+        kind="credit"
+        document={
+          notingInvoice && {
+            id: notingInvoice._id,
+            number: notingInvoice.invoiceNumber,
+            partyName: notingInvoice.customerName,
+            date: notingInvoice.invoiceDate,
+            outstandingPaise: notingInvoice.outstandingPaise,
+            amountsPaise: notingInvoice.amountsPaise,
+          }
+        }
+        onClose={() => setNotingInvoice(null)}
+        onRaised={(message) => {
+          showToast(message);
+          afterLedgerChange();
+        }}
+      />
       <RecordPaymentDialog
         kind="invoice"
         document={

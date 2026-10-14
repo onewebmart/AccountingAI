@@ -14,7 +14,8 @@ import { PermissionGuard } from '../auth/guards/permission.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CustomersService } from './customers.service';
 import { SalesInvoicesService } from './sales-invoices.service';
-import { CreateCustomerDto, CreateSalesInvoiceDto, PayInvoiceDto } from './dto/sales.dto';
+import { CreateCustomerDto, CreateSalesInvoiceDto, PayInvoiceDto, CreateCreditNoteDto } from './dto/sales.dto';
+import { CreditNotesService } from './credit-notes.service';
 
 interface AuthRequest {
   user: { orgId: string; sub: string };
@@ -26,6 +27,7 @@ export class SalesController {
   constructor(
     private readonly customersService: CustomersService,
     private readonly invoicesService: SalesInvoicesService,
+    private readonly creditNotesService: CreditNotesService,
   ) {}
 
   // ── Customers ────────────────────────────────────────────────────────────
@@ -96,5 +98,18 @@ export class SalesController {
   @RequirePermission(Permission.POST_JOURNAL)
   payInvoice(@Request() req: AuthRequest, @Param('id') id: string, @Body() body: PayInvoiceDto) {
     return this.invoicesService.markPaid(id, req.user.orgId, req.user.sub, body?.paidOn, body?.amountPaise);
+  }
+
+  /** Raise and post a credit note against a posted invoice — Dr/Cr in proportion, numbered by its voucher. */
+  @Post('invoices/:id/credit-notes')
+  @RequirePermission(Permission.POST_JOURNAL)
+  createCreditNote(@Request() req: AuthRequest, @Param('id') id: string, @Body() body: CreateCreditNoteDto) {
+    return this.creditNotesService.create(id, req.user.orgId, req.user.sub, body);
+  }
+
+  @Get('credit-notes')
+  @RequirePermission(Permission.MANAGE_SALES)
+  listCreditNotes(@Request() req: AuthRequest, @Query('invoiceId') invoiceId?: string) {
+    return this.creditNotesService.list(req.user.orgId, invoiceId);
   }
 }
