@@ -54,6 +54,10 @@ export class SalesInvoice {
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Journal', default: null })
   journalId: Types.ObjectId | null;
 
+  /** The receipt journal that settled this, set when it is marked paid. */
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Journal', default: null })
+  paymentJournalId: Types.ObjectId | null;
+
   @Prop({ type: String, default: null }) postedBy: string | null;
   /** Timestamp when the invoice was sent to the customer. */
   @Prop({ type: Date, default: null }) sentAt: Date | null;

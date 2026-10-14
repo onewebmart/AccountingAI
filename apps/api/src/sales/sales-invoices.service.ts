@@ -5,13 +5,15 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model, Types } from 'mongoose';
+import { ClientSession, Model, Types } from 'mongoose';
 import { InvoiceStatus, VoucherType } from '@ai-accounting/shared';
 import { SalesInvoice, SalesInvoiceDocument } from './schemas/sales-invoice.schema';
 import { Customer, CustomerDocument } from './schemas/customer.schema';
 import { AccountsService } from '../gl/accounts.service';
 import { SystemAccountKey } from '../gl/schemas/ledger-account.schema';
-import { PostingService } from '../gl/posting.service';
+import { PostingService, financialYearOf } from '../gl/posting.service';
+import { AuditService } from '../gl/audit.service';
+import { JournalDocument } from '../gl/schemas/journal.schema';
 import { withOrg } from '../database/tenant.plugin';
 
 /** The shape every list of sales invoices is rendered from. */
@@ -41,6 +43,8 @@ export interface InvoiceListItem {
 
 export interface CreateInvoiceInput {
   orgId: string;
+  /** Who created it, for the audit trail. */
+  actorId?: string;
   customerId: string;
   invoiceNumber?: string | null;
   invoiceDate: string;
@@ -81,6 +85,7 @@ export class SalesInvoicesService {
     @InjectModel(Customer.name) private customerModel: Model<CustomerDocument>,
     private accountsService: AccountsService,
     private postingService: PostingService,
+    private auditService: AuditService,
   ) {}
 
   async create(input: CreateInvoiceInput): Promise<SalesInvoiceDocument> {
@@ -94,6 +99,14 @@ export class SalesInvoicesService {
       amountsPaise: input.amountsPaise,
       lineItems: input.lineItems ?? [],
       notes: input.notes ?? null,
+    });
+    await this.auditService.record({
+      orgId: input.orgId,
+      entityType: 'SalesInvoice',
+      entityId: invoice._id.toString(),
+      action: 'CREATE',
+      performedBy: input.actorId ?? 'unknown',
+      after: { status: invoice.status, invoiceNumber: invoice.invoiceNumber, totalPaise: invoice.amountsPaise.total },
     });
     this.logger.log(`Created SalesInvoice ${invoice._id} (draft) for customer ${input.customerId}`);
     return invoice;
@@ -165,6 +178,15 @@ export class SalesInvoicesService {
         { new: true },
       )
       .exec();
+    await this.auditService.record({
+      orgId,
+      entityType: 'SalesInvoice',
+      entityId: id,
+      action: 'SEND',
+      performedBy: actorId,
+      before: { status: invoice.status },
+      after: { status: InvoiceStatus.SENT },
+    });
 
     this.logger.log(`SalesInvoice ${id} sent by ${actorId}`);
     return updated!;
@@ -237,64 +259,148 @@ export class SalesInvoicesService {
       }
     }
 
-    const journal = await this.postingService.post({
-      orgId,
-      voucherType: VoucherType.SALES,
-      financialYear: fy,
-      date: invoice.invoiceDate,
-      narration: `Sales invoice ${invoice.invoiceNumber ?? invoice._id.toString()} — customer ${invoice.customerId}`,
-      postedBy: actorId,
-      lines,
+    const updated = await this.postingService.inTransaction(async (session) => {
+      // Claim the transition before posting, in the same transaction, so a
+      // second click finds nothing to claim instead of posting the sale twice.
+      const claimed = await withOrg(orgId, () =>
+        this.invoiceModel
+          .findOneAndUpdate(
+            { _id: id, status: { $in: [InvoiceStatus.DRAFT, InvoiceStatus.SENT] } },
+            { $set: { status: InvoiceStatus.POSTED, financialYear: fy, postedBy: actorId } },
+            { session },
+          )
+          .exec(),
+      );
+      if (!claimed) throw new BadRequestException('Invoice has already been posted');
+
+      const journal = await this.postingService.post(
+        {
+          orgId,
+          voucherType: VoucherType.SALES,
+          financialYear: fy,
+          date: invoice.invoiceDate,
+          narration: `Sales invoice ${invoice.invoiceNumber ?? invoice._id.toString()} — customer ${invoice.customerId}`,
+          postedBy: actorId,
+          lines,
+        },
+        session,
+      );
+
+      await this.auditService.record(
+        {
+          orgId,
+          entityType: 'SalesInvoice',
+          entityId: id,
+          action: 'POST',
+          performedBy: actorId,
+          before: { status: claimed.status },
+          after: { status: InvoiceStatus.POSTED, journalId: journal._id.toString() },
+        },
+        session,
+      );
+
+      return this.invoiceModel
+        .findByIdAndUpdate(id, { $set: { journalId: journal._id } }, { new: true, session })
+        .exec();
     });
 
-    const updated = await this.invoiceModel
-      .findByIdAndUpdate(
-        id,
-        { $set: { status: InvoiceStatus.POSTED, journalId: journal._id, financialYear: fy, postedBy: actorId } },
-        { new: true },
-      )
-      .exec();
-
-    this.logger.log(`SalesInvoice ${id} posted → Journal ${journal._id}`);
+    this.logger.log(`SalesInvoice ${id} posted → Journal ${updated!.journalId}`);
     return updated!;
   }
 
-  /** Record receipt of payment against a posted invoice (creates a RECEIPT journal). */
-  async markPaid(id: string, orgId: string, actorId: string): Promise<SalesInvoiceDocument> {
+  /**
+   * Record receipt of payment against a posted invoice (creates a RECEIPT journal).
+   * `paidOn` is the day the money arrived — today when not given.
+   */
+  async markPaid(
+    id: string,
+    orgId: string,
+    actorId: string,
+    paidOn?: string,
+  ): Promise<SalesInvoiceDocument> {
     const invoice = await this.findById(id, orgId);
     if (invoice.status !== InvoiceStatus.POSTED) {
       throw new BadRequestException(`Invoice must be POSTED to mark as paid (current: ${invoice.status})`);
     }
 
-    const { total } = invoice.amountsPaise;
-    const fy = invoice.financialYear ?? getFY(invoice.invoiceDate);
+    const { invoice: paid } = await this.postingService.inTransaction((session) =>
+      this.settleWithin(session, id, orgId, actorId, paidOn ?? new Date().toISOString().slice(0, 10)),
+    );
 
-    const receiptAccounts = await this.accountsService.resolveSystemAccounts(orgId, [
+    this.logger.log(`SalesInvoice ${id} marked PAID by ${actorId}`);
+    return paid;
+  }
+
+  /**
+   * Settle a posted invoice in full inside the caller's transaction: claim
+   * POSTED → PAID, then post Dr Bank / Cr Accounts Receivable dated `paidOn`
+   * and filed in that date's financial year. Bank reconciliation calls this
+   * with the date the money reached the bank.
+   */
+  async settleWithin(
+    session: ClientSession,
+    id: string,
+    orgId: string,
+    actorId: string,
+    paidOn: string,
+  ): Promise<{ invoice: SalesInvoiceDocument; receipt: JournalDocument }> {
+    const accounts = await this.accountsService.resolveSystemAccounts(orgId, [
       SystemAccountKey.BANK,
       SystemAccountKey.ACCOUNTS_RECEIVABLE,
     ]);
-    const bank = receiptAccounts.get(SystemAccountKey.BANK)!;
-    const receivable = receiptAccounts.get(SystemAccountKey.ACCOUNTS_RECEIVABLE)!;
+    const bank = accounts.get(SystemAccountKey.BANK)!;
+    const receivable = accounts.get(SystemAccountKey.ACCOUNTS_RECEIVABLE)!;
 
-    // Receipt journal: Dr Bank / Cr Accounts Receivable
-    await this.postingService.post({
-      orgId,
-      voucherType: VoucherType.RECEIPT,
-      financialYear: fy,
-      date: new Date().toISOString().slice(0, 10),
-      narration: `Receipt for invoice ${invoice.invoiceNumber ?? id}`,
-      postedBy: actorId,
-      lines: [
-        { accountId: bank._id.toString(), description: bank.name, debitPaise: total, creditPaise: 0 },
-        { accountId: receivable._id.toString(), description: receivable.name, debitPaise: 0, creditPaise: total },
-      ],
-    });
+    // Claim POSTED → PAID first: two simultaneous clicks must not post two receipts.
+    const claimed = await withOrg(orgId, () =>
+      this.invoiceModel
+        .findOneAndUpdate(
+          { _id: id, status: InvoiceStatus.POSTED },
+          { $set: { status: InvoiceStatus.PAID, paidBy: actorId } },
+          { new: true, session },
+        )
+        .exec(),
+    );
+    if (!claimed) throw new BadRequestException('Invoice has already been marked paid');
 
-    const updated = await this.invoiceModel
-      .findByIdAndUpdate(id, { $set: { status: InvoiceStatus.PAID, paidBy: actorId } }, { new: true })
+    const total = claimed.amountsPaise.total;
+    const receipt = await this.postingService.post(
+      {
+        orgId,
+        voucherType: VoucherType.RECEIPT,
+        // Filed by its own date, not the invoice's — they differ for any
+        // invoice paid after 31 March.
+        financialYear: financialYearOf(paidOn),
+        date: paidOn,
+        narration: `Receipt for invoice ${claimed.invoiceNumber ?? id}`,
+        postedBy: actorId,
+        lines: [
+          { accountId: bank._id.toString(), description: bank.name, debitPaise: total, creditPaise: 0 },
+          { accountId: receivable._id.toString(), description: receivable.name, debitPaise: 0, creditPaise: total },
+        ],
+      },
+      session,
+    );
+
+    // Remember which voucher settled it, so reversing that voucher can reopen it.
+    await this.invoiceModel
+      .updateOne({ _id: claimed._id }, { $set: { paymentJournalId: receipt._id } }, { session })
       .exec();
 
-    this.logger.log(`SalesInvoice ${id} marked PAID by ${actorId}`);
-    return updated!;
+    await this.auditService.record(
+      {
+        orgId,
+        entityType: 'SalesInvoice',
+        entityId: id,
+        action: 'PAY',
+        performedBy: actorId,
+        before: { status: InvoiceStatus.POSTED },
+        after: { status: InvoiceStatus.PAID, receiptJournalId: receipt._id.toString(), paidOn },
+      },
+      session,
+    );
+
+    claimed.paymentJournalId = receipt._id;
+    return { invoice: claimed, receipt };
   }
 }

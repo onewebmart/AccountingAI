@@ -82,3 +82,10 @@ export class CreateBillDto {
   @IsString()
   notes?: string | null;
 }
+
+/** Optional body for "mark paid": the day the money moved, if not today. */
+export class PayBillDto {
+  @IsOptional()
+  @IsISO8601({}, { message: 'paidOn must be a date like 2026-10-10' })
+  paidOn?: string;
+}

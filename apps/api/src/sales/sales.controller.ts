@@ -14,7 +14,7 @@ import { PermissionGuard } from '../auth/guards/permission.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CustomersService } from './customers.service';
 import { SalesInvoicesService } from './sales-invoices.service';
-import { CreateCustomerDto, CreateSalesInvoiceDto } from './dto/sales.dto';
+import { CreateCustomerDto, CreateSalesInvoiceDto, PayInvoiceDto } from './dto/sales.dto';
 
 interface AuthRequest {
   user: { orgId: string; sub: string };
@@ -39,7 +39,7 @@ export class SalesController {
   @Post('customers')
   @RequirePermission(Permission.MANAGE_SALES)
   createCustomer(@Request() req: AuthRequest, @Body() body: CreateCustomerDto) {
-    return this.customersService.create({ ...body, orgId: req.user.orgId });
+    return this.customersService.create({ ...body, orgId: req.user.orgId, actorId: req.user.sub });
   }
 
   @Get('customers/:id')
@@ -71,7 +71,7 @@ export class SalesController {
   @Post('invoices')
   @RequirePermission(Permission.MANAGE_SALES)
   createInvoice(@Request() req: AuthRequest, @Body() body: CreateSalesInvoiceDto) {
-    return this.invoicesService.create({ ...body, orgId: req.user.orgId });
+    return this.invoicesService.create({ ...body, orgId: req.user.orgId, actorId: req.user.sub });
   }
 
   @Get('invoices/:id')
@@ -94,7 +94,7 @@ export class SalesController {
 
   @Post('invoices/:id/pay')
   @RequirePermission(Permission.POST_JOURNAL)
-  payInvoice(@Request() req: AuthRequest, @Param('id') id: string) {
-    return this.invoicesService.markPaid(id, req.user.orgId, req.user.sub);
+  payInvoice(@Request() req: AuthRequest, @Param('id') id: string, @Body() body: PayInvoiceDto) {
+    return this.invoicesService.markPaid(id, req.user.orgId, req.user.sub, body?.paidOn);
   }
 }

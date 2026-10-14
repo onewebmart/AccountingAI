@@ -1,5 +1,7 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
+import { AuditService } from '../gl/audit.service';
+import { gstinProblem } from '../extraction/invoice-checks';
 import { Model, Types } from 'mongoose';
 import { InvoiceStatus } from '@ai-accounting/shared';
 import { Customer, CustomerDocument } from './schemas/customer.schema';
@@ -9,6 +11,8 @@ import { buildAgeingSummary, AgeingSummary } from '../purchase/ageing.util';
 
 export interface CreateCustomerInput {
   orgId: string;
+  /** Who created it, for the audit trail. */
+  actorId?: string;
   name: string;
   gstin?: string | null;
   phone?: string | null;
@@ -23,19 +27,35 @@ export class CustomersService {
   constructor(
     @InjectModel(Customer.name) private customerModel: Model<CustomerDocument>,
     @InjectModel(SalesInvoice.name) private invoiceModel: Model<SalesInvoiceDocument>,
+    private auditService: AuditService,
   ) {}
 
   async create(input: CreateCustomerInput): Promise<CustomerDocument> {
-    return this.customerModel.create({
+    // A typed GSTIN with a wrong check digit is a typo; catch it here rather
+    // than on the GST return.
+    const gstin = input.gstin?.trim() ? input.gstin.trim().toUpperCase() : null;
+    const problem = gstin ? gstinProblem(gstin) : null;
+    if (problem) throw new BadRequestException(`GSTIN ${gstin} ${problem}`);
+
+    const customer = await this.customerModel.create({
       orgId: input.orgId,
       name: input.name,
-      gstin: input.gstin ?? null,
+      gstin,
       phone: input.phone ?? null,
       email: input.email ?? null,
       address: input.address ?? null,
       openingBalancePaise: input.openingBalancePaise ?? 0,
       notes: input.notes ?? null,
     });
+    await this.auditService.record({
+      orgId: input.orgId,
+      entityType: 'Customer',
+      entityId: customer._id.toString(),
+      action: 'CREATE',
+      performedBy: input.actorId ?? 'unknown',
+      after: { name: customer.name, gstin: customer.gstin },
+    });
+    return customer;
   }
 
   async list(orgId: string): Promise<CustomerDocument[]> {

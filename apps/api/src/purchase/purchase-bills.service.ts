@@ -5,13 +5,15 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model, Types } from 'mongoose';
+import { ClientSession, Model, Types } from 'mongoose';
 import { BillStatus, VoucherType } from '@ai-accounting/shared';
 import { PurchaseBill, PurchaseBillDocument } from './schemas/purchase-bill.schema';
 import { Vendor, VendorDocument } from './schemas/vendor.schema';
 import { AccountsService } from '../gl/accounts.service';
 import { SystemAccountKey } from '../gl/schemas/ledger-account.schema';
-import { PostingService } from '../gl/posting.service';
+import { PostingService, financialYearOf } from '../gl/posting.service';
+import { AuditService } from '../gl/audit.service';
+import { JournalDocument } from '../gl/schemas/journal.schema';
 import { withOrg } from '../database/tenant.plugin';
 
 /** The shape every list of bills is rendered from. */
@@ -41,6 +43,8 @@ export interface BillListItem {
 
 export interface CreateBillInput {
   orgId: string;
+  /** Who created it, for the audit trail. */
+  actorId?: string;
   vendorId: string;
   billNumber?: string | null;
   billDate: string;
@@ -81,6 +85,7 @@ export class PurchaseBillsService {
     @InjectModel(Vendor.name) private vendorModel: Model<VendorDocument>,
     private postingService: PostingService,
     private accountsService: AccountsService,
+    private auditService: AuditService,
   ) {}
 
   async create(input: CreateBillInput): Promise<PurchaseBillDocument> {
@@ -94,6 +99,14 @@ export class PurchaseBillsService {
       amountsPaise: input.amountsPaise,
       lineItems: input.lineItems ?? [],
       notes: input.notes ?? null,
+    });
+    await this.auditService.record({
+      orgId: input.orgId,
+      entityType: 'PurchaseBill',
+      entityId: bill._id.toString(),
+      action: 'CREATE',
+      performedBy: input.actorId ?? 'unknown',
+      after: { status: bill.status, billNumber: bill.billNumber, totalPaise: bill.amountsPaise.total },
     });
     this.logger.log(`Created PurchaseBill ${bill._id} (draft) for vendor ${input.vendorId}`);
     return bill;
@@ -221,66 +234,148 @@ export class PurchaseBillsService {
       creditPaise: total,
     });
 
-    const journal = await this.postingService.post({
-      orgId,
-      voucherType: VoucherType.PURCHASE,
-      financialYear: fy,
-      date: bill.billDate,
-      narration: `Purchase bill ${bill.billNumber ?? bill._id.toString()} — vendor ${bill.vendorId}`,
-      postedBy: actorId,
-      lines,
+    const updated = await this.postingService.inTransaction(async (session) => {
+      // Claim the transition before posting, in the same transaction, so a
+      // second click finds nothing to claim instead of posting the bill twice.
+      const claimed = await withOrg(orgId, () =>
+        this.billModel
+          .findOneAndUpdate(
+            { _id: id, status: BillStatus.DRAFT },
+            { $set: { status: BillStatus.POSTED, financialYear: fy, postedBy: actorId } },
+            { session },
+          )
+          .exec(),
+      );
+      if (!claimed) throw new BadRequestException('Bill has already been posted');
+
+      const journal = await this.postingService.post(
+        {
+          orgId,
+          voucherType: VoucherType.PURCHASE,
+          financialYear: fy,
+          date: bill.billDate,
+          narration: `Purchase bill ${bill.billNumber ?? bill._id.toString()} — vendor ${bill.vendorId}`,
+          postedBy: actorId,
+          lines,
+        },
+        session,
+      );
+
+      await this.auditService.record(
+        {
+          orgId,
+          entityType: 'PurchaseBill',
+          entityId: id,
+          action: 'POST',
+          performedBy: actorId,
+          before: { status: BillStatus.DRAFT },
+          after: { status: BillStatus.POSTED, journalId: journal._id.toString() },
+        },
+        session,
+      );
+
+      return this.billModel
+        .findByIdAndUpdate(id, { $set: { journalId: journal._id } }, { new: true, session })
+        .exec();
     });
 
-    const updated = await this.billModel
-      .findByIdAndUpdate(
-        id,
-        { $set: { status: BillStatus.POSTED, journalId: journal._id, financialYear: fy, postedBy: actorId } },
-        { new: true },
-      )
-      .exec();
-
-    this.logger.log(`PurchaseBill ${id} posted → Journal ${journal._id}`);
+    this.logger.log(`PurchaseBill ${id} posted → Journal ${updated!.journalId}`);
     return updated!;
   }
 
-  /** Record payment against a posted bill (creates a PAYMENT journal). */
-  async markPaid(id: string, orgId: string, actorId: string): Promise<PurchaseBillDocument> {
+  /**
+   * Record payment against a posted bill (creates a PAYMENT journal).
+   * `paidOn` is the day the money left — today when not given.
+   */
+  async markPaid(
+    id: string,
+    orgId: string,
+    actorId: string,
+    paidOn?: string,
+  ): Promise<PurchaseBillDocument> {
     const bill = await this.findById(id, orgId);
     if (bill.status !== BillStatus.POSTED) {
       throw new BadRequestException(`Bill must be in POSTED status to mark as paid (current: ${bill.status})`);
     }
 
-    const { total } = bill.amountsPaise;
-    const fy = bill.financialYear ?? getFY(bill.billDate);
+    const { bill: paid } = await this.postingService.inTransaction((session) =>
+      this.settleWithin(session, id, orgId, actorId, paidOn ?? new Date().toISOString().slice(0, 10)),
+    );
 
-    const payAccountMap = await this.accountsService.resolveSystemAccounts(orgId, [
+    this.logger.log(`PurchaseBill ${id} marked PAID by ${actorId}`);
+    return paid;
+  }
+
+  /**
+   * Settle a posted bill in full inside the caller's transaction: claim
+   * POSTED → PAID, then post Dr Accounts Payable / Cr Bank dated `paidOn` and
+   * filed in that date's financial year. Bank reconciliation calls this with
+   * the date the money left the bank.
+   */
+  async settleWithin(
+    session: ClientSession,
+    id: string,
+    orgId: string,
+    actorId: string,
+    paidOn: string,
+  ): Promise<{ bill: PurchaseBillDocument; payment: JournalDocument }> {
+    const accounts = await this.accountsService.resolveSystemAccounts(orgId, [
       SystemAccountKey.ACCOUNTS_PAYABLE,
       SystemAccountKey.BANK,
     ]);
-    const payAccounts = {
-      payable: payAccountMap.get(SystemAccountKey.ACCOUNTS_PAYABLE)!,
-      bank: payAccountMap.get(SystemAccountKey.BANK)!,
-    };
+    const payable = accounts.get(SystemAccountKey.ACCOUNTS_PAYABLE)!;
+    const bank = accounts.get(SystemAccountKey.BANK)!;
 
-    // Payment journal: Dr Accounts Payable / Cr Bank
-    await this.postingService.post({
-      orgId,
-      voucherType: VoucherType.PAYMENT,
-      financialYear: fy,
-      date: new Date().toISOString().slice(0, 10),
-      narration: `Payment for bill ${bill.billNumber ?? id}`,
-      postedBy: actorId,
-      lines: [
-        { accountId: payAccounts.payable._id.toString(), description: payAccounts.payable.name, debitPaise: total, creditPaise: 0 },
-        { accountId: payAccounts.bank._id.toString(), description: payAccounts.bank.name, debitPaise: 0, creditPaise: total },
-      ],
-    });
+    // Claim POSTED → PAID first: two simultaneous clicks must not pay the vendor twice.
+    const claimed = await withOrg(orgId, () =>
+      this.billModel
+        .findOneAndUpdate(
+          { _id: id, status: BillStatus.POSTED },
+          { $set: { status: BillStatus.PAID, paidBy: actorId } },
+          { new: true, session },
+        )
+        .exec(),
+    );
+    if (!claimed) throw new BadRequestException('Bill has already been marked paid');
 
-    const updated = await this.billModel
-      .findByIdAndUpdate(id, { $set: { status: BillStatus.PAID, paidBy: actorId } }, { new: true })
+    const total = claimed.amountsPaise.total;
+    const payment = await this.postingService.post(
+      {
+        orgId,
+        voucherType: VoucherType.PAYMENT,
+        // Filed by its own date, not the bill's — they differ for any bill
+        // paid after 31 March.
+        financialYear: financialYearOf(paidOn),
+        date: paidOn,
+        narration: `Payment for bill ${claimed.billNumber ?? id}`,
+        postedBy: actorId,
+        lines: [
+          { accountId: payable._id.toString(), description: payable.name, debitPaise: total, creditPaise: 0 },
+          { accountId: bank._id.toString(), description: bank.name, debitPaise: 0, creditPaise: total },
+        ],
+      },
+      session,
+    );
+
+    // Remember which voucher settled it, so reversing that voucher can reopen it.
+    await this.billModel
+      .updateOne({ _id: claimed._id }, { $set: { paymentJournalId: payment._id } }, { session })
       .exec();
 
-    this.logger.log(`PurchaseBill ${id} marked PAID by ${actorId}`);
-    return updated!;
+    await this.auditService.record(
+      {
+        orgId,
+        entityType: 'PurchaseBill',
+        entityId: id,
+        action: 'PAY',
+        performedBy: actorId,
+        before: { status: BillStatus.POSTED },
+        after: { status: BillStatus.PAID, paymentJournalId: payment._id.toString(), paidOn },
+      },
+      session,
+    );
+
+    claimed.paymentJournalId = payment._id;
+    return { bill: claimed, payment };
   }
 }

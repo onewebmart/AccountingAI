@@ -25,10 +25,11 @@ import { SalesInvoice, SalesInvoiceSchema, SalesInvoiceDocument } from './schema
 import { Journal, JournalSchema, JournalDocument } from '../gl/schemas/journal.schema';
 import { Counter, CounterSchema } from '../gl/schemas/counter.schema';
 import { AuditLog, AuditLogSchema } from '../gl/schemas/audit-log.schema';
-import { PostingService } from '../gl/posting.service';
+import { PostingService, financialYearOf } from '../gl/posting.service';
 import { AccountsService } from '../gl/accounts.service';
+import { AuditService } from '../gl/audit.service';
 import { LedgerAccount, LedgerAccountSchema } from '../gl/schemas/ledger-account.schema';
-import { InvoiceStatus } from '@ai-accounting/shared';
+import { InvoiceStatus, VoucherType } from '@ai-accounting/shared';
 
 const ORG_ID = new Types.ObjectId().toString();
 const ACTOR_ID = new Types.ObjectId().toString();
@@ -56,7 +57,7 @@ beforeAll(async () => {
         { name: LedgerAccount.name, schema: LedgerAccountSchema },
       ]),
     ],
-    providers: [CustomersService, SalesInvoicesService, PostingService, AccountsService],
+    providers: [CustomersService, SalesInvoicesService, PostingService, AccountsService, AuditService],
   }).compile();
 
   customersSvc = moduleRef.get(CustomersService);
@@ -256,5 +257,65 @@ describe('CustomersService — AR ageing', () => {
     const ageing = await customersSvc.arAgeing(ORG_ID);
     expect(ageing.days61_90).toBeGreaterThanOrEqual(118000);
     expect(ageing.total).toBeGreaterThan(0);
+  });
+});
+
+describe('SalesInvoicesService — a double-click posts once', () => {
+  const settle = <T>(ps: Promise<T>[]) => Promise.allSettled(ps);
+  const fulfilled = (rs: PromiseSettledResult<unknown>[]) => rs.filter((r) => r.status === 'fulfilled');
+  const reasons = (rs: PromiseSettledResult<unknown>[]) =>
+    rs.filter((r): r is PromiseRejectedResult => r.status === 'rejected').map((r) => String(r.reason));
+
+  it('two simultaneous posts create one sales journal', async () => {
+    const customer = await seedCustomer('Race Post Customer');
+    const inv = await seedInvoice(customer._id.toString(), { invoiceNumber: 'INV-RACE-POST' });
+
+    const results = await settle([
+      invoicesSvc.post(inv._id.toString(), ORG_ID, ACTOR_ID),
+      invoicesSvc.post(inv._id.toString(), ORG_ID, ACTOR_ID),
+    ]);
+
+    expect(fulfilled(results)).toHaveLength(1);
+    // Either the up-front status check or the atomic claim refuses the loser.
+    expect(reasons(results)).toEqual([expect.stringMatching(/already (been )?posted/i)]);
+    expect(
+      await journalModel.countDocuments({ orgId: ORG_ID, voucherType: VoucherType.SALES, narration: /^Sales invoice INV-RACE-POST / }),
+    ).toBe(1);
+    const stored = await invoiceModel.findById(inv._id).exec();
+    expect(stored?.status).toBe(InvoiceStatus.POSTED);
+    expect(stored?.journalId).toBeTruthy();
+  });
+
+  it('two simultaneous payments create one receipt', async () => {
+    const customer = await seedCustomer('Race Pay Customer');
+    const inv = await seedInvoice(customer._id.toString(), { invoiceNumber: 'INV-RACE-PAY' });
+    await invoicesSvc.post(inv._id.toString(), ORG_ID, ACTOR_ID);
+
+    const results = await settle([
+      invoicesSvc.markPaid(inv._id.toString(), ORG_ID, ACTOR_ID),
+      invoicesSvc.markPaid(inv._id.toString(), ORG_ID, ACTOR_ID),
+    ]);
+
+    expect(fulfilled(results)).toHaveLength(1);
+    expect(reasons(results)).toEqual([expect.stringMatching(/already been marked paid|current: paid/i)]);
+    expect(
+      await journalModel.countDocuments({ orgId: ORG_ID, voucherType: VoucherType.RECEIPT, narration: 'Receipt for invoice INV-RACE-PAY' }),
+    ).toBe(1);
+  });
+
+  it("files a receipt under the financial year of its own date, not the invoice's", async () => {
+    const customer = await seedCustomer('Last Year Customer');
+    // 400 days back is always in an earlier financial year than today.
+    const lastYear = new Date(Date.now() - 400 * 86_400_000).toISOString().slice(0, 10);
+    const inv = await seedInvoice(customer._id.toString(), { invoiceNumber: 'INV-LAST-FY', invoiceDate: lastYear });
+    await invoicesSvc.post(inv._id.toString(), ORG_ID, ACTOR_ID);
+    await invoicesSvc.markPaid(inv._id.toString(), ORG_ID, ACTOR_ID);
+
+    const receipt = await journalModel
+      .findOne({ orgId: ORG_ID, voucherType: VoucherType.RECEIPT, narration: 'Receipt for invoice INV-LAST-FY' })
+      .exec();
+    expect(receipt!.date).toBe(new Date().toISOString().slice(0, 10));
+    expect(receipt!.financialYear).toBe(financialYearOf(receipt!.date));
+    expect(receipt!.financialYear).not.toBe(financialYearOf(lastYear));
   });
 });

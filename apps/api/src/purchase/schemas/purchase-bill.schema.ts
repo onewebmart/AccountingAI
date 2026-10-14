@@ -57,6 +57,10 @@ export class PurchaseBill {
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Journal', default: null })
   journalId: Types.ObjectId | null;
 
+  /** The payment journal that settled this, set when it is marked paid. */
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Journal', default: null })
+  paymentJournalId: Types.ObjectId | null;
+
   /** Actor who posted this bill to the ledger. */
   @Prop({ type: String, default: null }) postedBy: string | null;
   /** Actor who marked this bill as paid. */

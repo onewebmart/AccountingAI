@@ -14,7 +14,7 @@ import { PermissionGuard } from '../auth/guards/permission.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { VendorsService } from './vendors.service';
 import { PurchaseBillsService } from './purchase-bills.service';
-import { CreateVendorDto, CreateBillDto } from './dto/purchase.dto';
+import { CreateVendorDto, CreateBillDto, PayBillDto } from './dto/purchase.dto';
 
 interface AuthRequest {
   user: { orgId: string; sub: string };
@@ -39,7 +39,7 @@ export class PurchaseController {
   @Post('vendors')
   @RequirePermission(Permission.MANAGE_PURCHASE)
   createVendor(@Request() req: AuthRequest, @Body() body: CreateVendorDto) {
-    return this.vendorsService.create({ ...body, orgId: req.user.orgId });
+    return this.vendorsService.create({ ...body, orgId: req.user.orgId, actorId: req.user.sub });
   }
 
   @Get('vendors/:id')
@@ -71,7 +71,7 @@ export class PurchaseController {
   @Post('bills')
   @RequirePermission(Permission.MANAGE_PURCHASE)
   createBill(@Request() req: AuthRequest, @Body() body: CreateBillDto) {
-    return this.billsService.create({ ...body, orgId: req.user.orgId });
+    return this.billsService.create({ ...body, orgId: req.user.orgId, actorId: req.user.sub });
   }
 
   @Get('bills/:id')
@@ -88,7 +88,7 @@ export class PurchaseController {
 
   @Post('bills/:id/pay')
   @RequirePermission(Permission.POST_JOURNAL)
-  payBill(@Request() req: AuthRequest, @Param('id') id: string) {
-    return this.billsService.markPaid(id, req.user.orgId, req.user.sub);
+  payBill(@Request() req: AuthRequest, @Param('id') id: string, @Body() body: PayBillDto) {
+    return this.billsService.markPaid(id, req.user.orgId, req.user.sub, body?.paidOn);
   }
 }

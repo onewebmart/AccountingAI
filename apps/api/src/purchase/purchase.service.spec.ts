@@ -25,10 +25,11 @@ import { PurchaseBill, PurchaseBillSchema, PurchaseBillDocument } from './schema
 import { Journal, JournalSchema, JournalDocument } from '../gl/schemas/journal.schema';
 import { Counter, CounterSchema } from '../gl/schemas/counter.schema';
 import { AuditLog, AuditLogSchema } from '../gl/schemas/audit-log.schema';
-import { PostingService } from '../gl/posting.service';
+import { PostingService, financialYearOf } from '../gl/posting.service';
 import { AccountsService } from '../gl/accounts.service';
+import { AuditService } from '../gl/audit.service';
 import { LedgerAccount, LedgerAccountSchema } from '../gl/schemas/ledger-account.schema';
-import { BillStatus } from '@ai-accounting/shared';
+import { BillStatus, VoucherType } from '@ai-accounting/shared';
 
 const ORG_ID = new Types.ObjectId().toString();
 const ACTOR_ID = new Types.ObjectId().toString();
@@ -57,7 +58,7 @@ beforeAll(async () => {
         { name: LedgerAccount.name, schema: LedgerAccountSchema },
       ]),
     ],
-    providers: [VendorsService, PurchaseBillsService, PostingService, AccountsService],
+    providers: [VendorsService, PurchaseBillsService, PostingService, AccountsService, AuditService],
   }).compile();
 
   vendorsSvc = moduleRef.get(VendorsService);
@@ -254,5 +255,63 @@ describe('VendorsService — AP ageing', () => {
     const ageing = await vendorsSvc.apAgeing(ORG_ID);
     expect(ageing.days31_60).toBeGreaterThanOrEqual(118000);
     expect(ageing.total).toBeGreaterThan(0);
+  });
+});
+
+describe('PurchaseBillsService — a double-click posts once', () => {
+  const settle = <T>(ps: Promise<T>[]) => Promise.allSettled(ps);
+  const fulfilled = (rs: PromiseSettledResult<unknown>[]) => rs.filter((r) => r.status === 'fulfilled');
+  const reasons = (rs: PromiseSettledResult<unknown>[]) =>
+    rs.filter((r): r is PromiseRejectedResult => r.status === 'rejected').map((r) => String(r.reason));
+
+  it('two simultaneous posts create one purchase journal', async () => {
+    const vendor = await seedVendor('Race Post Vendor');
+    const bill = await seedBill(vendor._id.toString(), { billNumber: 'BILL-RACE-POST' });
+
+    const results = await settle([
+      billsSvc.post(bill._id.toString(), ORG_ID, ACTOR_ID),
+      billsSvc.post(bill._id.toString(), ORG_ID, ACTOR_ID),
+    ]);
+
+    expect(fulfilled(results)).toHaveLength(1);
+    // Either the up-front status check or the atomic claim refuses the loser.
+    expect(reasons(results)).toEqual([expect.stringMatching(/already (been )?posted/i)]);
+    expect(
+      await journalModel.countDocuments({ orgId: ORG_ID, voucherType: VoucherType.PURCHASE, narration: /^Purchase bill BILL-RACE-POST / }),
+    ).toBe(1);
+  });
+
+  it('two simultaneous payments pay the vendor once', async () => {
+    // Found end to end: two quick clicks on "pay" posted two payment journals
+    // for one ₹26,786 bill, and cash out showed ₹53,572.
+    const vendor = await seedVendor('Race Pay Vendor');
+    const bill = await seedBill(vendor._id.toString(), { billNumber: 'BILL-RACE-PAY' });
+    await billsSvc.post(bill._id.toString(), ORG_ID, ACTOR_ID);
+
+    const results = await settle([
+      billsSvc.markPaid(bill._id.toString(), ORG_ID, ACTOR_ID),
+      billsSvc.markPaid(bill._id.toString(), ORG_ID, ACTOR_ID),
+    ]);
+
+    expect(fulfilled(results)).toHaveLength(1);
+    expect(reasons(results)).toEqual([expect.stringMatching(/already been marked paid|current: paid/i)]);
+    expect(
+      await journalModel.countDocuments({ orgId: ORG_ID, voucherType: VoucherType.PAYMENT, narration: 'Payment for bill BILL-RACE-PAY' }),
+    ).toBe(1);
+    expect((await billModel.findById(bill._id).exec())?.status).toBe(BillStatus.PAID);
+  });
+
+  it("files a payment under the financial year of its own date, not the bill's", async () => {
+    const vendor = await seedVendor('Last Year Vendor');
+    const lastYear = new Date(Date.now() - 400 * 86_400_000).toISOString().slice(0, 10);
+    const bill = await seedBill(vendor._id.toString(), { billNumber: 'BILL-LAST-FY', billDate: lastYear });
+    await billsSvc.post(bill._id.toString(), ORG_ID, ACTOR_ID);
+    await billsSvc.markPaid(bill._id.toString(), ORG_ID, ACTOR_ID);
+
+    const payment = await journalModel
+      .findOne({ orgId: ORG_ID, voucherType: VoucherType.PAYMENT, narration: 'Payment for bill BILL-LAST-FY' })
+      .exec();
+    expect(payment!.financialYear).toBe(financialYearOf(payment!.date));
+    expect(payment!.financialYear).not.toBe(financialYearOf(lastYear));
   });
 });
