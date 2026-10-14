@@ -6,6 +6,8 @@ import { ProposedEntry, ProposedEntrySchema } from '../proposals/schemas/propose
 import { BankAccount, BankAccountSchema } from '../banking/schemas/bank-account.schema';
 import { BankingModule } from '../banking/banking.module';
 import { GlModule } from '../gl/gl.module';
+import { StatementPdfIngestService } from './statement-pdf-ingest.service';
+import { GeminiStatementModel, STATEMENT_MODEL } from './statement-model';
 
 @Module({
   imports: [
@@ -16,7 +18,13 @@ import { GlModule } from '../gl/gl.module';
     BankingModule,
     GlModule,
   ],
-  providers: [SpreadsheetParserService, SpreadsheetIngestService],
-  exports: [SpreadsheetParserService, SpreadsheetIngestService],
+  providers: [
+    SpreadsheetParserService,
+    SpreadsheetIngestService,
+    StatementPdfIngestService,
+    // Reads statement PDFs the text parser cannot; without a key, the parser alone.
+    { provide: STATEMENT_MODEL, useClass: GeminiStatementModel },
+  ],
+  exports: [SpreadsheetParserService, SpreadsheetIngestService, StatementPdfIngestService],
 })
 export class IngestModule {}

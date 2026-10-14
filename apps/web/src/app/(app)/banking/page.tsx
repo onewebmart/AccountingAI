@@ -316,7 +316,7 @@ export default function BankingPage() {
       {uploading ? 'Uploading…' : 'Upload statement'}
       <input
         type="file"
-        accept=".csv,.xlsx,.xls"
+        accept=".pdf,.csv,.xlsx,.xls"
         className="hidden"
         disabled={uploading}
         onChange={(e) => {
@@ -354,7 +354,7 @@ export default function BankingPage() {
           <h2 className="text-h2 font-display text-ink-900 mb-2">Import a statement to reconcile.</h2>
           <p className="text-body text-ink-500 mb-6">Upload your bank statement and we&apos;ll match the lines.</p>
           {uploadButton}
-          <p className="mt-3 text-caption text-ink-400">CSV or Excel, as your bank exports it.</p>
+          <p className="mt-3 text-caption text-ink-400">PDF, CSV or Excel, as your bank gives it.</p>
         </div>
         {toastView}
       </div>

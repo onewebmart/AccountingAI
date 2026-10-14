@@ -10,6 +10,8 @@ import { ExtractionService } from '../extraction/extraction.service';
 import { ProposalsService } from '../proposals/proposals.service';
 import { SpreadsheetIngestService } from '../ingest/spreadsheet-ingest.service';
 import { isSpreadsheet } from '../ingest/spreadsheet-parser.service';
+import { StatementPdfIngestService } from '../ingest/statement-pdf-ingest.service';
+import { looksLikeBankStatement } from '../ingest/statement-text-parser';
 import { DocumentRequestService } from '../crm/documents/document-request.service';
 
 export interface DocumentProcessingJob {
@@ -32,6 +34,7 @@ export class DocumentProcessingProcessor extends WorkerHost {
     private extraction: ExtractionService,
     private proposals: ProposalsService,
     private spreadsheets: SpreadsheetIngestService,
+    private statements: StatementPdfIngestService,
     private documentRequests: DocumentRequestService,
   ) {
     super();
@@ -71,6 +74,13 @@ export class DocumentProcessingProcessor extends WorkerHost {
       this.logger.log(
         `Document ${documentId}: OCR tier ${tier}, confidence ${ocrResult.confidence.toFixed(2)}`,
       );
+
+      // A bank statement (usually a PDF) goes to reconciliation, not the review
+      // queue: its lines are matched there, and nothing is proposed from it.
+      if (looksLikeBankStatement(ocrResult.rawText)) {
+        await this.processStatement(documentId, orgId, originalName ?? 'statement.pdf', ocrResult.rawText);
+        return;
+      }
 
       // Step 2: AI extraction
       await this.docs.updateStatus(documentId, DocumentStatus.EXTRACTING);
@@ -134,6 +144,19 @@ export class DocumentProcessingProcessor extends WorkerHost {
       this.logger.warn(
         `Document ${documentId}: checklist match failed (${err instanceof Error ? err.message : String(err)})`,
       );
+    }
+  }
+
+  private async processStatement(documentId: string, orgId: string, fileName: string, text: string): Promise<void> {
+    await this.docs.updateStatus(documentId, DocumentStatus.EXTRACTING);
+    const result = await this.statements.ingest({ orgId, documentId, fileName, text });
+    await this.docs.setSpreadsheetOutcome(documentId, [result]);
+    if (result.rowsImported > 0) {
+      this.logger.log(`Document ${documentId}: PDF statement imported — ${result.rowsImported} lines`);
+      await this.docs.updateStatus(documentId, DocumentStatus.PROPOSED);
+    } else {
+      // Not retried: reading the same text again gives the same answer.
+      await this.docs.updateStatus(documentId, DocumentStatus.FAILED, result.warnings.join(' '));
     }
   }
 

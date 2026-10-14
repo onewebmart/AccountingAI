@@ -194,6 +194,57 @@ export class ReconciliationService {
     return account;
   }
 
+  /**
+   * The bank account a statement belongs to.
+   *
+   * A printed account number is matched on its last four digits, the part
+   * banks leave unmasked. If none matches, an account with no number yet is
+   * taken to be this one and given the number; otherwise a new account is
+   * opened. With no number to go on, the org's first account is used.
+   */
+  async resolveAccountForStatement(
+    orgId: string,
+    printed: { accountNumber?: string | null; bankName?: string | null },
+  ): Promise<BankAccountDocument> {
+    const accounts = await withOrg(orgId, () => this.accountModel.find().sort({ createdAt: 1 }).exec());
+    const last4 = (printed.accountNumber ?? '').replace(/\D/g, '').slice(-4);
+
+    if (last4.length === 4) {
+      const same = accounts.find((a) => (a.accountNumber ?? '').replace(/\D/g, '').slice(-4) === last4);
+      if (same) return same;
+      const unnumbered = accounts.find((a) => !a.accountNumber);
+      if (unnumbered) {
+        const before = { accountNumber: unnumbered.accountNumber, bankName: unnumbered.bankName };
+        unnumbered.accountNumber = printed.accountNumber ?? null;
+        unnumbered.bankName = unnumbered.bankName ?? printed.bankName ?? null;
+        await unnumbered.save();
+        await this.auditService.record({
+          orgId,
+          entityType: 'BankAccount',
+          entityId: unnumbered._id.toString(),
+          action: 'UPDATE',
+          performedBy: 'system:ingest',
+          before,
+          after: { accountNumber: unnumbered.accountNumber, bankName: unnumbered.bankName },
+        });
+        return unnumbered;
+      }
+      return this.createAccount({
+        orgId,
+        name: `${printed.bankName ?? 'Bank account'} ··${last4}`,
+        accountNumber: printed.accountNumber ?? null,
+        bankName: printed.bankName ?? null,
+      });
+    }
+
+    if (accounts.length > 0) return accounts[0];
+    return this.createAccount({
+      orgId,
+      name: printed.bankName ? `${printed.bankName} Account` : 'Imported Bank Account',
+      bankName: printed.bankName ?? null,
+    });
+  }
+
   async listAccounts(orgId: string): Promise<BankAccountDocument[]> {
     return withOrg(orgId, () => this.accountModel.find().sort({ name: 1 }).exec());
   }
