@@ -106,6 +106,15 @@ describe('CustomersService', () => {
     expect(found.orgId).toBe(ORG_ID);
   });
 
+  it('takes the state from the GSTIN, or as given for an unregistered customer', async () => {
+    const registered = await customersSvc.create({ orgId: ORG_ID, name: 'Registered', gstin: '27AAPFU0939F1ZV', stateCode: '29' });
+    expect(registered.stateCode).toBe('27');
+    const walkIn = await customersSvc.create({ orgId: ORG_ID, name: 'Walk-in', stateCode: '29' });
+    expect(walkIn.stateCode).toBe('29');
+    const unknown = await customersSvc.create({ orgId: ORG_ID, name: 'Unknown' });
+    expect(unknown.stateCode).toBeNull();
+  });
+
   it('lists customers scoped to orgId', async () => {
     await seedCustomer('Customer Alpha');
     await seedCustomer('Customer Beta');

@@ -6,6 +6,7 @@ import {
   IsOptional,
   IsString,
   Length,
+  Matches,
   Min,
   ValidateNested,
 } from 'class-validator';
@@ -96,6 +97,11 @@ export class CreateCustomerDto {
   @IsOptional()
   @IsString()
   address?: string;
+
+  /** GST state code, for a customer without a GSTIN. */
+  @IsOptional()
+  @Matches(/^\d{2}$/, { message: 'stateCode must be a two-digit GST state code, like 27' })
+  stateCode?: string;
 
   @IsOptional()
   @IsInt({ message: 'openingBalancePaise must be an integer number of paise' })

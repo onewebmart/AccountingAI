@@ -19,6 +19,8 @@ export interface CreateCustomerInput {
   phone?: string | null;
   email?: string | null;
   address?: string | null;
+  /** GST state code; ignored when the GSTIN gives it. */
+  stateCode?: string | null;
   openingBalancePaise?: number;
   notes?: string | null;
 }
@@ -45,6 +47,8 @@ export class CustomersService {
       phone: input.phone ?? null,
       email: input.email ?? null,
       address: input.address ?? null,
+      // The GSTIN names the state it was issued in, so it wins over a picked one.
+      stateCode: gstin ? gstin.slice(0, 2) : input.stateCode ?? null,
       openingBalancePaise: input.openingBalancePaise ?? 0,
       notes: input.notes ?? null,
     });
@@ -54,7 +58,7 @@ export class CustomersService {
       entityId: customer._id.toString(),
       action: 'CREATE',
       performedBy: input.actorId ?? 'unknown',
-      after: { name: customer.name, gstin: customer.gstin },
+      after: { name: customer.name, gstin: customer.gstin, stateCode: customer.stateCode },
     });
     return customer;
   }

@@ -8,6 +8,7 @@ import { DocumentUploadButton } from '@/components/shell/document-upload-button'
 import { DocumentDetailDialog, PartyDetailDialog } from '@/components/shell/record-detail-dialogs';
 import { RecordPaymentDialog } from '@/components/shell/record-payment-dialog';
 import { AdjustmentNoteDialog } from '@/components/shell/adjustment-note-dialog';
+import { AgeingBuckets } from '@/components/shell/ageing-buckets';
 import { Plus, ChevronRight } from 'lucide-react';
 import { api } from '@/lib/api';
 import { GST_RATES, GstRate, splitGst, rupeesToPaise, formatPaise } from '@/lib/gst';
@@ -377,7 +378,9 @@ function AddVendorModal({ onClose, onSuccess, showToast }: AddVendorModalProps) 
             />
           </div>
           {mutation.isError && (
-            <p className="text-caption text-error-fg">Couldn&apos;t save vendor. Try again.</p>
+            <p className="text-caption text-error-fg">
+              {(mutation.error as Error).message || "Couldn't save the vendor. Try again."}
+            </p>
           )}
           <div className="flex justify-end gap-3 pt-2">
             <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
@@ -750,22 +753,8 @@ export default function PurchasePage() {
       {/* Outstanding tab */}
       {activeTab === 'Outstanding' && (
         <div className="space-y-4">
-          <p className="text-caption text-ink-500">AP ageing — posted bills by days past due date.</p>
-          <div className="grid grid-cols-4 gap-3">
-            {[
-              { label: '0–30 days', paise: 1180000, color: 'text-pending-fg' },
-              { label: '31–60 days', paise: 5310000, color: 'text-error-fg' },
-              { label: '61–90 days', paise: 0, color: 'text-error-fg' },
-              { label: '90+ days', paise: 0, color: 'text-error-fg' },
-            ].map((bucket) => (
-              <div key={bucket.label} className="rounded-lg border border-line-200 bg-surface-card p-4">
-                <p className="text-caption text-ink-500 mb-1">{bucket.label}</p>
-                <p className={`text-h3 font-mono font-semibold ${bucket.paise > 0 ? bucket.color : 'text-ink-400'}`}>
-                  {formatRupees(bucket.paise)}
-                </p>
-              </div>
-            ))}
-          </div>
+          <p className="text-caption text-ink-500">AP ageing — what you still owe vendors, by days past the due date.</p>
+          <AgeingBuckets kind="payable" />
 
           <div className="rounded-lg border border-line-200 overflow-hidden">
             <table className="w-full text-body">

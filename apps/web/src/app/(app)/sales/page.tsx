@@ -8,10 +8,11 @@ import { DocumentUploadButton } from '@/components/shell/document-upload-button'
 import { DocumentDetailDialog, PartyDetailDialog } from '@/components/shell/record-detail-dialogs';
 import { RecordPaymentDialog } from '@/components/shell/record-payment-dialog';
 import { AdjustmentNoteDialog } from '@/components/shell/adjustment-note-dialog';
+import { AgeingBuckets } from '@/components/shell/ageing-buckets';
 import { Plus, ChevronRight, Send } from 'lucide-react';
 import { InvoiceStatus as SharedInvoiceStatus } from '@ai-accounting/shared';
 import { api } from '@/lib/api';
-import { GST_RATES, GstRate, splitGst, rupeesToPaise, formatPaise } from '@/lib/gst';
+import { GST_RATES, GST_STATES, GstRate, splitGst, rupeesToPaise, formatPaise } from '@/lib/gst';
 import { TableError } from '@/components/ui/query-error';
 
 // ── Types ─────────────────────────────────────────────────────────────────
@@ -41,7 +42,14 @@ interface Customer {
   _id: string;
   name: string;
   gstin: string | null;
+  /** GST state code: the place of supply for their invoices. */
+  stateCode?: string | null;
   receivablePaise: number;
+}
+
+function stateName(code: string | null | undefined): string | null {
+  if (!code) return null;
+  return GST_STATES.find((s) => s.code === code)?.name ?? code;
 }
 
 // ── Formatters ────────────────────────────────────────────────────────────
@@ -66,6 +74,142 @@ function InvoiceStatusBadge({ status }: { status: InvoiceStatus }) {
 // ── Tabs ──────────────────────────────────────────────────────────────────
 
 type Tab = 'Invoices' | 'Customers' | 'Receivables';
+
+// ── Add Customer Modal ────────────────────────────────────────────────────
+
+interface AddCustomerModalProps {
+  onClose: () => void;
+  onSuccess: () => void;
+  showToast: (msg: string, type?: 'success' | 'info') => void;
+}
+
+/**
+ * The invoice form told people to add a customer on the Customers tab, and the
+ * tab had no way to add one.
+ */
+function AddCustomerModal({ onClose, onSuccess, showToast }: AddCustomerModalProps) {
+  const [form, setForm] = useState({ name: '', gstin: '', stateCode: '', email: '', phone: '' });
+  const [nameError, setNameError] = useState<string | null>(null);
+  const gstin = form.gstin.trim().toUpperCase();
+  // A GSTIN starts with the state it was issued in, so it settles the question.
+  const stateFromGstin = /^\d{2}/.test(gstin) ? gstin.slice(0, 2) : null;
+
+  const mutation = useMutation({
+    mutationFn: (body: Record<string, string>) => api.post('/sales/customers', body),
+    onSuccess: () => {
+      showToast('Customer added');
+      onSuccess();
+      onClose();
+    },
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.name.trim()) {
+      setNameError('Required');
+      return;
+    }
+    const body: Record<string, string> = { name: form.name.trim() };
+    if (gstin) body.gstin = gstin;
+    else if (form.stateCode) body.stateCode = form.stateCode;
+    if (form.email.trim()) body.email = form.email.trim();
+    if (form.phone.trim()) body.phone = form.phone.trim();
+    mutation.mutate(body);
+  };
+
+  const field =
+    'w-full rounded-md border border-line-200 bg-white px-3 py-2 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-saffron-600/40';
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+      <div className="bg-surface-card rounded-xl border border-line-200 shadow-xl w-full max-w-md p-6">
+        <h2 className="text-h3 font-display text-ink-900 mb-5">New customer</h2>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="text-caption font-medium text-ink-700 block mb-1">
+              Customer name <span className="text-error-fg">*</span>
+            </label>
+            <input
+              type="text"
+              className={field}
+              value={form.name}
+              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+              placeholder="e.g. Sharma Traders"
+            />
+            {nameError && <p className="text-caption text-error-fg mt-1">{nameError}</p>}
+          </div>
+          <div>
+            <label className="text-caption font-medium text-ink-700 block mb-1">
+              GSTIN <span className="text-ink-400">(leave blank if unregistered)</span>
+            </label>
+            <input
+              type="text"
+              className={`${field} font-mono`}
+              value={form.gstin}
+              onChange={(e) => setForm((f) => ({ ...f, gstin: e.target.value }))}
+              placeholder="e.g. 27AAPFU0939F1ZV"
+            />
+          </div>
+          <div>
+            <label className="text-caption font-medium text-ink-700 block mb-1">State</label>
+            {stateFromGstin ? (
+              <p className="text-body text-ink-700">{stateName(stateFromGstin)} — from the GSTIN</p>
+            ) : (
+              <>
+                <select
+                  className={field}
+                  value={form.stateCode}
+                  onChange={(e) => setForm((f) => ({ ...f, stateCode: e.target.value }))}
+                >
+                  <option value="">Choose a state</option>
+                  {GST_STATES.map((s) => (
+                    <option key={s.code} value={s.code}>
+                      {s.code} · {s.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-caption text-ink-500 mt-1">
+                  The place of supply on your GSTR-1 for sales to this customer.
+                </p>
+              </>
+            )}
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-caption font-medium text-ink-700 block mb-1">Email</label>
+              <input
+                type="email"
+                className={field}
+                value={form.email}
+                onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+              />
+            </div>
+            <div>
+              <label className="text-caption font-medium text-ink-700 block mb-1">Phone</label>
+              <input
+                type="tel"
+                className={field}
+                value={form.phone}
+                onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+              />
+            </div>
+          </div>
+          {mutation.isError && (
+            <p className="text-caption text-error-fg">
+              {(mutation.error as Error).message || "Couldn't save the customer. Try again."}
+            </p>
+          )}
+          <div className="flex justify-end gap-3 pt-2">
+            <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
+            <Button type="submit" disabled={mutation.isPending}>
+              {mutation.isPending ? 'Saving…' : 'Add customer'}
+            </Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
 
 // ── Add Invoice Modal ─────────────────────────────────────────────────────
 
@@ -367,6 +511,8 @@ export default function SalesPage() {
     queryFn: () => api.get<Invoice[]>('/sales/invoices'),
   });
 
+  const [showCustomerModal, setShowCustomerModal] = useState(false);
+
   const customersQuery = useQuery<Customer[]>({
     queryKey: ['sales', 'customers'],
     queryFn: () => api.get<Customer[]>('/sales/customers'),
@@ -620,76 +766,82 @@ export default function SalesPage() {
 
       {/* Customers tab */}
       {activeTab === 'Customers' && (
-        <div className="rounded-lg border border-line-200 overflow-hidden">
-          <table className="w-full text-body">
-            <thead>
-              <tr className="border-b border-line-200 bg-surface-sink">
-                <th className="px-4 py-3 text-left text-caption font-medium text-ink-500">Customer</th>
-                <th className="px-4 py-3 text-left text-caption font-medium text-ink-500">GSTIN</th>
-                <th className="px-4 py-3 text-right text-caption font-medium text-ink-500">Receivable</th>
-                <th className="px-4 py-3" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-line-100">
-              {customersQuery.isLoading ? (
-                <tr>
-                  <td colSpan={4} className="px-4 py-8 text-center text-caption text-ink-400">Loading…</td>
+        <div className="space-y-4">
+          <div className="flex justify-end">
+            <Button onClick={() => setShowCustomerModal(true)} className="flex items-center gap-2">
+              <Plus size={14} />
+              New customer
+            </Button>
+          </div>
+          <div className="rounded-lg border border-line-200 overflow-hidden">
+            <table className="w-full text-body">
+              <thead>
+                <tr className="border-b border-line-200 bg-surface-sink">
+                  <th className="px-4 py-3 text-left text-caption font-medium text-ink-500">Customer</th>
+                  <th className="px-4 py-3 text-left text-caption font-medium text-ink-500">GSTIN</th>
+                  <th className="px-4 py-3 text-left text-caption font-medium text-ink-500">State</th>
+                  <th className="px-4 py-3 text-right text-caption font-medium text-ink-500">Receivable</th>
+                  <th className="px-4 py-3" />
                 </tr>
-              ) : customersQuery.isError ? (
-                <TableError error={customersQuery.error} colSpan={4} onRetry={() => void customersQuery.refetch()} />
-              ) : (
-                customers.map((customer) => (
-                  <tr key={customer._id} className="bg-surface-card hover:bg-surface-sink/50 transition-colors">
-                    <td className="px-4 py-3 font-medium text-ink-900">{customer.name}</td>
-                    <td className="px-4 py-3 font-mono text-caption text-ink-600">
-                      {customer.gstin ?? <span className="text-ink-400">—</span>}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      {customer.receivablePaise > 0 ? (
-                        <span className="font-mono font-medium text-ink-900">
-                          {formatRupees(customer.receivablePaise)}
-                        </span>
-                      ) : (
-                        <span className="text-success-fg font-medium text-caption">Cleared</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <button
-                        type="button"
-                        className="text-ink-400 hover:text-ink-700 transition-colors"
-                        aria-label={`Open ${customer.name}`}
-                        onClick={() => setOpenCustomer(customer)}
-                      >
-                        <ChevronRight size={16} />
-                      </button>
+              </thead>
+              <tbody className="divide-y divide-line-100">
+                {customersQuery.isLoading ? (
+                  <tr>
+                    <td colSpan={5} className="px-4 py-8 text-center text-caption text-ink-400">Loading…</td>
+                  </tr>
+                ) : customersQuery.isError ? (
+                  <TableError error={customersQuery.error} colSpan={5} onRetry={() => void customersQuery.refetch()} />
+                ) : customers.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-4 py-8 text-center text-caption text-ink-400">
+                      No customers yet. Add one to start invoicing.
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                ) : (
+                  customers.map((customer) => (
+                    <tr key={customer._id} className="bg-surface-card hover:bg-surface-sink/50 transition-colors">
+                      <td className="px-4 py-3 font-medium text-ink-900">{customer.name}</td>
+                      <td className="px-4 py-3 font-mono text-caption text-ink-600">
+                        {customer.gstin ?? <span className="text-ink-400">—</span>}
+                      </td>
+                      <td className="px-4 py-3 text-caption text-ink-600">
+                        {stateName(customer.stateCode) ?? (
+                          <span className="text-pending-fg" title="Needed for GSTR-1 when they have no GSTIN">Not set</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        {customer.receivablePaise > 0 ? (
+                          <span className="font-mono font-medium text-ink-900">
+                            {formatRupees(customer.receivablePaise)}
+                          </span>
+                        ) : (
+                          <span className="text-success-fg font-medium text-caption">Cleared</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <button
+                          type="button"
+                          className="text-ink-400 hover:text-ink-700 transition-colors"
+                          aria-label={`Open ${customer.name}`}
+                          onClick={() => setOpenCustomer(customer)}
+                        >
+                          <ChevronRight size={16} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
       {/* Receivables tab */}
       {activeTab === 'Receivables' && (
         <div className="space-y-4">
-          <p className="text-caption text-ink-500">AR ageing — open invoices by days past due date.</p>
-          <div className="grid grid-cols-4 gap-3">
-            {[
-              { label: '0–30 days', paise: 2950000, color: 'text-pending-fg' },
-              { label: '31–60 days', paise: 1180000, color: 'text-error-fg' },
-              { label: '61–90 days', paise: 0, color: 'text-error-fg' },
-              { label: '90+ days', paise: 0, color: 'text-error-fg' },
-            ].map((bucket) => (
-              <div key={bucket.label} className="rounded-lg border border-line-200 bg-surface-card p-4">
-                <p className="text-caption text-ink-500 mb-1">{bucket.label}</p>
-                <p className={`text-h3 font-mono font-semibold ${bucket.paise > 0 ? bucket.color : 'text-ink-400'}`}>
-                  {formatRupees(bucket.paise)}
-                </p>
-              </div>
-            ))}
-          </div>
+          <p className="text-caption text-ink-500">AR ageing — what customers still owe, by days past the due date.</p>
+          <AgeingBuckets kind="receivable" />
 
           <div className="rounded-lg border border-line-200 overflow-hidden">
             <table className="w-full text-body">
@@ -801,6 +953,13 @@ export default function SalesPage() {
       )}
 
       {/* Modals */}
+      {showCustomerModal && (
+        <AddCustomerModal
+          onClose={() => setShowCustomerModal(false)}
+          onSuccess={() => queryClient.invalidateQueries({ queryKey: ['sales', 'customers'] })}
+          showToast={showToast}
+        />
+      )}
       {showInvoiceModal && (
         <AddInvoiceModal
           customers={customersQuery.data ?? []}
