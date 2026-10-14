@@ -319,3 +319,76 @@ describe('SalesInvoicesService — a double-click posts once', () => {
     expect(receipt!.financialYear).not.toBe(financialYearOf(lastYear));
   });
 });
+
+describe('SalesInvoicesService — part payments', () => {
+  it('stays posted until the last rupee arrives, then is paid', async () => {
+    const customer = await seedCustomer('Part Pay Customer');
+    const inv = await seedInvoice(customer._id.toString(), { invoiceNumber: 'INV-PART-1' }); // ₹29,500
+    await invoicesSvc.post(inv._id.toString(), ORG_ID, ACTOR_ID);
+
+    const first = await invoicesSvc.markPaid(inv._id.toString(), ORG_ID, ACTOR_ID, '2026-10-01', 1000000);
+    expect(first.status).toBe(InvoiceStatus.POSTED);
+    expect(first.amountPaidPaise).toBe(1000000);
+    expect(await customersSvc.receivable(customer._id.toString(), ORG_ID)).toBe(1950000);
+
+    const rest = await invoicesSvc.markPaid(inv._id.toString(), ORG_ID, ACTOR_ID, '2026-10-05');
+    expect(rest.status).toBe(InvoiceStatus.PAID);
+    expect(rest.payments.map((p) => p.amountPaise)).toEqual([1000000, 1950000]);
+    expect(await customersSvc.receivable(customer._id.toString(), ORG_ID)).toBe(0);
+
+    const receipts = await journalModel
+      .find({ orgId: ORG_ID, voucherType: VoucherType.RECEIPT, narration: /INV-PART-1/ })
+      .sort({ date: 1 })
+      .exec();
+    expect(receipts.map((r) => [r.date, r.lines[0].debitPaise])).toEqual([
+      ['2026-10-01', 1000000],
+      ['2026-10-05', 1950000],
+    ]);
+    expect(receipts[0].narration).toMatch(/\(part\)$/);
+  });
+
+  it('refuses a payment larger than what is owed', async () => {
+    const customer = await seedCustomer('Over Pay Customer');
+    const inv = await seedInvoice(customer._id.toString(), { invoiceNumber: 'INV-OVER-1' });
+    await invoicesSvc.post(inv._id.toString(), ORG_ID, ACTOR_ID);
+    await invoicesSvc.markPaid(inv._id.toString(), ORG_ID, ACTOR_ID, undefined, 2000000);
+
+    await expect(
+      invoicesSvc.markPaid(inv._id.toString(), ORG_ID, ACTOR_ID, undefined, 1000000),
+    ).rejects.toThrow(/₹10,000\.00 is more than the ₹9,500\.00 still owed/);
+  });
+
+  it('two part payments at once cannot overpay between them', async () => {
+    const customer = await seedCustomer('Race Part Customer');
+    const inv = await seedInvoice(customer._id.toString(), { invoiceNumber: 'INV-RACE-PART' }); // ₹29,500
+    await invoicesSvc.post(inv._id.toString(), ORG_ID, ACTOR_ID);
+
+    const results = await Promise.allSettled([
+      invoicesSvc.markPaid(inv._id.toString(), ORG_ID, ACTOR_ID, undefined, 2000000),
+      invoicesSvc.markPaid(inv._id.toString(), ORG_ID, ACTOR_ID, undefined, 2000000),
+    ]);
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+    expect((await invoiceModel.findById(inv._id).exec())?.amountPaidPaise).toBe(2000000);
+  });
+
+  it('AR ageing counts what is still owed', async () => {
+    const customer = await seedCustomer('Ageing Part Customer');
+    const before = await customersSvc.arAgeing(ORG_ID);
+    const inv = await seedInvoice(customer._id.toString(), { invoiceNumber: 'INV-AGE-PART' });
+    await invoicesSvc.post(inv._id.toString(), ORG_ID, ACTOR_ID);
+    await invoicesSvc.markPaid(inv._id.toString(), ORG_ID, ACTOR_ID, undefined, 950000);
+
+    const after = await customersSvc.arAgeing(ORG_ID);
+    expect(after.total - before.total).toBe(2000000);
+  });
+
+  it('lists each customer with what they still owe', async () => {
+    const customer = await seedCustomer('Listed Owing Customer');
+    const inv = await seedInvoice(customer._id.toString(), { invoiceNumber: 'INV-LIST-1' });
+    await invoicesSvc.post(inv._id.toString(), ORG_ID, ACTOR_ID);
+    await invoicesSvc.markPaid(inv._id.toString(), ORG_ID, ACTOR_ID, undefined, 500000);
+
+    const listed = (await customersSvc.list(ORG_ID)).find((c) => String(c._id) === String(customer._id));
+    expect(listed?.receivablePaise).toBe(2450000);
+  });
+});

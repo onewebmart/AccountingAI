@@ -374,22 +374,46 @@ describe('manual matching', () => {
     expect((await invoiceModel.findById(target._id).exec())?.status).toBe(InvoiceStatus.PAID);
   });
 
-  it('refuses a part payment, money out against an invoice, and a target another line holds', async () => {
+  it('settles one invoice from two part payments, and refuses more than is owed', async () => {
     const orgId = newOrg();
     const invoice = await postedInvoice(orgId, 'INV-5001');
     const statement = await importLines(orgId, [
-      { date: '2026-10-10', description: 'PART PAYMENT', creditPaise: 400000 },
+      { date: '2026-10-10', description: 'PART PAYMENT 1', creditPaise: 400000 },
       { date: '2026-10-10', description: 'REFUND OUT', debitPaise: 1000000 },
-      { date: '2026-10-11', description: 'FULL PAYMENT', creditPaise: 1000000 },
-      { date: '2026-10-12', description: 'FULL PAYMENT AGAIN', creditPaise: 1000000 },
+      { date: '2026-10-11', description: 'PART PAYMENT 2', creditPaise: 600000 },
+      { date: '2026-10-12', description: 'ONE TOO MANY', creditPaise: 100000 },
     ]);
-    const [part, out, full, again] = await linesOf(statement._id);
+    const [first, out, second, extra] = await linesOf(statement._id);
     const target = { invoiceId: invoice._id.toString() };
 
-    await expect(svc.manualMatch(part._id.toString(), target, orgId, ACTOR_ID)).rejects.toThrow(/part payments are not supported/);
     await expect(svc.manualMatch(out._id.toString(), target, orgId, ACTOR_ID)).rejects.toThrow(/Only money coming in/);
-    await svc.manualMatch(full._id.toString(), target, orgId, ACTOR_ID);
-    await expect(svc.manualMatch(again._id.toString(), target, orgId, ACTOR_ID)).rejects.toThrow(/already matched to another bank line/);
+    await svc.manualMatch(first._id.toString(), target, orgId, ACTOR_ID);
+    await svc.manualMatch(second._id.toString(), target, orgId, ACTOR_ID);
+    // ₹4,000 + ₹6,000 are already matched to it, so nothing is left for a third line.
+    await expect(svc.manualMatch(extra._id.toString(), target, orgId, ACTOR_ID)).rejects.toThrow(
+      /has ₹0\.00 left to settle \(₹10,000\.00 is already matched/,
+    );
+
+    expect(await svc.confirmMatches(statement._id.toString(), orgId, ACTOR_ID)).toEqual({ confirmed: 2, failed: [] });
+    const stored = await invoiceModel.findById(invoice._id).exec();
+    expect(stored?.status).toBe(InvoiceStatus.PAID);
+    expect(stored?.payments.map((p) => [p.amountPaise, p.paidOn])).toEqual([
+      [400000, '2026-10-10'],
+      [600000, '2026-10-11'],
+    ]);
+  });
+
+  it('auto-matches against what is still owed, not the invoice total', async () => {
+    const orgId = newOrg();
+    const invoice = await postedInvoice(orgId, 'INV-5002');
+    await invoicesSvc.markPaid(invoice._id.toString(), orgId, ACTOR_ID, '2026-10-09', 300000);
+    const statement = await importLines(orgId, [
+      { date: '2026-10-12', description: 'NEFT CR INV-5002 balance', creditPaise: 700000 },
+    ]);
+
+    await svc.autoMatch(statement._id.toString(), orgId);
+    const [line] = await linesOf(statement._id);
+    expect(String(line.matchedInvoiceId)).toBe(String(invoice._id));
   });
 
   it('can unmatch, exclude, and clear a duplicate flag — but not undo a confirmed line', async () => {

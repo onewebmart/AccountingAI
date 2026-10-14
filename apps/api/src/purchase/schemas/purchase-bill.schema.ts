@@ -2,6 +2,7 @@ import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument, Types, Schema as MongooseSchema } from 'mongoose';
 import { BillStatus } from '@ai-accounting/shared';
 import { tenantIsolationPlugin } from '../../database/tenant.plugin';
+import { Settlement, SettlementSchema, settledAmountProp } from '../../gl/schemas/settlement.schema';
 
 export type PurchaseBillDocument = HydratedDocument<PurchaseBill>;
 
@@ -57,9 +58,14 @@ export class PurchaseBill {
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Journal', default: null })
   journalId: Types.ObjectId | null;
 
-  /** The payment journal that settled this, set when it is marked paid. */
-  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Journal', default: null })
-  paymentJournalId: Types.ObjectId | null;
+  /**
+   * Integer paise paid so far, across every payment in `payments`. The
+   * document stays posted until this reaches the total, then becomes paid.
+   */
+  @Prop(settledAmountProp) amountPaidPaise: number;
+
+  /** Each payment against this document — part payments add one each. */
+  @Prop({ type: [SettlementSchema], default: [] }) payments: Settlement[];
 
   /** Actor who posted this bill to the ledger. */
   @Prop({ type: String, default: null }) postedBy: string | null;

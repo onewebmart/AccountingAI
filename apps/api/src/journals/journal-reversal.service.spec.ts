@@ -134,15 +134,16 @@ describe('reversing a sale', () => {
     const paid = await invoices.markPaid(invoice._id.toString(), orgId, ACTOR_ID, '2026-10-10');
 
     await expect(reversals.reverse(String(invoice.journalId), orgId, ACTOR_ID)).rejects.toThrow(
-      /has been paid — reverse its receipt first/,
+      /has payments against it — reverse its receipts first/,
     );
     expect(await journalModel.countDocuments({ orgId, reversalOf: { $exists: true } })).toBe(0);
 
     // Reversing the receipt makes the invoice unpaid again…
-    await reversals.reverse(String(paid.paymentJournalId), orgId, ACTOR_ID);
+    await reversals.reverse(String(paid.payments[0].journalId), orgId, ACTOR_ID);
     let stored = await invoiceModel.findById(invoice._id).exec();
     expect(stored?.status).toBe(InvoiceStatus.POSTED);
-    expect(stored?.paymentJournalId).toBeNull();
+    expect(stored?.payments).toHaveLength(0);
+    expect(stored?.amountPaidPaise).toBe(0);
 
     // …and then the sale itself can go.
     await reversals.reverse(String(invoice.journalId), orgId, ACTOR_ID);
@@ -161,7 +162,7 @@ describe('reversing a payment', () => {
     await bills.post(draft._id.toString(), orgId, ACTOR_ID);
     const paid = await bills.markPaid(draft._id.toString(), orgId, ACTOR_ID);
 
-    await reversals.reverse(String(paid.paymentJournalId), orgId, ACTOR_ID);
+    await reversals.reverse(String(paid.payments[0].journalId), orgId, ACTOR_ID);
 
     expect((await billModel.findById(draft._id).exec())?.status).toBe(BillStatus.POSTED);
     expect(await net(orgId, /payable/i)).toBe(-1000000);
@@ -180,13 +181,31 @@ describe('reversing a payment', () => {
       debitPaise: 0,
       creditPaise: 1000000,
       matchStatus: MatchStatus.CONFIRMED,
-      matchedJournalId: paid.paymentJournalId,
+      matchedJournalId: paid.payments[0].journalId,
     });
 
-    await reversals.reverse(String(paid.paymentJournalId), orgId, ACTOR_ID);
+    await reversals.reverse(String(paid.payments[0].journalId), orgId, ACTOR_ID);
 
     const stored = await lineModel.findById(line._id).exec();
     expect(stored?.matchStatus).toBe(MatchStatus.UNMATCHED);
     expect(stored?.matchedJournalId).toBeNull();
+  });
+});
+
+describe('reversing one of several part payments', () => {
+  it('takes back only that payment', async () => {
+    const orgId = new Types.ObjectId().toString();
+    const invoice = await postedInvoice(orgId, 'R-004');
+    await invoices.markPaid(invoice._id.toString(), orgId, ACTOR_ID, '2026-10-10', 400000);
+    const both = await invoices.markPaid(invoice._id.toString(), orgId, ACTOR_ID, '2026-10-12', 600000);
+    expect(both.status).toBe(InvoiceStatus.PAID);
+
+    await reversals.reverse(String(both.payments[1].journalId), orgId, ACTOR_ID);
+
+    const stored = await invoiceModel.findById(invoice._id).exec();
+    expect(stored?.status).toBe(InvoiceStatus.POSTED);
+    expect(stored?.amountPaidPaise).toBe(400000);
+    expect(stored?.payments.map((p) => p.amountPaise)).toEqual([400000]);
+    expect(await net(orgId, /receivable/i)).toBe(600000);
   });
 });

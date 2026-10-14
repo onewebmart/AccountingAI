@@ -18,7 +18,8 @@ interface ApiRecord {
   financialYear?: string | null;
   amountsPaise: { taxableValue: number; cgst: number; sgst: number; igst: number; cess: number; total: number };
   journalId?: string | null;
-  paymentJournalId?: string | null;
+  amountPaidPaise?: number;
+  payments?: Array<{ _id: string; journalId: string; amountPaise: number; paidOn: string }>;
   sourceDocumentId?: string | null;
   notes?: string | null;
 }
@@ -103,9 +104,16 @@ export function DocumentDetailDialog({
 
             <div>
               <Row label="Posted as">{record.journalId ? <VoucherNumber id={record.journalId} /> : 'Not posted yet'}</Row>
-              <Row label={kind === 'invoice' ? 'Received by' : 'Paid by'}>
-                {record.paymentJournalId ? <VoucherNumber id={record.paymentJournalId} /> : record.status === 'paid' ? 'Paid' : 'Unpaid'}
-              </Row>
+              {(record.payments ?? []).map((p) => (
+                <Row key={p._id} label={`${kind === 'invoice' ? 'Received' : 'Paid'} ${formatRupees(p.amountPaise)}`}>
+                  <VoucherNumber id={p.journalId} />
+                </Row>
+              ))}
+              {record.status !== 'paid' && (
+                <Row label="Still owed">
+                  <span className="font-mono font-semibold">{formatRupees(a.total - (record.amountPaidPaise ?? 0))}</span>
+                </Row>
+              )}
             </div>
 
             {record.notes && <p className="text-caption text-ink-500">{record.notes}</p>}

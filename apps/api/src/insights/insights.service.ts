@@ -112,7 +112,8 @@ export class InsightsService {
           $group: {
             _id: null,
             count: { $sum: 1 },
-            totalPaise: { $sum: '$amountsPaise.total' },
+            // What is still owed, not the bill total — a part-paid bill owes less.
+            totalPaise: { $sum: { $subtract: ['$amountsPaise.total', { $ifNull: ['$amountPaidPaise', 0] }] } },
           },
         },
       ])

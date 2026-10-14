@@ -21,6 +21,7 @@ import { SalesInvoicesService } from '../sales/sales-invoices.service';
 import { PurchaseBillsService } from '../purchase/purchase-bills.service';
 import { formatVoucherNumber } from '../journals/journals.service';
 import { withOrg } from '../database/tenant.plugin';
+import { outstandingPaise } from '../gl/schemas/settlement.schema';
 
 export interface CreateBankAccountInput {
   orgId: string;
@@ -358,11 +359,12 @@ export class ReconciliationService {
         set = { matchedJournalId: voucher._id };
         takenIds.add(String(voucher._id));
       } else {
-        // 2. An open invoice or bill for exactly this amount, dated on or before the money moved.
+        // 2. An open invoice or bill owing exactly this amount, dated on or before the money moved.
+        // Exactly what is still owed — auto-matching never guesses a part payment.
         const candidates = (moneyIn
-          ? openInvoices.map((i) => ({ id: i._id, number: i.invoiceNumber, date: i.invoiceDate, total: i.amountsPaise.total }))
-          : openBills.map((b) => ({ id: b._id, number: b.billNumber, date: b.billDate, total: b.amountsPaise.total }))
-        ).filter((c) => !takenIds.has(String(c.id)) && c.total === amount && c.date <= line.date);
+          ? openInvoices.map((i) => ({ id: i._id, number: i.invoiceNumber, date: i.invoiceDate, owed: outstandingPaise(i) }))
+          : openBills.map((b) => ({ id: b._id, number: b.billNumber, date: b.billDate, owed: outstandingPaise(b) }))
+        ).filter((c) => !takenIds.has(String(c.id)) && c.owed === amount && c.date <= line.date);
 
         const narration = refKey(`${line.description} ${line.reference ?? ''}`);
         const byReference = candidates.filter((c) => refKey(c.number).length >= 4 && narration.includes(refKey(c.number)));
@@ -431,12 +433,14 @@ export class ReconciliationService {
           let journalId = line.matchedJournalId;
           if (line.matchedInvoiceId) {
             const { receipt } = await this.salesInvoices.settleWithin(
-              session, String(line.matchedInvoiceId), orgId, actorId, line.date,
+              session, String(line.matchedInvoiceId), orgId, actorId,
+              { paidOn: line.date, amountPaise: lineAmount(line), bankLineId: line._id.toString() },
             );
             journalId = receipt._id;
           } else if (line.matchedBillId) {
             const { payment } = await this.purchaseBills.settleWithin(
-              session, String(line.matchedBillId), orgId, actorId, line.date,
+              session, String(line.matchedBillId), orgId, actorId,
+              { paidOn: line.date, amountPaise: lineAmount(line), bankLineId: line._id.toString() },
             );
             journalId = payment._id;
           }
@@ -510,7 +514,7 @@ export class ReconciliationService {
       if (invoice.status !== InvoiceStatus.POSTED) {
         throw new BadRequestException(`Only a posted, unpaid invoice can be settled (this one is ${invoice.status})`);
       }
-      this.requireFullAmount(invoice.amountsPaise.total, amount, 'invoice');
+      await this.requireRoomFor(invoice._id, outstandingPaise(invoice), amount, line._id, orgId, 'invoice');
       set = { matchedInvoiceId: invoice._id };
       label = `Invoice ${invoice.invoiceNumber ?? invoice._id}`;
     } else {
@@ -520,22 +524,21 @@ export class ReconciliationService {
       if (bill.status !== BillStatus.POSTED) {
         throw new BadRequestException(`Only a posted, unpaid bill can be settled (this one is ${bill.status})`);
       }
-      this.requireFullAmount(bill.amountsPaise.total, amount, 'bill');
+      await this.requireRoomFor(bill._id, outstandingPaise(bill), amount, line._id, orgId, 'bill');
       set = { matchedBillId: bill._id };
       label = `Bill ${bill.billNumber ?? bill._id}`;
     }
 
-    const targetId = Object.values(set)[0];
-    const clash = await withOrg(orgId, () =>
-      this.lineModel
-        .exists({
-          _id: { $ne: line._id },
-          matchStatus: { $ne: MatchStatus.UNMATCHED },
-          $or: [{ matchedJournalId: targetId }, { matchedInvoiceId: targetId }, { matchedBillId: targetId }],
-        })
-        .exec(),
-    );
-    if (clash) throw new BadRequestException(`${label} is already matched to another bank line`);
+    // A voucher records one bank movement. An invoice or bill can take several
+    // (part payments) — requireRoomFor has already checked they fit.
+    if (target.journalId) {
+      const clash = await withOrg(orgId, () =>
+        this.lineModel
+          .exists({ _id: { $ne: line._id }, matchStatus: { $ne: MatchStatus.UNMATCHED }, matchedJournalId: set.matchedJournalId })
+          .exec(),
+      );
+      if (clash) throw new BadRequestException(`${label} is already matched to another bank line`);
+    }
 
     const updated = await withOrg(orgId, () =>
       this.lineModel
@@ -705,11 +708,36 @@ export class ReconciliationService {
     return updated;
   }
 
-  private requireFullAmount(documentTotal: number, bankAmount: number, kind: 'invoice' | 'bill'): void {
-    if (documentTotal !== bankAmount) {
+  /**
+   * A bank line may settle part of an invoice or bill, and several lines may
+   * settle one between them — but never more than is owed, counting other
+   * lines already matched to it and waiting to be confirmed.
+   */
+  private async requireRoomFor(
+    targetId: Types.ObjectId,
+    owedPaise: number,
+    amountPaise: number,
+    lineId: Types.ObjectId,
+    orgId: string,
+    kind: 'invoice' | 'bill',
+  ): Promise<void> {
+    const field = kind === 'invoice' ? 'matchedInvoiceId' : 'matchedBillId';
+    const pendingLines = await withOrg(orgId, () =>
+      this.lineModel
+        .find({
+          _id: { $ne: lineId },
+          [field]: targetId,
+          matchStatus: { $in: [MatchStatus.AUTO_MATCHED, MatchStatus.MANUALLY_MATCHED] },
+        })
+        .exec(),
+    );
+    const pending = pendingLines.reduce((s, l) => s + lineAmount(l), 0);
+    const room = owedPaise - pending;
+    if (amountPaise > room) {
       throw new BadRequestException(
-        `The ${kind} is for ${rupees(documentTotal)} but the bank line is ${rupees(bankAmount)} — ` +
-          'part payments are not supported yet, so the amounts must match',
+        `The ${kind} has ${rupees(room)} left to settle` +
+          (pending > 0 ? ` (${rupees(pending)} is already matched from other lines)` : '') +
+          `, but the bank line is ${rupees(amountPaise)}`,
       );
     }
   }

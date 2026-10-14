@@ -136,9 +136,15 @@ export class CreateSalesInvoiceDto {
   notes?: string | null;
 }
 
-/** Optional body for "mark paid": the day the money moved, if not today. */
+/** Optional body for recording a payment: when, and how much (default: all of it). */
 export class PayInvoiceDto {
   @IsOptional()
   @IsISO8601({}, { message: 'paidOn must be a date like 2026-10-10' })
   paidOn?: string;
+
+  /** Part of what is owed; everything outstanding when omitted. */
+  @IsOptional()
+  @IsInt({ message: 'amountPaise must be an integer number of paise' })
+  @Min(1)
+  amountPaise?: number;
 }

@@ -6,6 +6,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { DocumentUploadButton } from '@/components/shell/document-upload-button';
 import { DocumentDetailDialog, PartyDetailDialog } from '@/components/shell/record-detail-dialogs';
+import { RecordPaymentDialog } from '@/components/shell/record-payment-dialog';
 import { Plus, ChevronRight } from 'lucide-react';
 import { api } from '@/lib/api';
 import { GST_RATES, GstRate, splitGst, rupeesToPaise, formatPaise } from '@/lib/gst';
@@ -24,6 +25,9 @@ interface Bill {
   dueDate: string | null;
   status: BillStatus;
   totalPaise: number;
+  /** Paid so far, and still owed — part payments leave both non-zero. */
+  amountPaidPaise: number;
+  outstandingPaise: number;
   /** Set when this row was read off an upload; null when typed in by hand. */
   sourceDocumentId?: string | null;
 }
@@ -418,6 +422,7 @@ export default function PurchasePage() {
   const [toast, setToast] = useState<string | null>(null);
   const [showBillModal, setShowBillModal] = useState(false);
   const [openBill, setOpenBill] = useState<Bill | null>(null);
+  const [payingBill, setPayingBill] = useState<Bill | null>(null);
   const [openVendor, setOpenVendor] = useState<Vendor | null>(null);
   const [showVendorModal, setShowVendorModal] = useState(false);
 
@@ -449,15 +454,6 @@ export default function PurchasePage() {
     mutationFn: (id: string) => api.post(`/purchase/bills/${id}/post`),
     onSuccess: () => {
       showToast('Posted to ledger');
-      afterLedgerChange();
-    },
-    onError: (e) => showToast((e as Error).message),
-  });
-
-  const payMutation = useMutation({
-    mutationFn: (id: string) => api.post(`/purchase/bills/${id}/pay`),
-    onSuccess: () => {
-      showToast('Payment recorded');
       afterLedgerChange();
     },
     onError: (e) => showToast((e as Error).message),
@@ -628,6 +624,11 @@ export default function PurchasePage() {
                         </td>
                         <td className="px-4 py-3 text-right font-mono font-medium text-ink-900">
                           {formatRupees(bill.totalPaise)}
+                          {bill.amountPaidPaise > 0 && bill.outstandingPaise > 0 && (
+                            <span className="block text-caption font-normal text-pending-fg">
+                              {formatRupees(bill.outstandingPaise)} due
+                            </span>
+                          )}
                         </td>
                         <td className="px-4 py-3">
                           <BillStatusBadge status={bill.status} />
@@ -647,8 +648,7 @@ export default function PurchasePage() {
                           {bill.status === 'posted' && (
                             <button
                               type="button"
-                              onClick={() => payMutation.mutate(bill._id)}
-                              disabled={payMutation.isPending}
+                              onClick={() => setPayingBill(bill)}
                               className="rounded border border-success-fg/30 px-2 py-0.5 text-caption font-medium text-success-fg transition-colors hover:bg-success-bg disabled:opacity-40"
                             >
                               Mark paid
@@ -788,7 +788,7 @@ export default function PurchasePage() {
                             : '—'}
                         </td>
                         <td className="px-4 py-3 text-right font-mono font-medium text-ink-900">
-                          {formatRupees(bill.totalPaise)}
+                          {formatRupees(bill.outstandingPaise)}
                         </td>
                         <td className="px-4 py-3">
                           {due ? (
@@ -808,6 +808,22 @@ export default function PurchasePage() {
       )}
 
       {/* Toast */}
+      <RecordPaymentDialog
+        kind="bill"
+        document={
+          payingBill && {
+            id: payingBill._id,
+            number: payingBill.billNumber,
+            partyName: payingBill.vendorName,
+            outstandingPaise: payingBill.outstandingPaise,
+          }
+        }
+        onClose={() => setPayingBill(null)}
+        onRecorded={(message) => {
+          showToast(message);
+          afterLedgerChange();
+        }}
+      />
       <DocumentDetailDialog
         kind="bill"
         id={openBill?._id ?? null}

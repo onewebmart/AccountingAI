@@ -2,6 +2,7 @@ import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument, Types, Schema as MongooseSchema } from 'mongoose';
 import { InvoiceStatus } from '@ai-accounting/shared';
 import { tenantIsolationPlugin } from '../../database/tenant.plugin';
+import { Settlement, SettlementSchema, settledAmountProp } from '../../gl/schemas/settlement.schema';
 
 export type SalesInvoiceDocument = HydratedDocument<SalesInvoice>;
 
@@ -54,9 +55,14 @@ export class SalesInvoice {
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Journal', default: null })
   journalId: Types.ObjectId | null;
 
-  /** The receipt journal that settled this, set when it is marked paid. */
-  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Journal', default: null })
-  paymentJournalId: Types.ObjectId | null;
+  /**
+   * Integer paise paid so far, across every receipt in `payments`. The
+   * document stays posted until this reaches the total, then becomes paid.
+   */
+  @Prop(settledAmountProp) amountPaidPaise: number;
+
+  /** Each receipt against this document — part payments add one each. */
+  @Prop({ type: [SettlementSchema], default: [] }) payments: Settlement[];
 
   @Prop({ type: String, default: null }) postedBy: string | null;
   /** Timestamp when the invoice was sent to the customer. */

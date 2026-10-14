@@ -14,6 +14,7 @@ import { SystemAccountKey } from '../gl/schemas/ledger-account.schema';
 import { PostingService, financialYearOf } from '../gl/posting.service';
 import { AuditService } from '../gl/audit.service';
 import { JournalDocument } from '../gl/schemas/journal.schema';
+import { outstandingPaise } from '../gl/schemas/settlement.schema';
 import { withOrg } from '../database/tenant.plugin';
 
 /** The shape every list of bills is rendered from. */
@@ -36,6 +37,9 @@ export interface BillListItem {
   };
   /** amountsPaise.total, flattened — integer paise. */
   totalPaise: number;
+  /** Paid so far, and what is still owed — integer paise. */
+  amountPaidPaise: number;
+  outstandingPaise: number;
   financialYear: string | null;
   journalId: string | null;
   sourceDocumentId: string | null;
@@ -73,6 +77,11 @@ function getFY(dateStr: string): string {
   const y = d.getFullYear();
   const m = d.getMonth() + 1;
   return m >= 4 ? `${y}-${(y + 1).toString().slice(-2)}` : `${y - 1}-${y.toString().slice(-2)}`;
+}
+
+/** Rupees for a message, e.g. 1000000 → "₹10,000.00". */
+function rupees(paise: number): string {
+  return `₹${(paise / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 @Injectable()
@@ -150,6 +159,8 @@ export class PurchaseBillsService {
         status: b.status,
         amountsPaise: b.amountsPaise,
         totalPaise: b.amountsPaise?.total ?? 0,
+        amountPaidPaise: b.amountPaidPaise ?? 0,
+        outstandingPaise: outstandingPaise(b),
         financialYear: b.financialYear ?? null,
         journalId: b.journalId?.toString() ?? null,
         // Null for a manual entry; set when the bill was read off an upload.
@@ -284,98 +295,134 @@ export class PurchaseBillsService {
   }
 
   /**
-   * Record payment against a posted bill (creates a PAYMENT journal).
-   * `paidOn` is the day the money left — today when not given.
+   * Record a payment against a posted bill — all of what is owed, or part of
+   * it. `paidOn` is the day the money left (today when not given);
+   * `amountPaise` defaults to everything still outstanding.
    */
   async markPaid(
     id: string,
     orgId: string,
     actorId: string,
     paidOn?: string,
+    amountPaise?: number,
   ): Promise<PurchaseBillDocument> {
-    const bill = await this.findById(id, orgId);
-    if (bill.status !== BillStatus.POSTED) {
-      throw new BadRequestException(`Bill must be in POSTED status to mark as paid (current: ${bill.status})`);
-    }
+    await this.findById(id, orgId); // 404 for an unknown bill, before any transaction
 
-    const { bill: paid } = await this.postingService.inTransaction((session) =>
-      this.settleWithin(session, id, orgId, actorId, paidOn ?? new Date().toISOString().slice(0, 10)),
+    const { bill: updated } = await this.postingService.inTransaction((session) =>
+      this.settleWithin(session, id, orgId, actorId, {
+        paidOn: paidOn ?? new Date().toISOString().slice(0, 10),
+        amountPaise,
+      }),
     );
 
-    this.logger.log(`PurchaseBill ${id} marked PAID by ${actorId}`);
-    return paid;
+    this.logger.log(`PurchaseBill ${id} payment recorded by ${actorId} (now ${updated.status})`);
+    return updated;
   }
 
   /**
-   * Settle a posted bill in full inside the caller's transaction: claim
-   * POSTED → PAID, then post Dr Accounts Payable / Cr Bank dated `paidOn` and
-   * filed in that date's financial year. Bank reconciliation calls this with
-   * the date the money left the bank.
+   * Record a payment inside the caller's transaction: post the payment
+   * voucher dated `paidOn` (filed in that date's financial year), add it to
+   * the bill's payments, and mark the bill paid once nothing is owed.
+   *
+   * The bill is read and updated in the same transaction, guarded on the
+   * amount paid so far, so two payments recorded at once cannot overpay it —
+   * the second either sees the first or conflicts and retries. Bank
+   * reconciliation calls this with the date and amount of the bank line.
    */
   async settleWithin(
     session: ClientSession,
     id: string,
     orgId: string,
     actorId: string,
-    paidOn: string,
+    opts: { paidOn: string; amountPaise?: number; bankLineId?: string | null },
   ): Promise<{ bill: PurchaseBillDocument; payment: JournalDocument }> {
+    const current = await withOrg(orgId, () =>
+      this.billModel.findById(id).session(session).exec(),
+    );
+    if (!current) throw new NotFoundException('PurchaseBill not found');
+    if (current.status === BillStatus.PAID) throw new BadRequestException('Bill has already been marked paid');
+    if (current.status !== BillStatus.POSTED) {
+      throw new BadRequestException(`Bill must be POSTED to record a payment (current: ${current.status})`);
+    }
+
+    const owed = outstandingPaise(current);
+    const amount = opts.amountPaise ?? owed;
+    if (!Number.isInteger(amount) || amount <= 0) {
+      throw new BadRequestException('A payment must be a positive whole number of paise');
+    }
+    if (amount > owed) {
+      throw new BadRequestException(
+        `A payment of ${rupees(amount)} is more than the ${rupees(owed)} still owed on this bill`,
+      );
+    }
+
     const accounts = await this.accountsService.resolveSystemAccounts(orgId, [
       SystemAccountKey.ACCOUNTS_PAYABLE,
       SystemAccountKey.BANK,
     ]);
     const payable = accounts.get(SystemAccountKey.ACCOUNTS_PAYABLE)!;
     const bank = accounts.get(SystemAccountKey.BANK)!;
+    const number = current.billNumber ?? id;
 
-    // Claim POSTED → PAID first: two simultaneous clicks must not pay the vendor twice.
-    const claimed = await withOrg(orgId, () =>
-      this.billModel
-        .findOneAndUpdate(
-          { _id: id, status: BillStatus.POSTED },
-          { $set: { status: BillStatus.PAID, paidBy: actorId } },
-          { new: true, session },
-        )
-        .exec(),
-    );
-    if (!claimed) throw new BadRequestException('Bill has already been marked paid');
-
-    const total = claimed.amountsPaise.total;
     const payment = await this.postingService.post(
       {
         orgId,
         voucherType: VoucherType.PAYMENT,
-        // Filed by its own date, not the bill's — they differ for any bill
-        // paid after 31 March.
-        financialYear: financialYearOf(paidOn),
-        date: paidOn,
-        narration: `Payment for bill ${claimed.billNumber ?? id}`,
+        // Filed by its own date, not the bill's — they differ for any
+        // bill paid after 31 March.
+        financialYear: financialYearOf(opts.paidOn),
+        date: opts.paidOn,
+        narration: amount < owed ? `Payment for bill ${number} (part)` : `Payment for bill ${number}`,
         postedBy: actorId,
         lines: [
-          { accountId: payable._id.toString(), description: payable.name, debitPaise: total, creditPaise: 0 },
-          { accountId: bank._id.toString(), description: bank.name, debitPaise: 0, creditPaise: total },
+          { accountId: payable._id.toString(), description: payable.name, debitPaise: amount, creditPaise: 0 },
+          { accountId: bank._id.toString(), description: bank.name, debitPaise: 0, creditPaise: amount },
         ],
       },
       session,
     );
 
-    // Remember which voucher settled it, so reversing that voucher can reopen it.
-    await this.billModel
-      .updateOne({ _id: claimed._id }, { $set: { paymentJournalId: payment._id } }, { session })
-      .exec();
+    const paidInFull = amount === owed;
+    const updated = await withOrg(orgId, () =>
+      this.billModel
+        .findOneAndUpdate(
+          { _id: current._id, status: BillStatus.POSTED, amountPaidPaise: current.amountPaidPaise ?? 0 },
+          {
+            $inc: { amountPaidPaise: amount },
+            $push: {
+              payments: {
+                journalId: payment._id,
+                amountPaise: amount,
+                paidOn: opts.paidOn,
+                bankLineId: opts.bankLineId ? new Types.ObjectId(opts.bankLineId) : null,
+              },
+            },
+            $set: paidInFull ? { status: BillStatus.PAID, paidBy: actorId } : {},
+          },
+          { new: true, session },
+        )
+        .exec(),
+    );
+    if (!updated) throw new BadRequestException('This bill changed while the payment was being recorded — try again');
 
     await this.auditService.record(
       {
         orgId,
         entityType: 'PurchaseBill',
         entityId: id,
-        action: 'PAY',
+        action: paidInFull ? 'PAY' : 'PART_PAY',
         performedBy: actorId,
-        before: { status: BillStatus.POSTED },
-        after: { status: BillStatus.PAID, paymentJournalId: payment._id.toString(), paidOn },
+        before: { status: current.status, amountPaidPaise: current.amountPaidPaise ?? 0 },
+        after: {
+          status: updated.status,
+          amountPaidPaise: updated.amountPaidPaise,
+          paymentJournalId: payment._id.toString(),
+          paidOn: opts.paidOn,
+        },
       },
       session,
     );
 
-    claimed.paymentJournalId = payment._id;
-    return { bill: claimed, payment };
+    return { bill: updated, payment };
   }
 }

@@ -89,6 +89,6 @@ export class PurchaseController {
   @Post('bills/:id/pay')
   @RequirePermission(Permission.POST_JOURNAL)
   payBill(@Request() req: AuthRequest, @Param('id') id: string, @Body() body: PayBillDto) {
-    return this.billsService.markPaid(id, req.user.orgId, req.user.sub, body?.paidOn);
+    return this.billsService.markPaid(id, req.user.orgId, req.user.sub, body?.paidOn, body?.amountPaise);
   }
 }

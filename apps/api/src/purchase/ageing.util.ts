@@ -22,14 +22,16 @@ export function ageingBucket(dueDateStr: string | null): keyof Omit<AgeingSummar
   return 'over90';
 }
 
+/** Buckets what is still owed on each item — not its total, which overstated part-paid ones. */
 export function buildAgeingSummary(
-  items: Array<{ amountsPaise: { total: number }; dueDate: string | null }>,
+  items: Array<{ owedPaise: number; dueDate: string | null }>,
 ): AgeingSummary {
   const summary: AgeingSummary = { current: 0, days1_30: 0, days31_60: 0, days61_90: 0, over90: 0, total: 0 };
   for (const item of items) {
+    if (item.owedPaise <= 0) continue;
     const bucket = ageingBucket(item.dueDate);
-    summary[bucket] += item.amountsPaise.total;
-    summary.total += item.amountsPaise.total;
+    summary[bucket] += item.owedPaise;
+    summary.total += item.owedPaise;
   }
   return summary;
 }

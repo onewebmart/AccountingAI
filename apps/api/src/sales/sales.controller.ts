@@ -95,6 +95,6 @@ export class SalesController {
   @Post('invoices/:id/pay')
   @RequirePermission(Permission.POST_JOURNAL)
   payInvoice(@Request() req: AuthRequest, @Param('id') id: string, @Body() body: PayInvoiceDto) {
-    return this.invoicesService.markPaid(id, req.user.orgId, req.user.sub, body?.paidOn);
+    return this.invoicesService.markPaid(id, req.user.orgId, req.user.sub, body?.paidOn, body?.amountPaise);
   }
 }

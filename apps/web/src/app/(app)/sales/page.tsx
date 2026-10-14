@@ -6,6 +6,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { DocumentUploadButton } from '@/components/shell/document-upload-button';
 import { DocumentDetailDialog, PartyDetailDialog } from '@/components/shell/record-detail-dialogs';
+import { RecordPaymentDialog } from '@/components/shell/record-payment-dialog';
 import { Plus, ChevronRight, Send } from 'lucide-react';
 import { InvoiceStatus as SharedInvoiceStatus } from '@ai-accounting/shared';
 import { api } from '@/lib/api';
@@ -27,6 +28,9 @@ interface Invoice {
   dueDate: string | null;
   status: InvoiceStatus;
   totalPaise: number;
+  /** Paid so far, and still owed — part payments leave both non-zero. */
+  amountPaidPaise: number;
+  outstandingPaise: number;
   /** Set when this row was read off an upload; null when typed in by hand. */
   sourceDocumentId?: string | null;
 }
@@ -334,6 +338,7 @@ export default function SalesPage() {
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'info' } | null>(null);
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [openInvoice, setOpenInvoice] = useState<Invoice | null>(null);
+  const [payingInvoice, setPayingInvoice] = useState<Invoice | null>(null);
   const [openCustomer, setOpenCustomer] = useState<Customer | null>(null);
 
   const queryClient = useQueryClient();
@@ -377,15 +382,6 @@ export default function SalesPage() {
     mutationFn: (id: string) => api.post(`/sales/invoices/${id}/post`),
     onSuccess: () => {
       showToast('Posted to ledger');
-      afterLedgerChange();
-    },
-    onError: (e) => showToast((e as Error).message, 'info'),
-  });
-
-  const payMutation = useMutation({
-    mutationFn: (id: string) => api.post(`/sales/invoices/${id}/pay`),
-    onSuccess: () => {
-      showToast('Payment recorded');
       afterLedgerChange();
     },
     onError: (e) => showToast((e as Error).message, 'info'),
@@ -549,6 +545,11 @@ export default function SalesPage() {
                       </td>
                       <td className="px-4 py-3 text-right font-mono font-medium text-ink-900">
                         {formatRupees(inv.totalPaise)}
+                        {inv.amountPaidPaise > 0 && inv.outstandingPaise > 0 && (
+                          <span className="block text-caption font-normal text-pending-fg">
+                            {formatRupees(inv.outstandingPaise)} due
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-3">
                         <InvoiceStatusBadge status={inv.status} />
@@ -580,8 +581,7 @@ export default function SalesPage() {
                           {inv.status === 'posted' && (
                             <button
                               type="button"
-                              onClick={() => payMutation.mutate(inv._id)}
-                              disabled={payMutation.isPending}
+                              onClick={() => setPayingInvoice(inv)}
                               className="rounded border border-success-fg/30 px-2 py-0.5 text-caption font-medium text-success-fg transition-colors hover:bg-success-bg disabled:opacity-40"
                             >
                               Mark paid
@@ -707,7 +707,7 @@ export default function SalesPage() {
                         <InvoiceStatusBadge status={inv.status} />
                       </td>
                       <td className="px-4 py-3 text-right font-mono font-medium text-ink-900">
-                        {formatRupees(inv.totalPaise)}
+                        {formatRupees(inv.outstandingPaise)}
                       </td>
                     </tr>
                   ))
@@ -719,6 +719,22 @@ export default function SalesPage() {
       )}
 
       {/* Toast */}
+      <RecordPaymentDialog
+        kind="invoice"
+        document={
+          payingInvoice && {
+            id: payingInvoice._id,
+            number: payingInvoice.invoiceNumber,
+            partyName: payingInvoice.customerName,
+            outstandingPaise: payingInvoice.outstandingPaise,
+          }
+        }
+        onClose={() => setPayingInvoice(null)}
+        onRecorded={(message) => {
+          showToast(message);
+          afterLedgerChange();
+        }}
+      />
       <DocumentDetailDialog
         kind="invoice"
         id={openInvoice?._id ?? null}

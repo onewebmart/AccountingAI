@@ -8,6 +8,7 @@ import { Vendor, VendorDocument } from './schemas/vendor.schema';
 import { PurchaseBill, PurchaseBillDocument } from './schemas/purchase-bill.schema';
 import { withOrg } from '../database/tenant.plugin';
 import { buildAgeingSummary, AgeingSummary } from './ageing.util';
+import { outstandingPaise } from '../gl/schemas/settlement.schema';
 
 export interface CreateVendorInput {
   orgId: string;
@@ -58,8 +59,22 @@ export class VendorsService {
     return vendor;
   }
 
-  async list(orgId: string): Promise<VendorDocument[]> {
-    return withOrg(orgId, () => this.vendorModel.find().sort({ name: 1 }).exec());
+  /**
+   * Vendors with what is still owed to each. The Purchase page read
+   * outstandingPaise off this list, but it returned the raw documents — so
+   * every vendor showed "Cleared" and the total outstanding read ₹NaN.
+   */
+  async list(orgId: string): Promise<Array<Record<string, unknown> & { outstandingPaise: number }>> {
+    const [vendors, open] = await Promise.all([
+      withOrg(orgId, () => this.vendorModel.find().sort({ name: 1 }).lean().exec()),
+      withOrg(orgId, () => this.billModel.find({ status: BillStatus.POSTED }).lean().exec()),
+    ]);
+    const owed = new Map<string, number>();
+    for (const bill of open) {
+      const key = String(bill.vendorId);
+      owed.set(key, (owed.get(key) ?? 0) + outstandingPaise(bill));
+    }
+    return vendors.map((v) => ({ ...v, outstandingPaise: owed.get(String(v._id)) ?? 0 }));
   }
 
   async findById(id: string, orgId: string): Promise<VendorDocument> {
@@ -68,14 +83,14 @@ export class VendorsService {
     return vendor;
   }
 
-  /** Sum of all posted-but-unpaid bill amounts for this vendor. */
+  /** What is still owed to this vendor on posted bills, after part payments. */
   async outstanding(vendorId: string, orgId: string): Promise<number> {
     const bills = await withOrg(orgId, () =>
       this.billModel
         .find({ vendorId: new Types.ObjectId(vendorId), status: { $in: [BillStatus.POSTED] } })
         .exec(),
     );
-    return bills.reduce((sum, b) => sum + b.amountsPaise.total, 0);
+    return bills.reduce((sum, b) => sum + outstandingPaise(b), 0);
   }
 
   /** AP ageing: bucket posted-but-unpaid bills by days past due date. */
@@ -83,6 +98,6 @@ export class VendorsService {
     const bills = await withOrg(orgId, () =>
       this.billModel.find({ status: BillStatus.POSTED }).exec(),
     );
-    return buildAgeingSummary(bills.map((b) => ({ amountsPaise: b.amountsPaise, dueDate: b.dueDate })));
+    return buildAgeingSummary(bills.map((b) => ({ owedPaise: outstandingPaise(b), dueDate: b.dueDate })));
   }
 }

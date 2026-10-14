@@ -82,6 +82,8 @@ interface OpenDocument {
   customerName?: string;
   vendorName?: string;
   totalPaise: number;
+  /** What is still owed — a bank line can settle part of it. */
+  outstandingPaise: number;
 }
 
 interface ConfirmResult {
@@ -209,7 +211,6 @@ export default function BankingPage() {
     enabled: !!latestStatement,
     retry: false,
   });
-  const heldIds = new Set(lines.flatMap((l) => [l.matchedInvoiceId, l.matchedBillId]).filter(Boolean));
 
   const refresh = () => {
     void queryClient.invalidateQueries({ queryKey: ['banking'] });
@@ -455,9 +456,11 @@ export default function BankingPage() {
                   const amount = moneyIn ? line.creditPaise : line.debitPaise;
                   const settled = line.matchStatus === 'confirmed';
                   const suggested = line.matchStatus === 'auto_matched' || line.matchStatus === 'manually_matched';
-                  // Same-amount documents first: only a full settlement can be matched.
+                  // Anything still owing at least this much: a line can settle all or part of it.
+                  // The exact amount comes first — that is most often the one.
                   const candidates = ((moneyIn ? openInvoicesQuery.data : openBillsQuery.data) ?? [])
-                    .filter((d) => !heldIds.has(d._id) && d.totalPaise === amount);
+                    .filter((d) => d.outstandingPaise >= amount)
+                    .sort((a, b) => Number(b.outstandingPaise === amount) - Number(a.outstandingPaise === amount));
 
                   return (
                     <div
@@ -524,6 +527,7 @@ export default function BankingPage() {
                                   {candidates.map((d) => (
                                     <option key={d._id} value={d._id}>
                                       {(moneyIn ? d.invoiceNumber : d.billNumber) ?? 'No number'} · {(moneyIn ? d.customerName : d.vendorName) ?? ''}
+                                      {d.outstandingPaise !== amount ? ` · ${formatRupees(d.outstandingPaise)} owed (part)` : ''}
                                     </option>
                                   ))}
                                 </select>
