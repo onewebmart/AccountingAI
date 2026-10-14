@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
+import { AuditService } from './audit.service';
 import { Model, Types } from 'mongoose';
 import { AccountType, JournalStatus } from '@ai-accounting/shared';
 import {
@@ -24,6 +25,8 @@ export interface AccountListItem {
 
 export interface CreateAccountInput {
   orgId: string;
+  /** Who created it, for the audit trail. */
+  actorId?: string;
   name: string;
   type: AccountType;
   code?: string;
@@ -212,6 +215,7 @@ export class AccountsService {
     @InjectModel(LedgerAccount.name)
     private accountModel: Model<LedgerAccountDocument>,
     @InjectModel(Journal.name) private journalModel: Model<JournalDocument>,
+    private auditService: AuditService,
   ) {}
 
   /**
@@ -410,7 +414,7 @@ export class AccountsService {
     const clash = await withOrg(orgId, () => this.accountModel.findOne({ code }).exec());
     if (clash) throw new BadRequestException(`Account code "${code}" is already in use.`);
 
-    return this.accountModel.create({
+    const account = await this.accountModel.create({
       orgId,
       name: name.trim(),
       code,
@@ -419,6 +423,15 @@ export class AccountsService {
       isGroup: input.isGroup ?? false,
       isSystem: false,
     });
+    await this.auditService.record({
+      orgId,
+      entityType: 'LedgerAccount',
+      entityId: account._id.toString(),
+      action: 'CREATE',
+      performedBy: input.actorId ?? 'unknown',
+      after: { name: account.name, code: account.code, type: account.type },
+    });
+    return account;
   }
 
   /** Next free code in the block that belongs to this account type. */

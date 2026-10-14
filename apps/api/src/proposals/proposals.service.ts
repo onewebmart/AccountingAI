@@ -5,16 +5,19 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model, Types } from 'mongoose';
-import { ProposedEntryStatus, VoucherType } from '@ai-accounting/shared';
+import { ClientSession, Model, Types } from 'mongoose';
+import { DocumentStatus, ProposedEntryStatus, VoucherType } from '@ai-accounting/shared';
 import { ProposedEntry, ProposedEntryDocument } from './schemas/proposed-entry.schema';
 import { ExtractedDocument, ExtractedDocumentDocument } from '../extraction/schemas/extracted-document.schema';
+import { Document as UploadedDocument, DocumentDocument } from '../documents/schemas/document.schema';
 import { PostingService } from '../gl/posting.service';
+import { AuditService } from '../gl/audit.service';
 import { AccountsService } from '../gl/accounts.service';
 import { SystemAccountKey } from '../gl/schemas/ledger-account.schema';
 import { LearningService } from './learning.service';
 import { SubledgerSyncService } from './subledger-sync.service';
 import { withOrg } from '../database/tenant.plugin';
+import { dueDateFromTerms } from '../extraction/invoice-checks';
 
 export interface ApproveInput {
   proposalId: string;
@@ -61,9 +64,14 @@ interface SuggestedLineDraft {
 /** Map extracted documentType to VoucherType for the journal. */
 function toVoucherType(docType: string): VoucherType {
   switch (docType) {
-    case 'purchase_invoice': return VoucherType.PURCHASE;
+    // A bill is a supplier's invoice by another name and is booked like one.
+    case 'purchase_invoice':
+    case 'bill':             return VoucherType.PURCHASE;
     case 'sales_invoice':    return VoucherType.SALES;
-    case 'receipt':          return VoucherType.RECEIPT;
+    // A receipt is proof the business PAID for something: money out, booked
+    // Dr expense / Cr bank. It used to post as a RECEIPT voucher (money in),
+    // which bank matching then paired with a deposit.
+    case 'receipt':          return VoucherType.PAYMENT;
     default:                 return VoucherType.JOURNAL;
   }
 }
@@ -75,10 +83,12 @@ export class ProposalsService {
   constructor(
     @InjectModel(ProposedEntry.name) private proposalModel: Model<ProposedEntryDocument>,
     @InjectModel(ExtractedDocument.name) private extractedModel: Model<ExtractedDocumentDocument>,
+    @InjectModel(UploadedDocument.name) private documentModel: Model<DocumentDocument>,
     private postingService: PostingService,
     private learningService: LearningService,
     private accountsService: AccountsService,
     private subledgerSync: SubledgerSyncService,
+    private auditService: AuditService,
   ) {}
 
   /**
@@ -119,7 +129,12 @@ export class ProposalsService {
       await add(SystemAccountKey.GST_INPUT_SGST, a.sgst, 0);
       await add(SystemAccountKey.GST_INPUT_IGST, a.igst, 0);
       await add(SystemAccountKey.GST_INPUT_CESS, a.cess, 0);
-      await add(SystemAccountKey.ACCOUNTS_PAYABLE, 0, a.taxableValue + a.cgst + a.sgst + a.igst + a.cess);
+      // The vendor is owed the printed total. Crediting the sum of the parts
+      // instead made a misread total vanish; now any difference lands on a
+      // visible Round Off line, and extraction has already flagged anything
+      // larger than rounding.
+      const parts = a.taxableValue + a.cgst + a.sgst + a.igst + a.cess;
+      await add(SystemAccountKey.ACCOUNTS_PAYABLE, 0, a.total > 0 ? a.total : parts);
       return this.balance(orgId, lines);
     }
 
@@ -212,6 +227,10 @@ export class ProposalsService {
       vendorGstin: extracted.vendor?.gstin ?? null,
       invoiceNumber: extracted.invoiceNumber?.value ?? null,
       invoiceDate: extracted.invoiceDate?.value ?? null,
+      dueDate:
+        extracted.dueDate?.value ??
+        dueDateFromTerms(extracted.invoiceDate?.value ?? null, extracted.paymentTerms ?? null),
+      paymentTerms: extracted.paymentTerms ?? null,
       amountsPaise: extracted.amountsPaise,
       confidenceOverall: extracted.confidenceOverall,
       fieldConfidence: {
@@ -242,6 +261,20 @@ export class ProposalsService {
 
   async findById(id: string, orgId: string): Promise<ProposedEntryDocument | null> {
     return withOrg(orgId, () => this.proposalModel.findById(id).exec());
+  }
+
+  /** Move the uploaded document to the outcome of its review. */
+  private async markDocument(
+    proposal: ProposedEntryDocument,
+    status: DocumentStatus.APPROVED | DocumentStatus.REJECTED,
+    session: ClientSession,
+  ): Promise<void> {
+    if (!proposal.documentId) return; // GSTR-2B proposals have no upload behind them
+    await withOrg(proposal.orgId, () =>
+      this.documentModel
+        .updateOne({ _id: proposal.documentId }, { $set: { status } }, { session })
+        .exec(),
+    );
   }
 
   /** Approve & post — the ONLY path that writes to the ledger. Invariant 4. */
@@ -285,32 +318,74 @@ export class ProposalsService {
       }
     }
 
-    // PostingService.post() is the single writer to the ledger (Invariant 4)
-    const journal = await this.postingService.post({
-      orgId,
-      voucherType: toVoucherType(proposal.documentType),
-      financialYear: proposal.financialYear,
-      date: proposal.invoiceDate ?? new Date().toISOString().slice(0, 10),
-      narration: `${proposal.documentType.replace(/_/g, ' ')} — ${proposal.vendorName ?? 'Unknown vendor'} — ${proposal.invoiceNumber ?? 'No ref'}`,
-      postedBy: actorId,
-      lines: linesToPost,
+    const { journal, updated, sync } = await this.postingService.inTransaction(async (session) => {
+      // Claim PROPOSED → APPROVED before posting, in the same transaction. A
+      // double-click, the bulk approve, or a reject racing this one finds
+      // nothing left to claim, so the document is posted exactly once.
+      const claimed = await withOrg(orgId, () =>
+        this.proposalModel
+          .findOneAndUpdate(
+            { _id: proposalId, status: ProposedEntryStatus.PROPOSED },
+            { $set: { status: ProposedEntryStatus.APPROVED, approvedBy: actorId } },
+            { session },
+          )
+          .exec(),
+      );
+      if (!claimed) throw new BadRequestException('This proposal has already been approved or rejected');
+
+      // PostingService.post() is the single writer to the ledger (Invariant 4)
+      const posted = await this.postingService.post(
+        {
+          orgId,
+          voucherType: toVoucherType(proposal.documentType),
+          financialYear: proposal.financialYear,
+          date: proposal.invoiceDate ?? new Date().toISOString().slice(0, 10),
+          narration: `${proposal.documentType.replace(/_/g, ' ')} — ${proposal.vendorName ?? 'Unknown vendor'} — ${proposal.invoiceNumber ?? 'No ref'}`,
+          postedBy: actorId,
+          lines: linesToPost,
+        },
+        session,
+      );
+
+      const withJournal = await this.proposalModel
+        .findByIdAndUpdate(proposalId, { $set: { journalId: posted._id } }, { new: true, session })
+        .exec();
+
+      // Mirror the posting into the purchase/sales sub-ledgers so the Purchase,
+      // Sales, GST and ageing screens reflect this document without re-entry —
+      // in the same transaction, so there is never a journal without its bill.
+      const mirrored = await this.subledgerSync.syncApprovedProposal(
+        proposal,
+        posted._id,
+        actorId,
+        session,
+      );
+
+      // The upload itself moves on too; it used to sit at PROPOSED forever.
+      await this.markDocument(proposal, DocumentStatus.APPROVED, session);
+
+      await this.auditService.record(
+        {
+          orgId,
+          entityType: 'ProposedEntry',
+          entityId: proposalId,
+          action: 'APPROVE',
+          performedBy: actorId,
+          before: { status: ProposedEntryStatus.PROPOSED },
+          after: {
+            status: ProposedEntryStatus.APPROVED,
+            journalId: posted._id.toString(),
+            // Whether the human changed the AI's lines before posting.
+            editedByReviewer: !!overrideLines,
+            billId: mirrored.billId ?? null,
+            invoiceId: mirrored.invoiceId ?? null,
+          },
+        },
+        session,
+      );
+
+      return { journal: posted, updated: withJournal, sync: mirrored };
     });
-
-    const updated = await this.proposalModel
-      .findByIdAndUpdate(
-        proposalId,
-        { $set: { status: ProposedEntryStatus.APPROVED, journalId: journal._id, approvedBy: actorId } },
-        { new: true },
-      )
-      .exec();
-
-    // Mirror the posting into the purchase/sales sub-ledgers so the Purchase,
-    // Sales, GST and ageing screens reflect this document without re-entry.
-    const sync = await this.subledgerSync.syncApprovedProposal(
-      proposal,
-      journal._id,
-      actorId,
-    );
 
     this.logger.log(
       `Proposal ${proposalId} approved by ${actorId} → Journal ${journal._id}` +
@@ -331,22 +406,43 @@ export class ProposalsService {
       throw new BadRequestException(`Cannot reject a proposal with status "${proposal.status}"`);
     }
 
-    const updated = await this.proposalModel
-      .findByIdAndUpdate(
-        proposalId,
+    const updated = await this.postingService.inTransaction(async (session) => {
+      // Conditional on still being PROPOSED, so a reject racing an approve cannot
+      // mark rejected a proposal whose journal has just been posted.
+      const claimed = await withOrg(orgId, () =>
+        this.proposalModel
+          .findOneAndUpdate(
+            { _id: proposalId, status: ProposedEntryStatus.PROPOSED },
+            {
+              $set: {
+                status: ProposedEntryStatus.REJECTED,
+                rejectedBy: actorId,
+                rejectionReason: reason ?? null,
+              },
+            },
+            { new: true, session },
+          )
+          .exec(),
+      );
+      if (!claimed) throw new BadRequestException('This proposal has already been approved or rejected');
+      await this.markDocument(proposal, DocumentStatus.REJECTED, session);
+      await this.auditService.record(
         {
-          $set: {
-            status: ProposedEntryStatus.REJECTED,
-            rejectedBy: actorId,
-            rejectionReason: reason ?? null,
-          },
+          orgId,
+          entityType: 'ProposedEntry',
+          entityId: proposalId,
+          action: 'REJECT',
+          performedBy: actorId,
+          before: { status: ProposedEntryStatus.PROPOSED },
+          after: { status: ProposedEntryStatus.REJECTED, reason: reason ?? null },
         },
-        { new: true },
-      )
-      .exec();
+        session,
+      );
+      return claimed;
+    });
 
     this.logger.log(`Proposal ${proposalId} rejected by ${actorId}`);
-    return updated!;
+    return updated;
   }
 
   /** Approve all proposals with confidenceOverall >= threshold. */

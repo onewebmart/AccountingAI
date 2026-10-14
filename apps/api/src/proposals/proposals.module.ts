@@ -7,6 +7,7 @@ import { Vendor, VendorSchema } from '../purchase/schemas/vendor.schema';
 import { PurchaseBill, PurchaseBillSchema } from '../purchase/schemas/purchase-bill.schema';
 import { Customer, CustomerSchema } from '../sales/schemas/customer.schema';
 import { SalesInvoice, SalesInvoiceSchema } from '../sales/schemas/sales-invoice.schema';
+import { Document as UploadedDocument, DocumentSchema } from '../documents/schemas/document.schema';
 import { ProposalsService } from './proposals.service';
 import { ProposalsController } from './proposals.controller';
 import { LearningService } from './learning.service';
@@ -24,6 +25,8 @@ import { GlModule } from '../gl/gl.module';
       { name: PurchaseBill.name, schema: PurchaseBillSchema },
       { name: Customer.name, schema: CustomerSchema },
       { name: SalesInvoice.name, schema: SalesInvoiceSchema },
+      // The upload moves to APPROVED / REJECTED with its proposal
+      { name: UploadedDocument.name, schema: DocumentSchema },
     ]),
     GlModule, // for PostingService and AccountsService
   ],

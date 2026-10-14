@@ -29,6 +29,8 @@ import configuration from '../config/configuration';
 import { AuthModule } from '../auth/auth.module';
 import { TenancyModule } from '../tenancy/tenancy.module';
 import { DocumentsService, DOCUMENT_PROCESSING_QUEUE } from './documents.service';
+import { AuditService } from '../gl/audit.service';
+import { AuditLog, AuditLogSchema } from '../gl/schemas/audit-log.schema';
 import { DocumentsController } from './documents.controller';
 import { StorageService } from './storage.service';
 import { OcrResult, OcrResultSchema } from '../ocr/schemas/ocr-result.schema';
@@ -93,6 +95,7 @@ beforeAll(async () => {
         { name: ProposedEntry.name, schema: ProposedEntrySchema },
         // …and the OCR result, so it can show which tier read the file.
         { name: OcrResult.name, schema: OcrResultSchema },
+        { name: AuditLog.name, schema: AuditLogSchema },
       ]),
       TenancyModule,
       AuthModule,
@@ -100,6 +103,7 @@ beforeAll(async () => {
     controllers: [DocumentsController],
     providers: [
       DocumentsService,
+      AuditService,
       StorageService,
       // Provide the queue token as a plain value — no BullModule, no Redis connection needed.
       { provide: getQueueToken(DOCUMENT_PROCESSING_QUEUE), useValue: fakeQueue },

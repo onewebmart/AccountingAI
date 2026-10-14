@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model, Types } from 'mongoose';
+import { ClientSession, Model, Types } from 'mongoose';
 import { BillStatus, InvoiceStatus } from '@ai-accounting/shared';
 import { Vendor, VendorDocument } from '../purchase/schemas/vendor.schema';
 import { PurchaseBill, PurchaseBillDocument } from '../purchase/schemas/purchase-bill.schema';
@@ -37,6 +37,10 @@ function escapeRegex(value: string): string {
  * It never posts a journal of its own: the sub-ledger record is created already
  * carrying the journalId from the approval, which is why status is POSTED here
  * without a second trip through PostingService (that would double-count the ledger).
+ *
+ * It runs inside the approval's transaction. It used to run after the journal
+ * committed and swallow its own errors, so a failure left a posted journal with
+ * no bill or invoice behind it — invisible to ageing, GST and bank matching.
  */
 @Injectable()
 export class SubledgerSyncService {
@@ -53,28 +57,16 @@ export class SubledgerSyncService {
     proposal: ProposedEntryDocument,
     journalId: Types.ObjectId,
     actorId: string,
+    session?: ClientSession,
   ): Promise<SyncResult> {
     const orgId = proposal.orgId;
 
-    try {
-      if (
-        proposal.documentType === 'purchase_invoice' ||
-        proposal.documentType === 'bill'
-      ) {
-        return await this.syncPurchase(proposal, journalId, actorId, orgId);
-      }
-
-      if (proposal.documentType === 'sales_invoice') {
-        return await this.syncSales(proposal, journalId, actorId, orgId);
-      }
-    } catch (err) {
-      // The ledger entry is already committed and is the source of truth. A
-      // sub-ledger hiccup must not roll back or mask a successful posting.
-      this.logger.error(
-        `Sub-ledger sync failed for proposal ${proposal._id}: ${String(err)}`,
-      );
+    if (proposal.documentType === 'purchase_invoice' || proposal.documentType === 'bill') {
+      return this.syncPurchase(proposal, journalId, actorId, orgId, session);
     }
-
+    if (proposal.documentType === 'sales_invoice') {
+      return this.syncSales(proposal, journalId, actorId, orgId, session);
+    }
     return { created: false };
   }
 
@@ -83,13 +75,14 @@ export class SubledgerSyncService {
     journalId: Types.ObjectId,
     actorId: string,
     orgId: string,
+    session?: ClientSession,
   ): Promise<SyncResult> {
-    const vendor = await this.upsertVendor(orgId, proposal.vendorName, proposal.vendorGstin);
+    const vendor = await this.upsertVendor(orgId, proposal.vendorName, proposal.vendorGstin, session);
     const billDate = proposal.invoiceDate ?? new Date().toISOString().slice(0, 10);
 
     // Re-approving the same document must not create a second bill.
     const existing = await withOrg(orgId, () =>
-      this.billModel.findOne({ journalId }).exec(),
+      this.billModel.findOne({ journalId }).session(session ?? null).exec(),
     );
     if (existing) {
       return {
@@ -99,12 +92,12 @@ export class SubledgerSyncService {
       };
     }
 
-    const bill = await this.billModel.create({
+    const [bill] = await this.billModel.create([{
       orgId,
       vendorId: vendor._id,
       billNumber: proposal.invoiceNumber,
       billDate,
-      dueDate: null,
+      dueDate: proposal.dueDate ?? null,
       status: BillStatus.POSTED,
       amountsPaise: {
         taxableValue: proposal.amountsPaise.taxableValue,
@@ -122,7 +115,7 @@ export class SubledgerSyncService {
       sourceDocumentId: proposal.documentId ?? null,
       postedBy: actorId,
       notes: `Auto-created from approved document ${proposal.documentId ?? proposal._id}`,
-    });
+    }], { session });
 
     this.logger.log(
       `Proposal ${proposal._id} → purchase bill ${bill._id} for vendor "${vendor.name}"`,
@@ -136,12 +129,13 @@ export class SubledgerSyncService {
     journalId: Types.ObjectId,
     actorId: string,
     orgId: string,
+    session?: ClientSession,
   ): Promise<SyncResult> {
-    const customer = await this.upsertCustomer(orgId, proposal.vendorName, proposal.vendorGstin);
+    const customer = await this.upsertCustomer(orgId, proposal.vendorName, proposal.vendorGstin, session);
     const invoiceDate = proposal.invoiceDate ?? new Date().toISOString().slice(0, 10);
 
     const existing = await withOrg(orgId, () =>
-      this.invoiceModel.findOne({ journalId }).exec(),
+      this.invoiceModel.findOne({ journalId }).session(session ?? null).exec(),
     );
     if (existing) {
       return {
@@ -151,12 +145,12 @@ export class SubledgerSyncService {
       };
     }
 
-    const invoice = await this.invoiceModel.create({
+    const [invoice] = await this.invoiceModel.create([{
       orgId,
       customerId: customer._id,
       invoiceNumber: proposal.invoiceNumber,
       invoiceDate,
-      dueDate: null,
+      dueDate: proposal.dueDate ?? null,
       status: InvoiceStatus.POSTED,
       amountsPaise: {
         taxableValue: proposal.amountsPaise.taxableValue,
@@ -174,7 +168,7 @@ export class SubledgerSyncService {
       sourceDocumentId: proposal.documentId ?? null,
       postedBy: actorId,
       notes: `Auto-created from approved document ${proposal.documentId ?? proposal._id}`,
-    });
+    }], { session });
 
     this.logger.log(
       `Proposal ${proposal._id} → sales invoice ${invoice._id} for customer "${customer.name}"`,
@@ -192,12 +186,13 @@ export class SubledgerSyncService {
     orgId: string,
     name: string | null,
     gstin: string | null,
+    session?: ClientSession,
   ): Promise<VendorDocument> {
     const resolved = cleanName(name || '') || 'Unknown Vendor';
 
     if (gstin) {
       const byGstin = await withOrg(orgId, () =>
-        this.vendorModel.findOne({ gstin: gstin.toUpperCase() }).exec(),
+        this.vendorModel.findOne({ gstin: gstin.toUpperCase() }).session(session ?? null).exec(),
       );
       if (byGstin) return byGstin;
     }
@@ -205,34 +200,36 @@ export class SubledgerSyncService {
     const byName = await withOrg(orgId, () =>
       this.vendorModel
         .findOne({ name: new RegExp(`^${escapeRegex(resolved)}$`, 'i') })
+        .session(session ?? null)
         .exec(),
     );
     if (byName) {
       // Backfill a GSTIN we only learned about on a later bill.
       if (gstin && !byName.gstin) {
         byName.gstin = gstin.toUpperCase();
-        await byName.save();
+        await byName.save({ session });
       }
       return byName;
     }
 
-    return this.vendorModel.create({
-      orgId,
-      name: resolved,
-      gstin: gstin ? gstin.toUpperCase() : null,
-    });
+    const [created] = await this.vendorModel.create(
+      [{ orgId, name: resolved, gstin: gstin ? gstin.toUpperCase() : null }],
+      { session },
+    );
+    return created;
   }
 
   private async upsertCustomer(
     orgId: string,
     name: string | null,
     gstin: string | null,
+    session?: ClientSession,
   ): Promise<CustomerDocument> {
     const resolved = cleanName(name || '') || 'Unknown Customer';
 
     if (gstin) {
       const byGstin = await withOrg(orgId, () =>
-        this.customerModel.findOne({ gstin: gstin.toUpperCase() }).exec(),
+        this.customerModel.findOne({ gstin: gstin.toUpperCase() }).session(session ?? null).exec(),
       );
       if (byGstin) return byGstin;
     }
@@ -240,20 +237,21 @@ export class SubledgerSyncService {
     const byName = await withOrg(orgId, () =>
       this.customerModel
         .findOne({ name: new RegExp(`^${escapeRegex(resolved)}$`, 'i') })
+        .session(session ?? null)
         .exec(),
     );
     if (byName) {
       if (gstin && !byName.gstin) {
         byName.gstin = gstin.toUpperCase();
-        await byName.save();
+        await byName.save({ session });
       }
       return byName;
     }
 
-    return this.customerModel.create({
-      orgId,
-      name: resolved,
-      gstin: gstin ? gstin.toUpperCase() : null,
-    });
+    const [created] = await this.customerModel.create(
+      [{ orgId, name: resolved, gstin: gstin ? gstin.toUpperCase() : null }],
+      { session },
+    );
+    return created;
   }
 }

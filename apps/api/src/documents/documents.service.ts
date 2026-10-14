@@ -1,5 +1,6 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
+import { AuditService } from '../gl/audit.service';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Model, Types } from 'mongoose';
 import { Queue } from 'bullmq';
@@ -56,6 +57,7 @@ export class DocumentsService {
     @InjectModel(OcrResult.name) private ocrResultModel: Model<OcrResultDocument>,
     @InjectQueue(DOCUMENT_PROCESSING_QUEUE) private processingQueue: Queue,
     private storage: StorageService,
+    private auditService: AuditService,
   ) {}
 
   async upload(input: UploadInput): Promise<DocumentDocument> {
@@ -87,6 +89,14 @@ export class DocumentsService {
       sha256,
       uploadedBy: new Types.ObjectId(uploadedBy),
       duplicateOf: existing ? existing._id : undefined,
+    });
+    await this.auditService.record({
+      orgId,
+      entityType: 'Document',
+      entityId: doc._id.toString(),
+      action: 'UPLOAD',
+      performedBy: uploadedBy,
+      after: { originalName, status: doc.status, sha256 },
     });
 
     // 6. Enqueue processing job — even duplicates get enqueued so a human can decide

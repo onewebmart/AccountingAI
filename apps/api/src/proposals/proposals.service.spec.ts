@@ -31,11 +31,13 @@ import { PostingService } from '../gl/posting.service';
 import { AccountsService } from '../gl/accounts.service';
 import { LedgerAccount, LedgerAccountSchema } from '../gl/schemas/ledger-account.schema';
 import { SubledgerSyncService } from './subledger-sync.service';
+import { AuditService } from '../gl/audit.service';
 import { Vendor, VendorSchema } from '../purchase/schemas/vendor.schema';
 import { PurchaseBill, PurchaseBillSchema } from '../purchase/schemas/purchase-bill.schema';
 import { Customer, CustomerSchema } from '../sales/schemas/customer.schema';
 import { SalesInvoice, SalesInvoiceSchema } from '../sales/schemas/sales-invoice.schema';
-import { ProposedEntryStatus } from '@ai-accounting/shared';
+import { Document as UploadedDocument, DocumentSchema } from '../documents/schemas/document.schema';
+import { ProposedEntryStatus, VoucherType } from '@ai-accounting/shared';
 import { REDIS_CLIENT } from '../redis/redis.module';
 
 const redisMock = {
@@ -96,6 +98,7 @@ beforeAll(async () => {
         { name: PurchaseBill.name, schema: PurchaseBillSchema },
         { name: Customer.name, schema: CustomerSchema },
         { name: SalesInvoice.name, schema: SalesInvoiceSchema },
+        { name: UploadedDocument.name, schema: DocumentSchema },
       ]),
     ],
     providers: [
@@ -104,6 +107,7 @@ beforeAll(async () => {
       LearningService,
       AccountsService,
       SubledgerSyncService,
+      AuditService,
       { provide: REDIS_CLIENT, useValue: redisMock },
     ],
   }).compile();
@@ -386,5 +390,118 @@ describe('learning loop (Phase 9)', () => {
     );
     expect(expenseLine?.isAiSuggested).toBe(true);
     expect(expenseLine?.accountName).toBe('Purchases');
+  });
+});
+
+describe('approve — a double-click posts once', () => {
+  const refused = /already been approved or rejected|Cannot (approve|reject) a proposal/;
+
+  it('two simultaneous approvals post one journal', async () => {
+    const extracted = await seedExtracted(extractedModel, {
+      invoiceNumber: { value: 'INV-RACE-APPROVE', confidence: 0.98 },
+    });
+    const proposal = await svc.createFromExtracted(extracted._id.toString(), ORG_ID);
+    const input = { proposalId: proposal._id.toString(), orgId: ORG_ID, actorId: ACTOR_ID };
+
+    const results = await Promise.allSettled([svc.approve(input), svc.approve(input)]);
+
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+    const rejected = results.find((r): r is PromiseRejectedResult => r.status === 'rejected');
+    expect(String(rejected?.reason)).toMatch(refused);
+    expect(await journalModel.countDocuments({ orgId: ORG_ID, narration: / — INV-RACE-APPROVE$/ })).toBe(1);
+  });
+
+  it('an approve racing a reject ends in exactly one outcome', async () => {
+    const extracted = await seedExtracted(extractedModel, {
+      invoiceNumber: { value: 'INV-RACE-REJECT', confidence: 0.98 },
+    });
+    const proposal = await svc.createFromExtracted(extracted._id.toString(), ORG_ID);
+    const input = { proposalId: proposal._id.toString(), orgId: ORG_ID, actorId: ACTOR_ID };
+
+    const results = await Promise.allSettled([svc.approve(input), svc.reject(input)]);
+
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+    const final = await proposalModel.findById(proposal._id).exec();
+    const journals = await journalModel.countDocuments({ orgId: ORG_ID, narration: / — INV-RACE-REJECT$/ });
+    // Never a rejected proposal with a posted journal, nor an approved one without.
+    expect(journals).toBe(final!.status === ProposedEntryStatus.APPROVED ? 1 : 0);
+  });
+});
+
+describe('what a proposal carries into the books', () => {
+  const docs = () => moduleRef.get<Model<{ status: string }>>(getModelToken(UploadedDocument.name));
+  const bills = () => moduleRef.get<Model<{ journalId: unknown; dueDate: string | null }>>(getModelToken(PurchaseBill.name));
+
+  async function seedUpload() {
+    return docs().create({
+      orgId: ORG_ID,
+      status: 'PROPOSED',
+      s3Key: `k/${new Types.ObjectId()}`,
+      originalName: 'invoice.pdf',
+      mimeType: 'application/pdf',
+      sizeBytes: 2048,
+      sha256: new Types.ObjectId().toString(),
+      uploadedBy: new Types.ObjectId(),
+    });
+  }
+
+  it('owes the vendor the printed total, showing any difference on a Round Off line', async () => {
+    // Printed ₹47,700 but the parts add to ₹47,200. AP used to be credited with
+    // the parts, so the ₹500 the vendor will ask for vanished from the books.
+    const extracted = await seedExtracted(extractedModel, {
+      amountsPaise: { taxableValue: 4000000, cgst: 360000, sgst: 360000, igst: 0, cess: 0, total: 4770000, confidence: 0.9 },
+    });
+    const proposal = await svc.createFromExtracted(extracted._id.toString(), ORG_ID);
+
+    const payable = proposal.suggestedLines.find((l) => /payable/i.test(l.accountName));
+    const roundOff = proposal.suggestedLines.find((l) => /round/i.test(l.accountName));
+    expect(payable?.creditPaise).toBe(4770000);
+    expect(roundOff?.debitPaise).toBe(50000);
+  });
+
+  it('works out the due date from the payment terms, and the bill carries it', async () => {
+    const upload = await seedUpload();
+    const extracted = await seedExtracted(extractedModel, {
+      documentId: upload._id,
+      invoiceNumber: { value: 'INV-NET30', confidence: 0.98 },
+      invoiceDate: { value: '2026-10-05', confidence: 0.97 },
+      paymentTerms: 'Net 30 days',
+    });
+    const proposal = await svc.createFromExtracted(extracted._id.toString(), ORG_ID);
+    expect(proposal.dueDate).toBe('2026-11-04');
+
+    const approved = await svc.approve({ proposalId: proposal._id.toString(), orgId: ORG_ID, actorId: ACTOR_ID });
+    const bill = await bills().findOne({ journalId: approved.journalId }).exec();
+    // A null due date made every AI-created bill read as "current" forever.
+    expect(bill?.dueDate).toBe('2026-11-04');
+  });
+
+  it('moves the uploaded document to APPROVED or REJECTED with its proposal', async () => {
+    const approvedUpload = await seedUpload();
+    const toApprove = await svc.createFromExtracted(
+      (await seedExtracted(extractedModel, { documentId: approvedUpload._id, invoiceNumber: { value: 'INV-DOC-A', confidence: 0.9 } }))._id.toString(),
+      ORG_ID,
+    );
+    await svc.approve({ proposalId: toApprove._id.toString(), orgId: ORG_ID, actorId: ACTOR_ID });
+    expect((await docs().findById(approvedUpload._id).exec())?.status).toBe('APPROVED');
+
+    const rejectedUpload = await seedUpload();
+    const toReject = await svc.createFromExtracted(
+      (await seedExtracted(extractedModel, { documentId: rejectedUpload._id, invoiceNumber: { value: 'INV-DOC-R', confidence: 0.9 } }))._id.toString(),
+      ORG_ID,
+    );
+    await svc.reject({ proposalId: toReject._id.toString(), orgId: ORG_ID, actorId: ACTOR_ID });
+    expect((await docs().findById(rejectedUpload._id).exec())?.status).toBe('REJECTED');
+  });
+
+  it('books a paid receipt as money out (PAYMENT), not money in', async () => {
+    const extracted = await seedExtracted(extractedModel, {
+      documentType: 'receipt',
+      invoiceNumber: { value: 'RCPT-CAFE-9', confidence: 0.9 },
+    });
+    const proposal = await svc.createFromExtracted(extracted._id.toString(), ORG_ID);
+    const approved = await svc.approve({ proposalId: proposal._id.toString(), orgId: ORG_ID, actorId: ACTOR_ID });
+    const journal = await journalModel.findById(approved.journalId).exec();
+    expect(journal?.voucherType).toBe(VoucherType.PAYMENT);
   });
 });

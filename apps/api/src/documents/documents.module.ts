@@ -9,6 +9,7 @@ import { DocumentProcessingProcessor } from './document-processing.processor';
 import { OcrModule } from '../ocr/ocr.module';
 import { ExtractionModule } from '../extraction/extraction.module';
 import { ProposalsModule } from '../proposals/proposals.module';
+import { GlModule } from '../gl/gl.module';
 import { IngestModule } from '../ingest/ingest.module';
 import { CrmModule } from '../crm/crm.module';
 import { OcrResult, OcrResultSchema } from '../ocr/schemas/ocr-result.schema';
@@ -26,6 +27,7 @@ import { ProposedEntry, ProposedEntrySchema } from '../proposals/schemas/propose
     OcrModule,
     ExtractionModule,
     ProposalsModule,
+    GlModule, // AuditService
     IngestModule,
     CrmModule,
   ],

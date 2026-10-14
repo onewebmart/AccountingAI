@@ -70,6 +70,9 @@ export class ProposedEntry {
   @Prop({ type: String, default: null }) vendorGstin: string | null;
   @Prop({ type: String, default: null }) invoiceNumber: string | null;
   @Prop({ type: String, default: null }) invoiceDate: string | null;
+  /** Printed due date, else derived from the payment terms; null when neither says. */
+  @Prop({ type: String, default: null }) dueDate: string | null;
+  @Prop({ type: String, default: null }) paymentTerms: string | null;
   @Prop({ type: AmountSummary, required: true }) amountsPaise: AmountSummary;
   @Prop({ type: Number, required: true, min: 0, max: 1 }) confidenceOverall: number;
   @Prop({ type: FieldConfidence, required: true }) fieldConfidence: FieldConfidence;

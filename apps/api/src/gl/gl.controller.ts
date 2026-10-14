@@ -31,6 +31,7 @@ export class GlController {
 
     const account = await this.accounts.create({
       orgId: user.orgId,
+      actorId: user.sub,
       name: body.name,
       type: body.type,
       code: body.code,
