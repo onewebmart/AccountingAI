@@ -63,8 +63,18 @@ export class BankStatementLine {
 
   /** Set aside by a reviewer (e.g. a confirmed duplicate); ignored by matching. */
   @Prop({ type: Boolean, default: false }) excluded: boolean;
+
+  /**
+   * The bank's own id for this transaction, when it came from a bank feed.
+   * Unique per account, so a feed pulled twice imports each transaction once.
+   */
+  @Prop({ type: String, default: null }) externalId: string | null;
 }
 
 export const BankStatementLineSchema = SchemaFactory.createForClass(BankStatementLine);
 BankStatementLineSchema.index({ orgId: 1, statementId: 1, matchStatus: 1 });
+BankStatementLineSchema.index(
+  { orgId: 1, bankAccountId: 1, externalId: 1 },
+  { unique: true, partialFilterExpression: { externalId: { $type: 'string' } } },
+);
 BankStatementLineSchema.plugin(tenantIsolationPlugin);

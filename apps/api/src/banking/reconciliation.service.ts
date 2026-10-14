@@ -52,6 +52,8 @@ export interface ImportStatementInput {
     debitPaise: number;
     creditPaise: number;
     runningBalancePaise?: number | null;
+    /** The bank's transaction id, from a bank feed. */
+    externalId?: string | null;
   }>;
 }
 
@@ -301,6 +303,7 @@ export class ReconciliationService {
         debitPaise: l.debitPaise,
         creditPaise: l.creditPaise,
         runningBalancePaise: l.runningBalancePaise ?? null,
+        externalId: l.externalId ?? null,
         matchStatus: MatchStatus.UNMATCHED,
         matchedJournalId: null,
         possibleDuplicate,

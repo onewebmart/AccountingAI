@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { BankFeedsCard } from '@/components/banking/bank-feeds-card';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Upload, CheckCircle, AlertCircle, Minus, Sparkles, Copy, Undo2, EyeOff } from 'lucide-react';
@@ -356,6 +357,7 @@ export default function BankingPage() {
           {uploadButton}
           <p className="mt-3 text-caption text-ink-400">PDF, CSV or Excel, as your bank gives it.</p>
         </div>
+        <BankFeedsCard onToast={showToast} />
         {toastView}
       </div>
     );
@@ -416,6 +418,8 @@ export default function BankingPage() {
           {uploadButton}
         </div>
       </div>
+
+      <BankFeedsCard onToast={showToast} />
 
       {accounts.length > 1 && (
         <div className="flex items-center gap-3">

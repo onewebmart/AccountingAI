@@ -29,6 +29,7 @@ import { TdsModule } from './tds/tds.module';
 import { ClosingModule } from './closing/closing.module';
 import { AutomationModule } from './automation/automation.module';
 import { MigrationModule } from './migration/migration.module';
+import { BankFeedsModule } from './bank-feeds/bank-feeds.module';
 
 @Module({
   imports: [
@@ -71,6 +72,7 @@ import { MigrationModule } from './migration/migration.module';
     ClosingModule,
     AutomationModule,
     MigrationModule,
+    BankFeedsModule,
     CrmModule,
     WorkspaceModule,
   ],
