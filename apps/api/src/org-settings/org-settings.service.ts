@@ -1,4 +1,6 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { IsBoolean, IsIn, IsInt, IsOptional, IsString, Length, Matches, Max, Min } from 'class-validator';
+import { gstinProblem } from '../extraction/invoice-checks';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { UserRole } from '@ai-accounting/shared';
@@ -9,23 +11,36 @@ import { AuditLog, AuditLogDocument } from '../gl/schemas/audit-log.schema';
 
 // ── DTOs ────────────────────────────────────────────────────────────────────────
 
-export interface UpdateSettingsDto {
-  displayName?: string;
-  gstin?: string;
-  pan?: string;
-  stateCode?: string;
-  timezone?: string;
-  currencyCode?: string;
-  financialYearStartMonth?: number;
-  gstFilingFrequency?: 'monthly' | 'quarterly';
-  tallyCompanyName?: string;
-  razorpayKeyId?: string;
-  awsBucketName?: string;
-  brandingLogoUrl?: string;
-  brandingAccentColor?: string;
-  customDomain?: string;
-  clientPortalEnabled?: boolean;
+/**
+ * The fields an org admin may change. A class, so the global ValidationPipe
+ * whitelists it: this used to be an interface, which validates nothing, and
+ * the body went straight into `$set` — any schema field, `orgId` included,
+ * could be overwritten from the browser.
+ */
+export class UpdateSettingsDto {
+  @IsOptional() @IsString() @Length(1, 200) displayName?: string;
+  @IsOptional() @IsString() gstin?: string;
+  @IsOptional() @IsString() pan?: string;
+  @IsOptional() @Matches(/^\d{2}$/, { message: 'stateCode must be the two-digit GST state code, e.g. 27' }) stateCode?: string;
+  @IsOptional() @IsString() timezone?: string;
+  @IsOptional() @IsString() @Length(3, 3) currencyCode?: string;
+  @IsOptional() @IsInt() @Min(1) @Max(12) financialYearStartMonth?: number;
+  @IsOptional() @IsIn(['monthly', 'quarterly']) gstFilingFrequency?: 'monthly' | 'quarterly';
+  @IsOptional() @IsString() tallyCompanyName?: string;
+  @IsOptional() @IsString() razorpayKeyId?: string;
+  @IsOptional() @IsString() awsBucketName?: string;
+  @IsOptional() @IsString() brandingLogoUrl?: string;
+  @IsOptional() @IsString() brandingAccentColor?: string;
+  @IsOptional() @IsString() customDomain?: string;
+  @IsOptional() @IsBoolean() clientPortalEnabled?: boolean;
 }
+
+/** Exactly the fields above — anything else in a request body is ignored. */
+const UPDATABLE_FIELDS = [
+  'displayName', 'gstin', 'pan', 'stateCode', 'timezone', 'currencyCode',
+  'financialYearStartMonth', 'gstFilingFrequency', 'tallyCompanyName', 'razorpayKeyId',
+  'awsBucketName', 'brandingLogoUrl', 'brandingAccentColor', 'customDomain', 'clientPortalEnabled',
+] as const;
 
 export interface TeamMember {
   userId: string;
@@ -46,6 +61,9 @@ function validateGstin(gstin: string): void {
   if (!pattern.test(gstin)) {
     throw new BadRequestException('GSTIN format is invalid');
   }
+  // The format alone passes a mistyped character; the check digit does not.
+  const problem = gstinProblem(gstin);
+  if (problem) throw new BadRequestException(`GSTIN ${problem}`);
 }
 
 function validatePan(pan: string): void {
@@ -85,9 +103,24 @@ export class OrgSettingsService {
     if (dto.gstin) validateGstin(dto.gstin);
     if (dto.pan) validatePan(dto.pan);
 
+    const set: Record<string, unknown> = Object.fromEntries(
+      UPDATABLE_FIELDS.filter((k) => dto[k] !== undefined).map((k) => [k, dto[k]]),
+    );
+    // A GSTIN's first two digits are its state, which decides CGST/SGST versus
+    // IGST on every register — so the two cannot disagree.
+    if (dto.gstin) {
+      const gstinState = dto.gstin.slice(0, 2);
+      if (dto.stateCode && dto.stateCode !== gstinState) {
+        throw new BadRequestException(
+          `GSTIN ${dto.gstin} is registered in state ${gstinState}, but state ${dto.stateCode} was chosen`,
+        );
+      }
+      set.stateCode = gstinState;
+    }
+
     const before = await this.getSettings(orgId);
     const updated = await this.settingsModel
-      .findOneAndUpdate({ orgId }, { $set: dto }, { new: true, upsert: true })
+      .findOneAndUpdate({ orgId }, { $set: set }, { new: true, upsert: true })
       .exec();
 
     await this.auditLogModel.create({

@@ -25,7 +25,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigModule } from '@nestjs/config';
 import { MongooseModule, getModelToken } from '@nestjs/mongoose';
 import configuration from '../config/configuration';
-import { OrgSettingsService } from './org-settings.service';
+import { OrgSettingsService, UpdateSettingsDto } from './org-settings.service';
 import { OrgSettings, OrgSettingsSchema, OrgSettingsDocument } from './schemas/org-settings.schema';
 import { OrgMembership, OrgMembershipSchema, OrgMembershipDocument } from '../tenancy/schemas/org-membership.schema';
 import { User, UserSchema, UserDocument } from '../tenancy/schemas/user.schema';
@@ -268,5 +268,27 @@ describe('acceptance criteria — Company Admin can configure without platform a
     // Audit log should name the actor
     const log = await auditLogModel.findOne({ performedBy: companyAdminId }).exec();
     expect(log).not.toBeNull();
+  });
+});
+
+describe('updateSettings — only the settings fields, and consistent ones', () => {
+  it('ignores an orgId in the body instead of moving the settings to another org', async () => {
+    // The body used to go straight into $set, so this re-homed the document.
+    const body = { displayName: 'Kaveri Traders', orgId: ORG_B } as unknown as UpdateSettingsDto;
+    const updated = await svc.updateSettings(ORG_A, ACTOR_ID, body);
+    expect(updated.orgId).toBe(ORG_A);
+    expect(updated.displayName).toBe('Kaveri Traders');
+  });
+
+  it('rejects a GSTIN whose check digit is wrong', async () => {
+    await expect(svc.updateSettings(ORG_A, ACTOR_ID, { gstin: '27AAFCS3456M1Z9' })).rejects.toThrow(/check digit/);
+  });
+
+  it('takes the state from the GSTIN, and refuses a state that contradicts it', async () => {
+    const updated = await svc.updateSettings(ORG_A, ACTOR_ID, { gstin: '27AAPFU0939F1ZV' });
+    expect(updated.stateCode).toBe('27');
+    await expect(
+      svc.updateSettings(ORG_A, ACTOR_ID, { gstin: '27AAPFU0939F1ZV', stateCode: '29' }),
+    ).rejects.toThrow(/registered in state 27/);
   });
 });
