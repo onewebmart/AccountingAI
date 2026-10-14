@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { toCsv, paiseToCsvAmount, downloadCsvFile } from '@/lib/csv';
+import { GstReturnsPanel } from '@/components/gst/gst-returns-panel';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -117,9 +118,10 @@ function ReconChip({ status }: { status: ReconStatus }) {
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
 
-type Tab = 'purchase' | 'sales' | 'recon' | 'summary';
+type Tab = 'returns' | 'purchase' | 'sales' | 'recon' | 'summary';
 
 const TABS: { id: Tab; label: string }[] = [
+  { id: 'returns', label: 'GSTR-1 / 3B' },
   { id: 'purchase', label: 'Purchase register' },
   { id: 'sales', label: 'Sales register' },
   { id: 'recon', label: '2A/2B reconciliation' },
@@ -144,10 +146,16 @@ function TableSkeleton({ cols, rows = 3 }: { cols: number; rows?: number }) {
 
 // ── Period options ────────────────────────────────────────────────────────────
 
-const PERIOD_OPTIONS = [
-  '2025-04', '2025-05', '2025-06', '2025-07', '2025-08', '2025-09',
-  '2025-10', '2025-11', '2025-12', '2026-01', '2026-02', '2026-03',
-];
+/**
+ * The last eighteen months, newest first. This was a fixed list ending in
+ * March 2026, so the month the page opened on was not one of its options.
+ */
+function periodOptions(at: Date = new Date()): string[] {
+  return Array.from({ length: 18 }, (_, i) => {
+    const d = new Date(at.getFullYear(), at.getMonth() - i, 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  });
+}
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
@@ -196,6 +204,15 @@ export default function GstPage() {
       api.get<SalesRegisterEntry[]>(
         `/gst/sales-register?period=${period}&buyerStateCode=${STATE_CODE}`,
       ),
+  });
+
+  // What GSTR-3B says is payable in cash. The summary used to show output GST
+  // less 2B-confirmed credit, which ignored the set-off order, reverse charge
+  // (always cash) and credit notes.
+  const gstr3bQuery = useQuery<{ setOff: { cashTotalPaise: number } }>({
+    queryKey: ['gst', 'returns', 'gstr3b', period],
+    queryFn: () => api.get<{ setOff: { cashTotalPaise: number } }>(`/gst/returns/gstr3b?period=${period}`),
+    enabled: tab === 'summary',
   });
 
   const lines2bQuery = useQuery<Gstr2bLine[]>({
@@ -348,7 +365,7 @@ export default function GstPage() {
             GST
           </h1>
           <p className="text-body text-ink-500 mt-1">
-            Registers, reconciliation, and input tax credit.
+            Returns, registers, reconciliation, and input tax credit.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -357,7 +374,7 @@ export default function GstPage() {
             onChange={(e) => setPeriod(e.target.value)}
             className="rounded-md border border-line-200 bg-surface-card px-3 py-1.5 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-brand-500"
           >
-            {['2025-01', '2025-02', '2025-03', ...PERIOD_OPTIONS].map((p) => (
+            {periodOptions().map((p) => (
               <option key={p} value={p}>
                 {new Date(`${p}-01`).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}
               </option>
@@ -410,6 +427,9 @@ export default function GstPage() {
           ))}
         </nav>
       </div>
+
+      {/* ── Returns ── */}
+      {tab === 'returns' && <GstReturnsPanel period={period} onDownloaded={showToast} />}
 
       {/* ── Purchase register ── */}
       {tab === 'purchase' && (
@@ -703,15 +723,15 @@ export default function GstPage() {
           {/* Net GST payable */}
           <div className="rounded-lg border border-brand-200 bg-brand-50 p-5 space-y-4">
             <h2 className="text-body font-semibold text-ink-900">Net GST payable</h2>
-            <div className="flex items-end justify-between">
-              <p className="text-caption text-ink-500">Output GST − ITC claimed</p>
+            <div className="flex items-end justify-between gap-4">
+              <p className="text-caption text-ink-500">
+                In cash, after input credit is set off as GSTR-3B does it.{' '}
+                <button type="button" className="text-brand-600 hover:underline" onClick={() => setTab('returns')}>
+                  See the 3B
+                </button>
+              </p>
               <p className="text-h1 font-mono font-bold text-ink-900">
-                {formatRupees(
-                  salesRows.reduce(
-                    (s, e) => s + e.cgstPaise + e.sgstPaise + e.igstPaise,
-                    0,
-                  ) - confirmedIn2B,
-                )}
+                {gstr3bQuery.data ? formatRupees(gstr3bQuery.data.setOff.cashTotalPaise) : '—'}
               </p>
             </div>
           </div>

@@ -231,6 +231,7 @@ function AddInvoiceModal({ customers, onClose, onSuccess, showToast }: AddInvoic
     rate: 18 as GstRate,
     interState: false,
     description: '',
+    hsnSac: '',
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -275,6 +276,7 @@ function AddInvoiceModal({ customers, onClose, onSuccess, showToast }: AddInvoic
       lineItems: [
         {
           description: form.description.trim() || 'Sale',
+          hsnSac: form.hsnSac.trim() || null,
           qty: 1,
           ratePaise: amounts.taxableValue,
           amountPaise: amounts.taxableValue,
@@ -424,16 +426,30 @@ function AddInvoiceModal({ customers, onClose, onSuccess, showToast }: AddInvoic
             </dl>
           )}
 
-          <div>
-            <label className="text-caption font-medium text-ink-700 block mb-1">Description</label>
-            <input
-              type="text"
-              className={field}
-              value={form.description}
-              onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-              placeholder="What was sold"
-            />
+          <div className="grid grid-cols-[1fr_9rem] gap-3">
+            <div>
+              <label className="text-caption font-medium text-ink-700 block mb-1">Description</label>
+              <input
+                type="text"
+                className={field}
+                value={form.description}
+                onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                placeholder="What was sold"
+              />
+            </div>
+            <div>
+              <label className="text-caption font-medium text-ink-700 block mb-1">HSN/SAC</label>
+              <input
+                type="text"
+                inputMode="numeric"
+                className={`${field} font-mono`}
+                value={form.hsnSac}
+                onChange={(e) => setForm((f) => ({ ...f, hsnSac: e.target.value.replace(/\D/g, '').slice(0, 8) }))}
+                placeholder="e.g. 998314"
+              />
+            </div>
           </div>
+          <p className="-mt-2 text-caption text-ink-500">The HSN or SAC code goes on your GSTR-1 HSN summary.</p>
 
           {mutation.isError && (
             <p className="text-caption text-error-fg">{(mutation.error as Error).message}</p>

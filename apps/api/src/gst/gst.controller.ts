@@ -19,6 +19,7 @@ import { RequirePermission } from '../auth/decorators';
 import { Permission } from '@ai-accounting/shared';
 import { GstService, ImportGstr2bLineDto } from './gst.service';
 import { Gstr2bImportService } from './gstr2b-import.service';
+import { GstReturnsService } from './gst-returns.service';
 
 interface AuthRequest {
   user: { orgId: string; sub: string };
@@ -31,7 +32,33 @@ export class GstController {
   constructor(
     private readonly gstService: GstService,
     private readonly gstr2bImport: Gstr2bImportService,
+    private readonly returns: GstReturnsService,
   ) {}
+
+  // ── Returns ──────────────────────────────────────────────────────────────
+
+  /** GSTR-1 for a month, table by table, with anything that would stop it filing. */
+  @Get('returns/gstr1')
+  gstr1(@Request() req: AuthRequest, @Query('period') period: string) {
+    return this.returns.gstr1(req.user.orgId, period);
+  }
+
+  /** The same GSTR-1 in the GST offline tool's JSON shape. */
+  @Get('returns/gstr1/json')
+  gstr1Json(@Request() req: AuthRequest, @Query('period') period: string) {
+    return this.returns.gstr1Json(req.user.orgId, period);
+  }
+
+  /** GSTR-3B for a month: liability, credit, and how the tax is paid. */
+  @Get('returns/gstr3b')
+  gstr3b(@Request() req: AuthRequest, @Query('period') period: string) {
+    return this.returns.gstr3b(req.user.orgId, period);
+  }
+
+  @Get('returns/gstr3b/json')
+  gstr3bJson(@Request() req: AuthRequest, @Query('period') period: string) {
+    return this.returns.gstr3bJson(req.user.orgId, period);
+  }
 
   @Get('purchase-register')
   getPurchaseRegister(

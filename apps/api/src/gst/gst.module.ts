@@ -6,6 +6,10 @@ import { Vendor, VendorSchema } from '../purchase/schemas/vendor.schema';
 import { SalesInvoice, SalesInvoiceSchema } from '../sales/schemas/sales-invoice.schema';
 import { Customer, CustomerSchema } from '../sales/schemas/customer.schema';
 import { ProposedEntry, ProposedEntrySchema } from '../proposals/schemas/proposed-entry.schema';
+import { CreditNote, CreditNoteSchema } from '../sales/schemas/credit-note.schema';
+import { DebitNote, DebitNoteSchema } from '../purchase/schemas/debit-note.schema';
+import { OrgSettings, OrgSettingsSchema } from '../org-settings/schemas/org-settings.schema';
+import { GstReturnsService } from './gst-returns.service';
 import { GstService } from './gst.service';
 import { GstController } from './gst.controller';
 import { Gstr2bImportService } from './gstr2b-import.service';
@@ -21,12 +25,16 @@ import { GlModule } from '../gl/gl.module';
       { name: SalesInvoice.name, schema: SalesInvoiceSchema },
       { name: Customer.name, schema: CustomerSchema },
       { name: ProposedEntry.name, schema: ProposedEntrySchema },
+      // Read for GSTR-1 and GSTR-3B.
+      { name: CreditNote.name, schema: CreditNoteSchema },
+      { name: DebitNote.name, schema: DebitNoteSchema },
+      { name: OrgSettings.name, schema: OrgSettingsSchema },
     ]),
     IngestModule,
     GlModule, // real ledger accounts for 2B entries // spreadsheet parsing for GSTR-2B Excel downloads
   ],
   controllers: [GstController],
-  providers: [GstService, Gstr2bImportService],
+  providers: [GstService, Gstr2bImportService, GstReturnsService],
   exports: [GstService],
 })
 export class GstModule {}
