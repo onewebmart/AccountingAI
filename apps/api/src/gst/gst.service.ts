@@ -1,5 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
+import { AccountsService } from '../gl/accounts.service';
+import { SystemAccountKey } from '../gl/schemas/ledger-account.schema';
 import { Model, Types } from 'mongoose';
 import {
   BillStatus,
@@ -178,6 +180,7 @@ export class GstService {
     @InjectModel(SalesInvoice.name) private salesInvoiceModel: Model<SalesInvoiceDocument>,
     @InjectModel(Customer.name) private customerModel: Model<CustomerDocument>,
     @InjectModel(ProposedEntry.name) private proposedEntryModel: Model<ProposedEntryDocument>,
+    private accountsService: AccountsService,
   ) {}
 
   // ── Purchase register ───────────────────────────────────────────────────────
@@ -482,62 +485,51 @@ export class GstService {
       throw new Error('Can only create entries for lines classified as missing_in_books');
     }
 
-    const totalPaise = line.taxableValuePaise + line.itcEligiblePaise + line.cessPaise;
+    // The invoice value is the sum of its parts, so the lines always balance.
+    // It used to add cess to the payable without a cess debit, which made any
+    // 2B line carrying cess a proposal that could never post.
+    const totalPaise =
+      line.taxableValuePaise + line.cgstPaise + line.sgstPaise + line.igstPaise + line.cessPaise;
     const fy = line.invoiceDate ? getFY(line.invoiceDate) : getFY(`${line.period}-01`);
 
-    // Build balanced journal lines:
-    // Dr Purchase (taxable value) + Dr GST Input (ITC) = Cr Accounts Payable (total)
+    // Real ledgers from this org's chart. These lines used to carry a fresh
+    // `new Types.ObjectId()` each, so approving one posted to accounts that
+    // existed nowhere and never reached the chart of accounts or the reports.
+    const accounts = await this.accountsService.resolveSystemAccounts(orgId, [
+      SystemAccountKey.PURCHASE_EXPENSE,
+      SystemAccountKey.GST_INPUT_CGST,
+      SystemAccountKey.GST_INPUT_SGST,
+      SystemAccountKey.GST_INPUT_IGST,
+      SystemAccountKey.GST_INPUT_CESS,
+      SystemAccountKey.ACCOUNTS_PAYABLE,
+    ]);
+    const lineFor = (key: SystemAccountKey, debitPaise: number, creditPaise: number, confidence: number) => {
+      const account = accounts.get(key)!;
+      return {
+        accountName: account.name,
+        accountCode: account.code,
+        accountId: account._id,
+        debitPaise,
+        creditPaise,
+        confidence,
+        isAiSuggested: false,
+      };
+    };
+
+    // Dr Purchases (taxable) + Dr input taxes = Cr Accounts Payable (invoice value)
     const suggestedLines = [
-      {
-        accountName: 'Purchase Account',
-        accountCode: null,
-        accountId: new Types.ObjectId(),
-        debitPaise: line.taxableValuePaise,
-        creditPaise: 0,
-        confidence: 0.75,
-        isAiSuggested: false,
-      },
-      ...(line.igstPaise > 0
-        ? [
-            {
-              accountName: 'GST Input — IGST',
-              accountCode: null,
-              accountId: new Types.ObjectId(),
-              debitPaise: line.igstPaise,
-              creditPaise: 0,
-              confidence: 0.9,
-              isAiSuggested: false,
-            },
-          ]
-        : [
-            {
-              accountName: 'GST Input — CGST',
-              accountCode: null,
-              accountId: new Types.ObjectId(),
-              debitPaise: line.cgstPaise,
-              creditPaise: 0,
-              confidence: 0.9,
-              isAiSuggested: false,
-            },
-            {
-              accountName: 'GST Input — SGST',
-              accountCode: null,
-              accountId: new Types.ObjectId(),
-              debitPaise: line.sgstPaise,
-              creditPaise: 0,
-              confidence: 0.9,
-              isAiSuggested: false,
-            },
-          ]),
-      {
-        accountName: 'Accounts Payable',
-        accountCode: null,
-        accountId: new Types.ObjectId(),
-        debitPaise: 0,
-        creditPaise: totalPaise,
-        confidence: 0.9,
-        isAiSuggested: false,
-      },
+      lineFor(SystemAccountKey.PURCHASE_EXPENSE, line.taxableValuePaise, 0, 0.75),
+      ...(
+        [
+          [SystemAccountKey.GST_INPUT_CGST, line.cgstPaise],
+          [SystemAccountKey.GST_INPUT_SGST, line.sgstPaise],
+          [SystemAccountKey.GST_INPUT_IGST, line.igstPaise],
+          [SystemAccountKey.GST_INPUT_CESS, line.cessPaise],
+        ] as const
+      )
+        .filter(([, amount]) => amount > 0)
+        .map(([key, amount]) => lineFor(key, amount, 0, 0.9)),
+      lineFor(SystemAccountKey.ACCOUNTS_PAYABLE, 0, totalPaise, 0.9),
     ];
 
     const proposal = await this.proposedEntryModel.create({

@@ -10,6 +10,7 @@ import { GstService } from './gst.service';
 import { GstController } from './gst.controller';
 import { Gstr2bImportService } from './gstr2b-import.service';
 import { IngestModule } from '../ingest/ingest.module';
+import { GlModule } from '../gl/gl.module';
 
 @Module({
   imports: [
@@ -21,7 +22,8 @@ import { IngestModule } from '../ingest/ingest.module';
       { name: Customer.name, schema: CustomerSchema },
       { name: ProposedEntry.name, schema: ProposedEntrySchema },
     ]),
-    IngestModule, // spreadsheet parsing for GSTR-2B Excel downloads
+    IngestModule,
+    GlModule, // real ledger accounts for 2B entries // spreadsheet parsing for GSTR-2B Excel downloads
   ],
   controllers: [GstController],
   providers: [GstService, Gstr2bImportService],

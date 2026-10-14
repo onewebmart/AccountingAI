@@ -22,6 +22,10 @@ import { ConfigModule } from '@nestjs/config';
 import { MongooseModule, getModelToken } from '@nestjs/mongoose';
 import configuration from '../config/configuration';
 import { GstService } from './gst.service';
+import { AccountsService } from '../gl/accounts.service';
+import { AuditService } from '../gl/audit.service';
+import { LedgerAccount, LedgerAccountSchema } from '../gl/schemas/ledger-account.schema';
+import { AuditLog, AuditLogSchema } from '../gl/schemas/audit-log.schema';
 import { Gstr2bLine, Gstr2bLineSchema, Gstr2bLineDocument } from './schemas/gstr2b-line.schema';
 import { PurchaseBill, PurchaseBillSchema, PurchaseBillDocument } from '../purchase/schemas/purchase-bill.schema';
 import { Vendor, VendorSchema, VendorDocument } from '../purchase/schemas/vendor.schema';
@@ -123,9 +127,11 @@ beforeAll(async () => {
         { name: Customer.name, schema: CustomerSchema },
         { name: ProposedEntry.name, schema: ProposedEntrySchema },
         { name: Journal.name, schema: JournalSchema },
+        { name: LedgerAccount.name, schema: LedgerAccountSchema },
+        { name: AuditLog.name, schema: AuditLogSchema },
       ]),
     ],
-    providers: [GstService],
+    providers: [GstService, AccountsService, AuditService],
   }).compile();
 
   svc = moduleRef.get(GstService);
@@ -486,5 +492,39 @@ describe('createEntryFrom2bLine (Invariant 4)', () => {
     await expect(
       svc.createEntryFrom2bLine(line!._id.toString(), ORG_ID),
     ).rejects.toThrow();
+  });
+});
+
+describe('createEntryFrom2bLine — a proposal that can actually post', () => {
+  it('uses real ledger accounts, and balances when the line carries cess', async () => {
+    const orgId = new Types.ObjectId().toString();
+    await svc.importGstr2b(orgId, '2025-03', [
+      {
+        supplierGstin: '27AAPFU0939F1ZV',
+        supplierName: 'Cess Motors',
+        invoiceNumber: 'CM/2025/7',
+        invoiceDate: '2025-03-12',
+        taxableValuePaise: 1000000,
+        cgstPaise: 140000,
+        sgstPaise: 140000,
+        igstPaise: 0,
+        cessPaise: 220000,
+      },
+    ]);
+    await svc.reconcile2b(orgId, '2025-03', BUYER_STATE);
+    const line = await gstr2bModel.findOne({ orgId }).lean();
+    const proposal = await svc.createEntryFrom2bLine(line!._id.toString(), orgId);
+
+    const debit = proposal.suggestedLines.reduce((s, l) => s + l.debitPaise, 0);
+    const credit = proposal.suggestedLines.reduce((s, l) => s + l.creditPaise, 0);
+    // It used to credit cess to the payable with no cess debit — unbalanced, unpostable.
+    expect(debit).toBe(credit);
+    expect(credit).toBe(1500000);
+    expect(proposal.suggestedLines.some((l) => /cess/i.test(l.accountName))).toBe(true);
+
+    // Every line points at an account in this org's chart, not a made-up id.
+    const ledger = moduleRef.get<Model<{ _id: unknown; orgId: string }>>(getModelToken(LedgerAccount.name));
+    const ids = proposal.suggestedLines.map((l) => l.accountId);
+    expect(await ledger.countDocuments({ orgId, _id: { $in: ids } })).toBe(ids.length);
   });
 });
