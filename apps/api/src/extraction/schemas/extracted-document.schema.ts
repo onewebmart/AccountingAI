@@ -78,6 +78,14 @@ export class ExtractedDocument {
   @Prop({ type: ConfidenceField, required: true })
   invoiceDate: ConfidenceField;
 
+  /** Only a due date printed on the document; see paymentTerms for "Net 30" and the like. */
+  @Prop({ type: ConfidenceField, default: () => ({ value: null, confidence: 0 }) })
+  dueDate: ConfidenceField;
+
+  /** Payment terms exactly as printed, e.g. "Net 30 days". */
+  @Prop({ type: String, default: null })
+  paymentTerms: string | null;
+
   @Prop({ type: String, default: null })
   placeOfSupply: string | null;
 

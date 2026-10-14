@@ -29,8 +29,10 @@ MANDATORY RULES — any violation is a critical failure:
 3. All monetary amounts are INTEGER PAISE (1 rupee = 100 paise). Multiply rupee values by 100 and round to nearest integer. Never use decimals for money.
 4. confidence values are floats 0.0–1.0. Use ≥0.9 only when the value is clear and unambiguous.
 5. document_type must be exactly one of: purchase_invoice, sales_invoice, bank_statement, receipt, bill
-5a. invoice_date must be ISO format YYYY-MM-DD. Indian invoices print dd/mm/yyyy — read them day-first (13/04/2025 is 2025-04-13, NOT 2025-13-04).
+5a. invoice_date and due_date must be ISO format YYYY-MM-DD. Indian invoices print dd/mm/yyyy — read them day-first (13/04/2025 is 2025-04-13, NOT 2025-13-04).
 5b. document_type is from the buyer's point of view: a bill received from a supplier is purchase_invoice; an invoice raised to a customer is sales_invoice.
+5c. due_date is only a date printed as the due / payment date. payment_terms is the terms text exactly as printed (e.g. "Net 30 days", "Due on receipt"). Do not compute a due date from the terms.
+5d. line_items: one object per printed line, in the shape shown; amounts in integer paise.
 6. raw_warnings: list every data quality concern as a short string (e.g. "line items do not sum to total", "GSTIN format invalid", "date ambiguous"). Use [] if none.
 
 OUTPUT SCHEMA (fill in values, do not modify keys):
@@ -40,13 +42,17 @@ OUTPUT SCHEMA (fill in values, do not modify keys):
   "vendor": { "name": null, "gstin": null, "confidence": 0.0 },
   "invoice_number": { "value": null, "confidence": 0.0 },
   "invoice_date": { "value": null, "confidence": 0.0 },
+  "due_date": { "value": null, "confidence": 0.0 },
+  "payment_terms": null,
   "place_of_supply": null,
   "currency": "INR",
   "amounts_paise": {
     "taxable_value": 0, "cgst": 0, "sgst": 0, "igst": 0, "cess": 0, "total": 0,
     "confidence": 0.0
   },
-  "line_items": [],
+  "line_items": [
+    { "description": null, "hsn_sac": null, "qty": 0, "rate_paise": 0, "amount_paise": 0, "tax_rate_pct": 0 }
+  ],
   "is_reverse_charge": false,
   "raw_warnings": []
 }`;

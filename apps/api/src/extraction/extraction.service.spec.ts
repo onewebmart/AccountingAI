@@ -276,3 +276,57 @@ describe('Retry and failure handling', () => {
     expect(Number.isInteger(result.amountsPaise.cgst)).toBe(true);
   });
 });
+
+describe('Deterministic checks and payment terms', () => {
+  const extract = () =>
+    svc.extract({ documentId: DOC_ID, orgId: ORG_ID, ocrResultId: OCR_RESULT_ID, ocrText: SAMPLE_OCR_TEXT });
+
+  it('warns and caps confidence when the total does not add up', async () => {
+    fakeGroq.extract.mockResolvedValue({
+      rawJson: makeValidResponse({
+        amounts_paise: { taxable_value: 1000000, cgst: 90000, sgst: 90000, igst: 0, cess: 0, total: 1230000, confidence: 0.95 },
+      }),
+      tokensIn: 500,
+      tokensOut: 200,
+    });
+    const result = await extract();
+    expect(result.rawWarnings).toEqual(
+      expect.arrayContaining([expect.stringMatching(/invoice total reads ₹12,300\.00/)]),
+    );
+    // Below the 0.9 bulk-approve threshold, so a person has to look at it.
+    expect(result.confidenceOverall).toBeLessThanOrEqual(0.5);
+  });
+
+  it('warns about a GSTIN that fails its check digit', async () => {
+    fakeGroq.extract.mockResolvedValue({
+      rawJson: makeValidResponse({ vendor: { name: 'Sterling Stationers', gstin: '27AAFCS3456M1Z9', confidence: 0.95 } }),
+      tokensIn: 500,
+      tokensOut: 200,
+    });
+    const result = await extract();
+    expect(result.rawWarnings).toEqual(expect.arrayContaining([expect.stringMatching(/check digit/)]));
+  });
+
+  it('does not complain about line items that carry no amounts', async () => {
+    // Every real invoice used to warn "line items sum (0 paise) does not match".
+    fakeGroq.extract.mockResolvedValue({
+      rawJson: makeValidResponse({ line_items: [{ description: 'A4 paper', qty: 100 }] }),
+      tokensIn: 500,
+      tokensOut: 200,
+    });
+    const result = await extract();
+    expect(result.rawWarnings).toEqual([]);
+    expect(result.confidenceOverall).toBe(0.92);
+  });
+
+  it('keeps the printed due date and payment terms', async () => {
+    fakeGroq.extract.mockResolvedValue({
+      rawJson: makeValidResponse({ due_date: { value: '04/11/2026', confidence: 0.9 }, payment_terms: ' Net 30 days ' }),
+      tokensIn: 500,
+      tokensOut: 200,
+    });
+    const result = await extract();
+    expect(result.dueDate.value).toBe('2026-11-04');
+    expect(result.paymentTerms).toBe('Net 30 days');
+  });
+});

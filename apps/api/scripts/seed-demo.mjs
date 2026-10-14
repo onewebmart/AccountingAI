@@ -139,9 +139,9 @@ try {
   console.log('Seeding books as the accountant…');
 
   const customers = [
-    { name: 'Deccan Retail LLP', gstin: '27AAECD1234F1Z5', phone: '9822011001', email: 'ap@deccanretail.in' },
-    { name: 'Nimbus Softworks Pvt Ltd', gstin: '29AABCN5678K1Z2', phone: '9845022002', email: 'billing@nimbus.dev' },
-    { name: 'Kaveri Traders', gstin: '29AAKFK9012L1Z8', phone: '9880033003', email: 'accounts@kaveri.co.in' },
+    { name: 'Deccan Retail LLP', gstin: '27AAECD1234F1Z3', phone: '9822011001', email: 'ap@deccanretail.in' },
+    { name: 'Nimbus Softworks Pvt Ltd', gstin: '29AABCN5678K1ZT', phone: '9845022002', email: 'billing@nimbus.dev' },
+    { name: 'Kaveri Traders', gstin: '29AAKFK9012L1ZV', phone: '9880033003', email: 'accounts@kaveri.co.in' },
   ];
   const customerIds = [];
   for (const c of customers) {
@@ -150,8 +150,8 @@ try {
   }
 
   const vendors = [
-    { name: 'Sterling Stationers', gstin: '27AAFCS3456M1Z9', phone: '9820044004' },
-    { name: 'Bharat Logistics', gstin: '27AACCB7890N1Z3', phone: '9821055005' },
+    { name: 'Sterling Stationers', gstin: '27AAFCS3456M1ZW', phone: '9820044004' },
+    { name: 'Bharat Logistics', gstin: '27AACCB7890N1Z0', phone: '9821055005' },
   ];
   const vendorIds = [];
   for (const v of vendors) {
@@ -203,11 +203,11 @@ try {
     console.log('Seeding the practice as the firm admin…');
 
     const clients = [
-      { name: 'Deccan Retail LLP', gstin: '27AAECD1234F1Z5', pan: 'AAECD1234F', contactName: 'Sunil Rao',
+      { name: 'Deccan Retail LLP', gstin: '27AAECD1234F1Z3', pan: 'AAECD1234F', contactName: 'Sunil Rao',
         whatsappNumber: '919822011001', contactEmail: 'sunil@deccanretail.in', services: ['GST_FILING', 'TDS', 'BOOKKEEPING'] },
-      { name: 'Nimbus Softworks Pvt Ltd', gstin: '29AABCN5678K1Z2', pan: 'AABCN5678K', contactName: 'Farah Qureshi',
+      { name: 'Nimbus Softworks Pvt Ltd', gstin: '29AABCN5678K1ZT', pan: 'AABCN5678K', contactName: 'Farah Qureshi',
         whatsappNumber: '919845022002', contactEmail: 'farah@nimbus.dev', services: ['GST_FILING', 'ITR', 'ROC_MCA'] },
-      { name: 'Kaveri Traders', gstin: '29AAKFK9012L1Z8', pan: 'AAKFK9012L', contactName: 'Girish Kamath',
+      { name: 'Kaveri Traders', gstin: '29AAKFK9012L1ZV', pan: 'AAKFK9012L', contactName: 'Girish Kamath',
         whatsappNumber: '919880033003', contactEmail: 'girish@kaveri.co.in', services: ['GST_FILING'] },
       { name: 'Sanghvi Jewellers', pan: 'AASFS4567P', contactName: 'Rekha Sanghvi',
         whatsappNumber: '919833066006', services: ['ITR', 'AUDIT'] },

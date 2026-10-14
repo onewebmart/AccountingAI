@@ -5,6 +5,7 @@ import { ExtractedDocument, ExtractedDocumentDocument } from './schemas/extracte
 import { GeminiExtractionService, OrgContext } from './gemini-extraction.service';
 import { UsageMeterService } from '../ocr/usage-meter.service';
 import { Organization, OrganizationDocument } from '../tenancy/schemas/organization.schema';
+import { invoiceProblems, ROUNDING_TOLERANCE_PAISE } from './invoice-checks';
 
 export interface ExtractionInput {
   documentId: string;
@@ -75,6 +76,13 @@ export function normaliseDate(value: unknown): string | null {
   return null;
 }
 
+/** The printed due date, if any. Older responses without the field read as absent. */
+function dueDateField(raw: unknown): { value: string | null; confidence: number } {
+  const field = typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {};
+  const value = normaliseDate(field.value);
+  return { value, confidence: value && typeof field.confidence === 'number' ? field.confidence : 0 };
+}
+
 /** Validates the raw Groq JSON against the canonical contract. Returns the normalized object or null. */
 function validateAndNormalize(raw: unknown): ReturnType<typeof buildDbPayload> | null {
   if (typeof raw !== 'object' || raw === null) return null;
@@ -113,23 +121,47 @@ function validateAndNormalize(raw: unknown): ReturnType<typeof buildDbPayload> |
     warnings.push(`could not read the invoice date "${String(invoiceDate.value)}" — set it manually`);
   }
 
-  // Advisory check: line-item amounts should sum to taxable value
-  if (lineItems.length > 0) {
-    const itemSum = (lineItems as Record<string, unknown>[]).reduce((acc, item) => {
-      const amt = item.amount_paise;
-      return acc + (typeof amt === 'number' && Number.isInteger(amt) ? amt : 0);
-    }, 0);
+  // Advisory check: line-item amounts should sum to taxable value. Only when the
+  // items actually carry amounts — a line list with none read used to warn
+  // "line items sum (0 paise) does not match" on every invoice, which taught
+  // reviewers to ignore the warnings panel.
+  const itemAmounts = (lineItems as Record<string, unknown>[])
+    .map((item) => item.amount_paise)
+    .filter((amt): amt is number => typeof amt === 'number' && Number.isInteger(amt) && amt > 0);
+  if (itemAmounts.length > 0) {
+    const itemSum = itemAmounts.reduce((acc, amt) => acc + amt, 0);
     const taxable = amounts.taxable_value as number;
-    if (Math.abs(itemSum - taxable) > 1) {
-      // Allow 1 paise rounding tolerance
+    if (Math.abs(itemSum - taxable) > ROUNDING_TOLERANCE_PAISE) {
       warnings.push(
         `line items sum (${itemSum} paise) does not match taxable_value (${taxable} paise)`,
       );
     }
   }
 
-  return buildDbPayload(d, amounts, vendor, invoiceNumber, invoiceDate, lineItems, warnings);
+  // Deterministic checks the model does not reliably make. Any failure caps the
+  // confidence below the bulk-approve threshold, so a person has to look.
+  const problems = invoiceProblems(
+    {
+      taxableValue: amounts.taxable_value as number,
+      cgst: amounts.cgst as number,
+      sgst: amounts.sgst as number,
+      igst: amounts.igst as number,
+      cess: amounts.cess as number,
+      total: amounts.total as number,
+    },
+    typeof vendor.gstin === 'string' && vendor.gstin.trim() ? vendor.gstin : null,
+  );
+  warnings.push(...problems);
+
+  const payload = buildDbPayload(d, amounts, vendor, invoiceNumber, invoiceDate, lineItems, warnings);
+  if (problems.length > 0) {
+    payload.confidenceOverall = Math.min(payload.confidenceOverall, CHECK_FAILED_CONFIDENCE_CAP);
+  }
+  return payload;
 }
+
+/** Below the 0.9 bulk-approve threshold and the review screen's "high" band. */
+const CHECK_FAILED_CONFIDENCE_CAP = 0.5;
 
 function buildDbPayload(
   d: Record<string, unknown>,
@@ -161,6 +193,9 @@ function buildDbPayload(
           ? (invoiceDate.confidence as number)
           : 0,
     },
+    dueDate: dueDateField(d.due_date),
+    paymentTerms:
+      typeof d.payment_terms === 'string' && d.payment_terms.trim() ? d.payment_terms.trim() : null,
     placeOfSupply: typeof d.place_of_supply === 'string' ? d.place_of_supply : null,
     currency: 'INR',
     amountsPaise: {
