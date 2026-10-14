@@ -54,7 +54,7 @@ export class GstReturnsService {
     const [org, invoices, unpostedCount, notes] = await Promise.all([
       this.org(orgId),
       this.invoiceModel
-        .find({ orgId, invoiceDate: inPeriod(period), status: { $in: [InvoiceStatus.POSTED, InvoiceStatus.PAID] } })
+        .find({ orgId, invoiceDate: inPeriod(period), isOpeningBalance: { $ne: true }, status: { $in: [InvoiceStatus.POSTED, InvoiceStatus.PAID] } })
         .sort({ invoiceDate: 1 })
         .lean()
         .exec(),
@@ -109,7 +109,7 @@ export class GstReturnsService {
     const org = await this.org(orgId);
     const [bills, notes] = await Promise.all([
       this.billModel
-        .find({ orgId, billDate: inPeriod(period), status: { $in: [BillStatus.POSTED, BillStatus.PAID] } })
+        .find({ orgId, billDate: inPeriod(period), isOpeningBalance: { $ne: true }, status: { $in: [BillStatus.POSTED, BillStatus.PAID] } })
         .lean()
         .exec(),
       this.debitNoteModel.find({ orgId, noteDate: inPeriod(period), status: 'posted' }).lean().exec(),

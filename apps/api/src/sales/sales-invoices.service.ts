@@ -218,6 +218,7 @@ export class SalesInvoicesService {
    */
   async post(id: string, orgId: string, actorId: string): Promise<SalesInvoiceDocument> {
     const invoice = await this.findById(id, orgId);
+    if (invoice.isOpeningBalance) throw new BadRequestException('An opening balance is already in the books through the opening entry.');
     if (![InvoiceStatus.DRAFT, InvoiceStatus.SENT].includes(invoice.status)) {
       throw new BadRequestException(`Invoice is already ${invoice.status}`);
     }

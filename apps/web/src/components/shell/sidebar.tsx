@@ -15,6 +15,7 @@ import {
   Lightbulb,
   Settings,
   Repeat,
+  Upload,
   BookOpen,
   Briefcase,
   Users,
@@ -84,6 +85,7 @@ const NAV_GROUPS: NavGroup[] = [
       { href: '/vouchers', label: 'Vouchers', icon: <FileText size={18} /> },
       { href: '/accounts', label: 'Chart of accounts', icon: <BookOpen size={18} /> },
       { href: '/gst', label: 'GST', icon: <ReceiptIndianRupee size={18} /> },
+      { href: '/migration', label: 'Import books', icon: <Upload size={18} /> },
     ],
   },
   {

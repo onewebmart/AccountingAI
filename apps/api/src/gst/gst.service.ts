@@ -191,7 +191,7 @@ export class GstService {
     buyerStateCode: string,
   ): Promise<PurchaseRegisterEntry[]> {
     const bills = await this.purchaseBillModel
-      .find({ orgId, status: { $in: [BillStatus.POSTED, BillStatus.PAID] } })
+      .find({ orgId, isOpeningBalance: { $ne: true }, status: { $in: [BillStatus.POSTED, BillStatus.PAID] } })
       .lean()
       .exec();
 
@@ -253,7 +253,7 @@ export class GstService {
     buyerStateCode: string,
   ): Promise<SalesRegisterEntry[]> {
     const invoices = await this.salesInvoiceModel
-      .find({ orgId, status: { $in: [InvoiceStatus.POSTED, InvoiceStatus.PAID] } })
+      .find({ orgId, isOpeningBalance: { $ne: true }, status: { $in: [InvoiceStatus.POSTED, InvoiceStatus.PAID] } })
       .lean()
       .exec();
 

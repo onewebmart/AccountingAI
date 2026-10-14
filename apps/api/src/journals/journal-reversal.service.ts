@@ -59,6 +59,11 @@ export class JournalReversalService {
 
         const reversal = await this.posting.reverse(journalId, actorId, session);
 
+        // Opening balances imported with this entry go with it: they have no
+        // posting of their own, so sending them back to draft would let one be
+        // posted as a fresh sale. (A paid one has already been refused above.)
+        await this.removeOpeningDocuments(id, orgId, actorId, session);
+
         await this.reopen('SalesInvoice', orgId, actorId, session, 'REVERSE_POSTING',
           { status: InvoiceStatus.DRAFT, journalId: null, postedBy: null },
           (set) => this.invoiceModel
@@ -155,6 +160,24 @@ export class JournalReversalService {
    * A sale or purchase with any payment or note against it cannot be undone
    * underneath them.
    */
+  private async removeOpeningDocuments(journalId: Types.ObjectId, orgId: string, actorId: string, session: ClientSession): Promise<void> {
+    const filter = { orgId, journalId, isOpeningBalance: true };
+    const [invoices, bills] = await Promise.all([
+      this.invoiceModel.find(filter).session(session).lean().exec(),
+      this.billModel.find(filter).session(session).lean().exec(),
+    ]);
+    for (const [entityType, docs] of [['SalesInvoice', invoices], ['PurchaseBill', bills]] as const) {
+      for (const doc of docs) {
+        await this.audit.record(
+          { orgId, entityType, entityId: doc._id.toString(), action: 'DELETE', performedBy: actorId, before: { status: doc.status, isOpeningBalance: true, totalPaise: doc.amountsPaise.total } },
+          session,
+        );
+      }
+    }
+    if (invoices.length) await this.invoiceModel.deleteMany(filter, { session }).exec();
+    if (bills.length) await this.billModel.deleteMany(filter, { session }).exec();
+  }
+
   private async refuseWhilePaid(journalId: Types.ObjectId, orgId: string, session: ClientSession): Promise<void> {
     const paidAtAll = {
       journalId,

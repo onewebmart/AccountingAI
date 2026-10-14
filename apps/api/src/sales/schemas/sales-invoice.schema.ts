@@ -96,6 +96,13 @@ export class SalesInvoice {
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'RecurringTemplate', default: null })
   recurringTemplateId?: MongooseSchema.Types.ObjectId | null;
 
+  /**
+   * An opening balance brought in from another system: what the party owed
+   * on the day the books moved here. It has no posting of its own (the
+   * opening journal carries it) and is not a supply, so GST returns skip it.
+   */
+  @Prop({ type: Boolean, default: false }) isOpeningBalance: boolean;
+
 }
 
 export const SalesInvoiceSchema = SchemaFactory.createForClass(SalesInvoice);
