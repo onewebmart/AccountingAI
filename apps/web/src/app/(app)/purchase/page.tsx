@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { DocumentUploadButton } from '@/components/shell/document-upload-button';
+import { DocumentDetailDialog, PartyDetailDialog } from '@/components/shell/record-detail-dialogs';
 import { Plus, ChevronRight } from 'lucide-react';
 import { api } from '@/lib/api';
 import { GST_RATES, GstRate, splitGst, rupeesToPaise, formatPaise } from '@/lib/gst';
@@ -16,6 +17,7 @@ type BillStatus = 'draft' | 'posted' | 'paid';
 
 interface Bill {
   _id: string;
+  vendorId?: string | null;
   vendorName: string;
   billNumber: string | null;
   billDate: string;
@@ -415,6 +417,8 @@ export default function PurchasePage() {
   const [activeTab, setActiveTab] = useState<Tab>('Bills');
   const [toast, setToast] = useState<string | null>(null);
   const [showBillModal, setShowBillModal] = useState(false);
+  const [openBill, setOpenBill] = useState<Bill | null>(null);
+  const [openVendor, setOpenVendor] = useState<Vendor | null>(null);
   const [showVendorModal, setShowVendorModal] = useState(false);
 
   const queryClient = useQueryClient();
@@ -653,7 +657,8 @@ export default function PurchasePage() {
                           <button
                             type="button"
                             className="text-ink-400 hover:text-ink-700 transition-colors"
-                            onClick={() => showToast(`Bill ${bill._id} — detail view coming soon`)}
+                            aria-label={`Open bill ${bill.billNumber ?? ''}`}
+                            onClick={() => setOpenBill(bill)}
                           >
                             <ChevronRight size={16} />
                           </button>
@@ -715,7 +720,8 @@ export default function PurchasePage() {
                         <button
                           type="button"
                           className="text-ink-400 hover:text-ink-700 transition-colors"
-                          onClick={() => showToast(`Vendor ${vendor._id} — detail view coming soon`)}
+                          aria-label={`Open ${vendor.name}`}
+                          onClick={() => setOpenVendor(vendor)}
                         >
                           <ChevronRight size={16} />
                         </button>
@@ -802,6 +808,28 @@ export default function PurchasePage() {
       )}
 
       {/* Toast */}
+      <DocumentDetailDialog
+        kind="bill"
+        id={openBill?._id ?? null}
+        partyName={openBill?.vendorName ?? ''}
+        onClose={() => setOpenBill(null)}
+      />
+      <PartyDetailDialog
+        kind="vendor"
+        party={
+          openVendor && {
+            id: openVendor._id,
+            name: openVendor.name,
+            gstin: openVendor.gstin,
+            balancePaise: openVendor.outstandingPaise,
+          }
+        }
+        documents={bills
+          .filter((b) => b.vendorId === openVendor?._id)
+          .map((b) => ({ id: b._id, number: b.billNumber, date: b.billDate, status: b.status, totalPaise: b.totalPaise }))}
+        onClose={() => setOpenVendor(null)}
+      />
+
       {toast && (
         <div className="fixed bottom-6 right-6 z-50 rounded-md bg-success-bg border border-success-fg px-4 py-3 text-body font-medium text-success-fg shadow-lg">
           {toast}

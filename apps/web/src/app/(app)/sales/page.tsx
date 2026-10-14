@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { DocumentUploadButton } from '@/components/shell/document-upload-button';
+import { DocumentDetailDialog, PartyDetailDialog } from '@/components/shell/record-detail-dialogs';
 import { Plus, ChevronRight, Send } from 'lucide-react';
 import { InvoiceStatus as SharedInvoiceStatus } from '@ai-accounting/shared';
 import { api } from '@/lib/api';
@@ -19,6 +20,7 @@ type InvoiceStatus = `${SharedInvoiceStatus}`;
 
 interface Invoice {
   _id: string;
+  customerId?: string | null;
   customerName: string;
   invoiceNumber: string | null;
   invoiceDate: string;
@@ -331,6 +333,8 @@ export default function SalesPage() {
   const [activeTab, setActiveTab] = useState<Tab>('Invoices');
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'info' } | null>(null);
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
+  const [openInvoice, setOpenInvoice] = useState<Invoice | null>(null);
+  const [openCustomer, setOpenCustomer] = useState<Customer | null>(null);
 
   const queryClient = useQueryClient();
 
@@ -573,7 +577,7 @@ export default function SalesPage() {
                               </button>
                             </>
                           )}
-                          {(inv.status === 'sent' || inv.status === 'posted') && (
+                          {inv.status === 'posted' && (
                             <button
                               type="button"
                               onClick={() => payMutation.mutate(inv._id)}
@@ -586,7 +590,8 @@ export default function SalesPage() {
                           <button
                             type="button"
                             className="text-ink-400 hover:text-ink-700 transition-colors"
-                            onClick={() => showToast(`Invoice ${inv._id} — detail view coming soon`, 'info')}
+                            aria-label={`Open invoice ${inv.invoiceNumber ?? ''}`}
+                            onClick={() => setOpenInvoice(inv)}
                           >
                             <ChevronRight size={16} />
                           </button>
@@ -640,7 +645,8 @@ export default function SalesPage() {
                       <button
                         type="button"
                         className="text-ink-400 hover:text-ink-700 transition-colors"
-                        onClick={() => showToast(`Customer ${customer._id} — detail view coming soon`, 'info')}
+                        aria-label={`Open ${customer.name}`}
+                        onClick={() => setOpenCustomer(customer)}
                       >
                         <ChevronRight size={16} />
                       </button>
@@ -713,6 +719,28 @@ export default function SalesPage() {
       )}
 
       {/* Toast */}
+      <DocumentDetailDialog
+        kind="invoice"
+        id={openInvoice?._id ?? null}
+        partyName={openInvoice?.customerName ?? ''}
+        onClose={() => setOpenInvoice(null)}
+      />
+      <PartyDetailDialog
+        kind="customer"
+        party={
+          openCustomer && {
+            id: openCustomer._id,
+            name: openCustomer.name,
+            gstin: openCustomer.gstin,
+            balancePaise: openCustomer.receivablePaise,
+          }
+        }
+        documents={invoices
+          .filter((i) => i.customerId === openCustomer?._id)
+          .map((i) => ({ id: i._id, number: i.invoiceNumber, date: i.invoiceDate, status: i.status, totalPaise: i.totalPaise }))}
+        onClose={() => setOpenCustomer(null)}
+      />
+
       {toast && (
         <div
           className={`fixed bottom-6 right-6 z-50 rounded-md px-4 py-3 text-body font-medium shadow-lg border ${
