@@ -14,6 +14,8 @@ export function formatRupees(paise: number): string {
 }
 
 export function formatRupeesCompact(paise: number): string {
+  // A loss compacts like a profit, with its sign in front.
+  if (paise < 0) return `−${formatRupeesCompact(-paise)}`;
   const rupees = paise / 100;
   if (rupees >= 10_000_000) {
     return `₹${(rupees / 10_000_000).toFixed(2)} Cr`;

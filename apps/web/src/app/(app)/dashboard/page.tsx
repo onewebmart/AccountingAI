@@ -336,9 +336,40 @@ export default function DashboardPage() {
               </CardContent>
             </Card>
           </div>
+
+          <ForecastCard />
         </>
       )}
     </div>
+  );
+}
+
+/** Where cash is heading, in one line: the full view is on Insights. */
+function ForecastCard() {
+  const { data, isError } = useQuery<{ weeks: Array<{ weekStart: string; closingPaise: number }>; lowestPaise: number; openingCashPaise: number }>({
+    queryKey: ['insights', 'forecast'],
+    queryFn: () => api.get('/insights/forecast'),
+  });
+  if (isError || !data || data.weeks.length === 0) return null;
+  const end = data.weeks[data.weeks.length - 1].closingPaise;
+  const short = data.weeks.find((w) => w.closingPaise < 0);
+  return (
+    <Card>
+      <CardContent className="flex flex-wrap items-center justify-between gap-4 py-4">
+        <div>
+          <p className="text-caption text-ink-500">Cash in {data.weeks.length} weeks (forecast)</p>
+          <p className={`text-h2 font-mono tabular-nums ${end < 0 ? 'text-error-fg' : 'text-pending-fg'}`}>{formatRupeesCompact(end)}</p>
+          <p className="text-caption text-ink-500 mt-1">
+            {short
+              ? `Runs short in the week of ${new Date(`${short.weekStart}T00:00:00Z`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' })}`
+              : `Lowest point ${formatRupeesCompact(data.lowestPaise)}`}
+          </p>
+        </div>
+        <Link href="/insights#forecast" className="text-body font-medium text-brand-600 hover:underline">
+          See the forecast
+        </Link>
+      </CardContent>
+    </Card>
   );
 }
 

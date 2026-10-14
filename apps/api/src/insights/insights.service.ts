@@ -5,6 +5,7 @@ import { BillStatus, JournalStatus } from '@ai-accounting/shared';
 import { Journal, JournalDocument } from '../gl/schemas/journal.schema';
 import { PurchaseBill, PurchaseBillDocument } from '../purchase/schemas/purchase-bill.schema';
 import { ReportsService } from '../reports/reports.service';
+import { outstandingPaise } from '../gl/schemas/settlement.schema';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -97,37 +98,16 @@ export class InsightsService {
       this.reportsService.getCashFlow(orgId, financialYear, currentPeriod),
     ]);
 
-    // Overdue AP: purchase bills that are POSTED and past their due date
-    type AggResult = { count: number; totalPaise: number };
-    const overdueResult = await (this.purchaseBillModel as Model<PurchaseBillDocument>)
-      .aggregate<AggResult>([
-        {
-          $match: {
-            orgId,
-            status: BillStatus.POSTED,
-            dueDate: { $ne: null, $lt: todayStr },
-          },
-        },
-        {
-          $group: {
-            _id: null,
-            count: { $sum: 1 },
-            // What is still owed, not the bill total — payments and debit notes reduce it.
-            totalPaise: {
-              $sum: {
-                $subtract: [
-                  '$amountsPaise.total',
-                  { $add: [{ $ifNull: ['$amountPaidPaise', 0] }, { $ifNull: ['$adjustedPaise', 0] }] },
-                ],
-              },
-            },
-          },
-        },
-      ])
+    // Overdue AP: posted bills past their due date, by what is still owed to
+    // the vendor. Summing total − paid overstated it by any TDS withheld and,
+    // on reverse-charge bills, by the GST, which the vendor is never paid.
+    const overdueBills = await (this.purchaseBillModel as Model<PurchaseBillDocument>)
+      .find({ orgId, status: BillStatus.POSTED, dueDate: { $ne: null, $lt: todayStr } })
+      .lean()
       .exec();
-
-    const overdueCount: number = overdueResult[0]?.count ?? 0;
-    const overdueTotalPaise: number = overdueResult[0]?.totalPaise ?? 0;
+    const overdueOwed = overdueBills.map((b) => outstandingPaise(b)).filter((p) => p > 0);
+    const overdueCount = overdueOwed.length;
+    const overdueTotalPaise = overdueOwed.reduce((s, p) => s + p, 0);
 
     // GST due date proximity — GSTR-3B for the PREVIOUS month is due on 20th of current month
     const gstDueDate = getGstDueDate(prevPeriod);
@@ -148,7 +128,7 @@ export class InsightsService {
         id: 'overdue-ap',
         type: InsightType.OVERDUE_AP,
         priority: 'high',
-        headline: `${overdueCount} vendor${overdueCount !== 1 ? 's' : ''} usually paid by now`,
+        headline: `${overdueCount} bill${overdueCount !== 1 ? 's' : ''} past the due date`,
         explanation: `${fmtPaise(overdueTotalPaise)} in bills are past their usual payment date.`,
         amountPaise: overdueTotalPaise,
         actionLabel: 'View bills',

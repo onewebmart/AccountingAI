@@ -251,7 +251,7 @@ describe('overdue AP', () => {
     const overdue = insights.find((i) => i.type === InsightType.OVERDUE_AP);
     expect(overdue).toBeDefined();
     expect(overdue!.amountPaise).toBe(180000);
-    expect(overdue!.headline).toMatch(/1 vendor/);
+    expect(overdue!.headline).toMatch(/1 bill past the due date/);
   });
 
   it('aggregates multiple overdue bills correctly', async () => {
@@ -261,7 +261,7 @@ describe('overdue AP', () => {
     const insights = await svc.getInsights(ORG_A, FY, TODAY);
     const overdue = insights.find((i) => i.type === InsightType.OVERDUE_AP)!;
     expect(overdue.amountPaise).toBe(180000);
-    expect(overdue.headline).toMatch(/2 vendors/);
+    expect(overdue.headline).toMatch(/2 bills past the due date/);
   });
 
   it('does NOT emit overdue_ap when all bills are within due date', async () => {

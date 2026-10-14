@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { CashForecastPanel, PlOutlookPanel } from '@/components/insights/cash-forecast';
 import { Button } from '@/components/ui/button';
 import {
   TrendingUp,
@@ -197,7 +198,7 @@ export default function InsightsPage() {
             AI Insights
           </h1>
           <p className="text-body text-ink-500 mt-1">
-            Read-only advisory based on your posted journals.
+            Forecasts and advice from your posted books. Read-only: nothing here changes them.
           </p>
         </div>
 
@@ -223,6 +224,10 @@ export default function InsightsPage() {
           </p>
         </div>
       )}
+
+      {/* Where cash is heading: a projection, shown apart from the insight cards. */}
+      <CashForecastPanel />
+      <PlOutlookPanel />
 
       {/* Insights feed */}
       {insightsQuery.isLoading ? (

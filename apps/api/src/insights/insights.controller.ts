@@ -1,8 +1,10 @@
-import { Controller, Get, Query, Request, UseGuards } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
+import { BadRequestException, Controller, Get, Query, Request, UseGuards } from '@nestjs/common';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { PermissionGuard } from '../auth/guards/permission.guard';
 import { RequirePermission } from '../auth/decorators';
 import { Permission } from '@ai-accounting/shared';
 import { InsightsService } from './insights.service';
+import { ForecastService } from './forecast.service';
 import { financialYearOf } from '../gl/posting.service';
 
 interface AuthRequest {
@@ -10,10 +12,28 @@ interface AuthRequest {
 }
 
 @Controller('insights')
-@UseGuards(AuthGuard('jwt'))
+// The permission guard was missing, so @RequirePermission was never checked.
+@UseGuards(JwtAuthGuard, PermissionGuard)
 @RequirePermission(Permission.VIEW_REPORTS)
 export class InsightsController {
-  constructor(private readonly insightsService: InsightsService) {}
+  constructor(
+    private readonly insightsService: InsightsService,
+    private readonly forecastService: ForecastService,
+  ) {}
+
+  /** Where cash is heading, week by week. */
+  @Get('forecast')
+  forecast(@Request() req: AuthRequest, @Query('weeks') weeks?: string) {
+    const n = weeks === undefined ? 13 : Number(weeks);
+    if (!Number.isInteger(n)) throw new BadRequestException('weeks must be a whole number');
+    return this.forecastService.cashForecast(req.user.orgId, n);
+  }
+
+  /** The last six months of profit and loss, and the next three by trend. */
+  @Get('projection')
+  projection(@Request() req: AuthRequest) {
+    return this.forecastService.plProjection(req.user.orgId);
+  }
 
   @Get()
   async getInsights(
