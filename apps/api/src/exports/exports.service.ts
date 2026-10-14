@@ -132,10 +132,12 @@ export class ExportsService {
 
   async ledgerCsv(orgId: string, financialYear: string, account: string): Promise<string> {
     const report = await this.reportsService.getLedger(orgId, financialYear, account);
+    const drCr = (p: number) => (Math.abs(p) / 100).toFixed(2) + (p >= 0 ? ' Dr' : ' Cr');
     const lines: string[] = [
-      csvRow([`Ledger — ${account} — FY ${financialYear}`]),
+      csvRow([`Ledger — ${report.accountDescription} — FY ${financialYear}`]),
       '',
       csvRow(['Date', 'Voucher Type', 'Voucher No.', 'Narration', 'Debit (₹)', 'Credit (₹)', 'Balance (₹)']),
+      csvRow(['', '', '', 'Opening Balance', '', '', drCr(report.openingBalancePaise)]),
     ];
 
     for (const e of report.entries) {

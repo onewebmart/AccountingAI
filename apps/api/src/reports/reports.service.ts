@@ -333,8 +333,18 @@ export class ReportsService {
     financialYear: string,
     asOf?: string | null,
   ): Promise<BsReport> {
-    const today = asOf ?? new Date().toISOString().slice(0, 10);
-    const journals = await this.loadJournals(orgId, financialYear);
+    // A balance sheet is a position at a date, so it sums everything posted up
+    // to that date — every earlier year included. It used to load only the
+    // selected year's journals and ignore `asOf`, so a business's second year
+    // opened with no assets, no bank balance and no profit brought forward.
+    const { end } = financialYearRange(financialYear);
+    const today = new Date().toISOString().slice(0, 10);
+    const asOfDate = asOf ?? (today < end ? today : end);
+    const journals = (await this.journalModel
+      .find({ orgId, status: JournalStatus.POSTED, date: { $lte: asOfDate } })
+      .sort({ date: 1, voucherNumber: 1 })
+      .lean()
+      .exec()) as unknown as JournalDocument[];
     const accountMap = this.buildAccountMap(journals, await this.loadAccounts(orgId));
     const entries = [...accountMap.values()];
 
@@ -358,16 +368,18 @@ export class ReportsService {
       0,
     );
 
-    // Retained earnings = current year net income (P&L)
-    const pl = await this.getProfitAndLoss(orgId, financialYear);
-    const retainedEarningsPaise = pl.netIncomePaise;
+    // Retained earnings = all profit to date (earlier years plus this one), since
+    // no year-end entry closes income and expense into a capital account.
+    const retainedEarningsPaise = entries
+      .filter((e) => e.accountType === AccountType.INCOME || e.accountType === AccountType.EXPENSE)
+      .reduce((s, e) => s + (e.totalCreditPaise - e.totalDebitPaise), 0);
     const totalEquityPaise = explicitCapitalPaise + retainedEarningsPaise;
 
     const isTiedOut = totalAssetsPaise === totalLiabilitiesPaise + totalEquityPaise;
 
     return {
       financialYear,
-      asOf: today,
+      asOf: asOfDate,
       assetLines,
       liabilityLines,
       capitalLines,
@@ -381,18 +393,46 @@ export class ReportsService {
 
   // ── Ledger ───────────────────────────────────────────────────────────────
 
+  /**
+   * One account's postings for a year, with a running balance.
+   *
+   * `account` is a ledger account id, or — for exports and older callers — the
+   * account's description as written on the journal lines. Balance-sheet
+   * accounts open with everything posted to them in earlier years; income and
+   * expense accounts start every year at zero.
+   */
   async getLedger(
     orgId: string,
     financialYear: string,
-    accountDescription: string,
+    account: string,
   ): Promise<LedgerReport> {
+    const accounts = await this.loadAccounts(orgId);
+    const byId = accounts.get(account);
+    const accountDescription = byId?.name ?? account;
+    const accountType = byId?.type ?? classifyAccount(account);
+    const matches = (line: { accountId?: unknown; description?: string }) =>
+      byId ? String(line.accountId) === account : (line.description || '') === account;
+
+    let opening = 0;
+    if ([AccountType.ASSETS, AccountType.LIABILITIES, AccountType.CAPITAL].includes(accountType)) {
+      const prior = await this.journalModel
+        .find({ orgId, status: JournalStatus.POSTED, financialYear: { $lt: financialYear } })
+        .lean()
+        .exec();
+      for (const j of prior) {
+        for (const line of j.lines) {
+          if (matches(line)) opening += line.debitPaise - line.creditPaise;
+        }
+      }
+    }
+
     const journals = await this.loadJournals(orgId, financialYear);
-    let running = 0;
+    let running = opening;
     const entries: LedgerEntry[] = [];
 
     for (const j of journals) {
       for (const line of j.lines) {
-        if ((line.description || '') !== accountDescription) continue;
+        if (!matches(line)) continue;
         running += line.debitPaise - line.creditPaise;
         entries.push({
           date: j.date,
@@ -410,7 +450,7 @@ export class ReportsService {
     return {
       accountDescription,
       financialYear,
-      openingBalancePaise: 0,
+      openingBalancePaise: opening,
       entries,
       closingBalancePaise: running,
     };

@@ -24,7 +24,7 @@ import { ReportsService, classifyAccount } from './reports.service';
 import { Journal, JournalSchema, JournalDocument } from '../gl/schemas/journal.schema';
 import { Counter, CounterSchema } from '../gl/schemas/counter.schema';
 import { AuditLog, AuditLogSchema } from '../gl/schemas/audit-log.schema';
-import { PostingService } from '../gl/posting.service';
+import { PostingService, financialYearOf } from '../gl/posting.service';
 import { LedgerAccount, LedgerAccountSchema } from '../gl/schemas/ledger-account.schema';
 import { AccountType, VoucherType } from '@ai-accounting/shared';
 
@@ -162,6 +162,36 @@ describe('getTrialBalance', () => {
     expect(tb.entries).toHaveLength(0);
     expect(tb.isBalanced).toBe(true); // 0 === 0
   });
+
+  it('nets a reversed journal to zero', async () => {
+    // Found end to end: reversing a ₹10,000 sale left Sales at +₹8,474.58 and
+    // AR doubled, because the original dropped out of the posted set while its
+    // contra entry stayed in. A reversal is dated today, so post the original
+    // in today's financial year to see both in one report.
+    const today = new Date().toISOString().slice(0, 10);
+    const fy = financialYearOf(today);
+    const receivable = new Types.ObjectId().toString();
+    const sales = new Types.ObjectId().toString();
+    const original = await postingSvc.post({
+      orgId: ORG_ID,
+      voucherType: VoucherType.SALES,
+      financialYear: fy,
+      date: today,
+      narration: 'Sale entered in error',
+      postedBy: ACTOR_ID,
+      lines: [
+        { accountId: receivable, description: 'Accounts Receivable', debitPaise: 1000000, creditPaise: 0 },
+        { accountId: sales, description: 'Sales / Revenue Account', debitPaise: 0, creditPaise: 1000000 },
+      ],
+    });
+
+    await postingSvc.reverse(original._id.toString(), ACTOR_ID);
+
+    const tb = await svc.getTrialBalance(ORG_ID, fy);
+    expect(tb.entries.map((e) => e.netPaise)).toEqual([0, 0]);
+    expect(tb.grandTotalDebitPaise).toBe(2000000);
+    expect(tb.isBalanced).toBe(true);
+  });
 });
 
 // ── P&L ──────────────────────────────────────────────────────────────────────
@@ -293,6 +323,73 @@ describe('getLedger', () => {
     expect(ledger.entries[1].creditPaise).toBe(500000);
     expect(ledger.entries[1].runningBalancePaise).toBe(0); // fully cleared
     expect(ledger.closingBalancePaise).toBe(0);
+  });
+});
+
+// ── Balances that carry across years ─────────────────────────────────────────
+
+describe('balances carried across financial years', () => {
+  // Two years of postings for one org: ₹10,000 of sales in 2024-25, ₹5,000 in
+  // 2025-26, all still owed by the customer.
+  const orgId = new Types.ObjectId().toString();
+  let receivableId: string;
+  let salesId: string;
+
+  async function sale(date: string, financialYear: string, paise: number) {
+    await postingSvc.post({
+      orgId,
+      voucherType: VoucherType.SALES,
+      financialYear,
+      date,
+      narration: `Sale ${date}`,
+      postedBy: ACTOR_ID,
+      lines: [
+        { accountId: receivableId, description: 'Accounts Receivable', debitPaise: paise, creditPaise: 0 },
+        { accountId: salesId, description: 'Sales Revenue', debitPaise: 0, creditPaise: paise },
+      ],
+    });
+  }
+
+  beforeEach(async () => {
+    const accounts = moduleRef.get<Model<unknown>>(getModelToken(LedgerAccount.name));
+    await accounts.deleteMany({ orgId });
+    const [ar, sales] = await accounts.create([
+      { orgId, name: 'Accounts Receivable', code: '1200', type: AccountType.ASSETS },
+      { orgId, name: 'Sales Revenue', code: '4100', type: AccountType.INCOME },
+    ]);
+    receivableId = String((ar as { _id: unknown })._id);
+    salesId = String((sales as { _id: unknown })._id);
+    await sale('2024-06-01', '2024-25', 1000000);
+    await sale('2025-05-01', '2025-26', 500000);
+  });
+
+  it('a ledger looked up by account id opens with the prior years for a balance-sheet account', async () => {
+    const ledger = await svc.getLedger(orgId, '2025-26', receivableId);
+    expect(ledger.accountDescription).toBe('Accounts Receivable');
+    expect(ledger.openingBalancePaise).toBe(1000000);
+    expect(ledger.entries).toHaveLength(1);
+    expect(ledger.closingBalancePaise).toBe(1500000);
+  });
+
+  it('an income account starts every year at zero', async () => {
+    const ledger = await svc.getLedger(orgId, '2025-26', salesId);
+    expect(ledger.openingBalancePaise).toBe(0);
+    expect(ledger.closingBalancePaise).toBe(-500000);
+  });
+
+  it('the balance sheet includes earlier years, and profit to date as retained earnings', async () => {
+    // It used to read only the selected year: assets ₹5,000, the 2024-25 sale gone.
+    const bs = await svc.getBalanceSheet(orgId, '2025-26');
+    expect(bs.totalAssetsPaise).toBe(1500000);
+    expect(bs.retainedEarningsPaise).toBe(1500000);
+    expect(bs.isTiedOut).toBe(true);
+  });
+
+  it('the balance sheet stops at asOf', async () => {
+    const bs = await svc.getBalanceSheet(orgId, '2025-26', '2025-04-30');
+    expect(bs.asOf).toBe('2025-04-30');
+    expect(bs.totalAssetsPaise).toBe(1000000);
+    expect(bs.isTiedOut).toBe(true);
   });
 });
 

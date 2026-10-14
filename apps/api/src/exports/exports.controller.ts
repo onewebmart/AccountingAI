@@ -143,6 +143,18 @@ export class ExportsController {
     res.send(csv);
   }
 
+  @Get('ledger.xlsx')
+  async ledgerXlsx(
+    @Request() req: AuthRequest,
+    @Query('financialYear') financialYear: string,
+    @Query('account') account: string,
+    @Res() res: Response,
+  ) {
+    const csv = await this.exportsService.ledgerCsv(req.user.orgId, financialYear, account);
+    const buffer = await this.excel.fromCsv(csv, 'Ledger', `Ledger — FY ${financialYear}`);
+    sendXlsx(res, buffer, `ledger-${financialYear}.xlsx`);
+  }
+
   @Get('ledger.csv')
   async ledgerCsv(
     @Request() req: AuthRequest,
