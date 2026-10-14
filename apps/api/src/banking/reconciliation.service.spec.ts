@@ -1,18 +1,18 @@
 /**
- * Phase 11 Integration Tests — ReconciliationService.
+ * Integration tests — ReconciliationService.
  *
  * Done when:
- *  ✓ Bank account can be created and listed
- *  ✓ Statement import stores lines with UNMATCHED status
- *  ✓ autoMatch: bank debit ↔ PAYMENT journal (same amount, ±3 days)
- *  ✓ autoMatch: bank credit ↔ RECEIPT journal (same amount, ±3 days)
- *  ✓ autoMatch does not double-match a journal to multiple bank lines
- *  ✓ confirmMatches: AUTO_MATCHED → CONFIRMED (chips turn green)
- *  ✓ manualMatch: explicitly match a bank line to a journal
- *  ✓ getDiffReport: matched/unmatched counts are correct
- *  ✓ getDiffReport: GL balance reconciles to bank closing balance when fully matched
- *  ✓ getDiffReport: difference = net of unmatched lines when partially matched
- *  ✓ isReconciled = true only when differencePaise === 0 AND unmatchedLines === 0
+ *  ✓ Import flags possible duplicates, within a statement and across overlapping ones
+ *  ✓ autoMatch pairs bank lines with receipts / payments (same amount, ±3 days) — never sales or purchase journals
+ *  ✓ autoMatch never reuses a voucher, invoice or bill another line already holds, across runs
+ *  ✓ A bank credit matched to an open invoice settles it on confirm: receipt dated the bank date, invoice PAID
+ *  ✓ A bank debit matched to an open bill settles it the same way
+ *  ✓ Ambiguous candidates are left for a person unless the narration names one
+ *  ✓ One line that cannot be confirmed does not stop the others
+ *  ✓ Manual match enforces direction, full amount and one-line-per-target
+ *  ✓ The report's GL balance counts only movement that is in the books
+ *
+ * All against a real replica set — settlement posts inside transactions.
  */
 import 'reflect-metadata';
 import mongoose, { Types, Model } from 'mongoose';
@@ -22,27 +22,41 @@ import { ConfigModule } from '@nestjs/config';
 import { MongooseModule, getModelToken } from '@nestjs/mongoose';
 import configuration from '../config/configuration';
 import { ReconciliationService } from './reconciliation.service';
-import { BankAccount, BankAccountSchema, BankAccountDocument } from './schemas/bank-account.schema';
+import { BankAccount, BankAccountSchema } from './schemas/bank-account.schema';
 import { BankStatement, BankStatementSchema } from './schemas/bank-statement.schema';
 import { BankStatementLine, BankStatementLineSchema, BankStatementLineDocument } from './schemas/bank-statement-line.schema';
 import { Journal, JournalSchema, JournalDocument } from '../gl/schemas/journal.schema';
 import { Counter, CounterSchema } from '../gl/schemas/counter.schema';
 import { AuditLog, AuditLogSchema } from '../gl/schemas/audit-log.schema';
+import { LedgerAccount, LedgerAccountSchema } from '../gl/schemas/ledger-account.schema';
+import { SalesInvoice, SalesInvoiceSchema, SalesInvoiceDocument } from '../sales/schemas/sales-invoice.schema';
+import { Customer, CustomerSchema } from '../sales/schemas/customer.schema';
+import { PurchaseBill, PurchaseBillSchema, PurchaseBillDocument } from '../purchase/schemas/purchase-bill.schema';
+import { Vendor, VendorSchema } from '../purchase/schemas/vendor.schema';
 import { PostingService } from '../gl/posting.service';
-import { MatchStatus, VoucherType } from '@ai-accounting/shared';
+import { AccountsService } from '../gl/accounts.service';
+import { AuditService } from '../gl/audit.service';
+import { SalesInvoicesService } from '../sales/sales-invoices.service';
+import { CustomersService } from '../sales/customers.service';
+import { PurchaseBillsService } from '../purchase/purchase-bills.service';
+import { VendorsService } from '../purchase/vendors.service';
+import { BillStatus, InvoiceStatus, MatchStatus, VoucherType } from '@ai-accounting/shared';
 
-const ORG_ID = new Types.ObjectId().toString();
 const ACTOR_ID = new Types.ObjectId().toString();
 
 let moduleRef: TestingModule;
 let svc: ReconciliationService;
 let postingSvc: PostingService;
+let invoicesSvc: SalesInvoicesService;
+let customersSvc: CustomersService;
+let billsSvc: PurchaseBillsService;
+let vendorsSvc: VendorsService;
 let lineModel: Model<BankStatementLineDocument>;
-let accountModel: Model<BankAccountDocument>;
 let journalModel: Model<JournalDocument>;
+let invoiceModel: Model<SalesInvoiceDocument>;
+let billModel: Model<PurchaseBillDocument>;
 
 beforeAll(async () => {
-
   moduleRef = await Test.createTestingModule({
     imports: [
       ConfigModule.forRoot({ isGlobal: true, load: [configuration] }),
@@ -54,16 +68,35 @@ beforeAll(async () => {
         { name: Journal.name, schema: JournalSchema },
         { name: Counter.name, schema: CounterSchema },
         { name: AuditLog.name, schema: AuditLogSchema },
+        { name: LedgerAccount.name, schema: LedgerAccountSchema },
+        { name: SalesInvoice.name, schema: SalesInvoiceSchema },
+        { name: Customer.name, schema: CustomerSchema },
+        { name: PurchaseBill.name, schema: PurchaseBillSchema },
+        { name: Vendor.name, schema: VendorSchema },
       ]),
     ],
-    providers: [ReconciliationService, PostingService],
+    providers: [
+      ReconciliationService,
+      PostingService,
+      AccountsService,
+      AuditService,
+      SalesInvoicesService,
+      CustomersService,
+      PurchaseBillsService,
+      VendorsService,
+    ],
   }).compile();
 
   svc = moduleRef.get(ReconciliationService);
   postingSvc = moduleRef.get(PostingService);
-  lineModel = moduleRef.get<Model<BankStatementLineDocument>>(getModelToken(BankStatementLine.name));
-  accountModel = moduleRef.get<Model<BankAccountDocument>>(getModelToken(BankAccount.name));
-  journalModel = moduleRef.get<Model<JournalDocument>>(getModelToken(Journal.name));
+  invoicesSvc = moduleRef.get(SalesInvoicesService);
+  customersSvc = moduleRef.get(CustomersService);
+  billsSvc = moduleRef.get(PurchaseBillsService);
+  vendorsSvc = moduleRef.get(VendorsService);
+  lineModel = moduleRef.get(getModelToken(BankStatementLine.name));
+  journalModel = moduleRef.get(getModelToken(Journal.name));
+  invoiceModel = moduleRef.get(getModelToken(SalesInvoice.name));
+  billModel = moduleRef.get(getModelToken(PurchaseBill.name));
 }, 60_000);
 
 afterAll(async () => {
@@ -73,343 +106,342 @@ afterAll(async () => {
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
-async function seedAccount(openingBalance = 10000000 /* ₹1,00,000 */) {
-  return svc.createAccount({
-    orgId: ORG_ID,
-    name: 'HDFC Current Account',
-    accountNumber: 'XXXX1234',
-    bankName: 'HDFC Bank',
-    openingBalancePaise: openingBalance,
-    openingBalanceDate: '2025-04-01',
+/** A fresh organisation per test, so no test can match another's vouchers. */
+const newOrg = () => new Types.ObjectId().toString();
+
+async function seedAccount(orgId: string) {
+  return svc.createAccount({ orgId, actorId: ACTOR_ID, name: 'HDFC Current', bankName: 'HDFC', openingBalancePaise: 0 });
+}
+
+type Line = { date: string; description: string; debitPaise?: number; creditPaise?: number };
+
+async function importLines(orgId: string, lines: Line[], opening = 0) {
+  const account = await seedAccount(orgId);
+  return importInto(orgId, account._id.toString(), lines, opening);
+}
+
+async function importInto(orgId: string, bankAccountId: string, lines: Line[], opening = 0) {
+  const normalized = lines.map((l) => ({ debitPaise: 0, creditPaise: 0, ...l }));
+  const closing = opening + normalized.reduce((s, l) => s + l.creditPaise - l.debitPaise, 0);
+  const dates = normalized.map((l) => l.date).sort();
+  return svc.importStatement({
+    orgId,
+    actorId: ACTOR_ID,
+    bankAccountId,
+    periodStart: dates[0],
+    periodEnd: dates[dates.length - 1],
+    openingBalancePaise: opening,
+    closingBalancePaise: closing,
+    lines: normalized,
   });
 }
 
-async function postPayment(amountPaise: number, date: string) {
+async function postVoucher(orgId: string, type: VoucherType, amountPaise: number, date: string) {
   return postingSvc.post({
-    orgId: ORG_ID,
-    voucherType: VoucherType.PAYMENT,
-    financialYear: '2025-26',
+    orgId,
+    voucherType: type,
+    financialYear: '2026-27',
     date,
-    narration: `Payment ${amountPaise} on ${date}`,
+    narration: `${type} ${amountPaise}`,
     postedBy: ACTOR_ID,
     lines: [
-      { accountId: new Types.ObjectId().toString(), description: 'Accounts Payable', debitPaise: amountPaise, creditPaise: 0 },
-      { accountId: new Types.ObjectId().toString(), description: 'Bank Account', debitPaise: 0, creditPaise: amountPaise },
+      { accountId: new Types.ObjectId().toString(), description: 'Dr', debitPaise: amountPaise, creditPaise: 0 },
+      { accountId: new Types.ObjectId().toString(), description: 'Cr', debitPaise: 0, creditPaise: amountPaise },
     ],
   });
 }
 
-async function postReceipt(amountPaise: number, date: string) {
-  return postingSvc.post({
-    orgId: ORG_ID,
-    voucherType: VoucherType.RECEIPT,
-    financialYear: '2025-26',
-    date,
-    narration: `Receipt ${amountPaise} on ${date}`,
-    postedBy: ACTOR_ID,
-    lines: [
-      { accountId: new Types.ObjectId().toString(), description: 'Bank Account', debitPaise: amountPaise, creditPaise: 0 },
-      { accountId: new Types.ObjectId().toString(), description: 'Accounts Receivable', debitPaise: 0, creditPaise: amountPaise },
-    ],
+const tenThousand = { taxableValue: 847458, cgst: 76271, sgst: 76271, igst: 0, cess: 0, total: 1000000 };
+
+async function postedInvoice(orgId: string, invoiceNumber: string, invoiceDate = '2026-10-08') {
+  const customer = await customersSvc.create({ orgId, name: `Customer ${invoiceNumber}` });
+  const invoice = await invoicesSvc.create({
+    orgId, customerId: customer._id.toString(), invoiceNumber, invoiceDate, amountsPaise: tenThousand,
   });
+  return invoicesSvc.post(invoice._id.toString(), orgId, ACTOR_ID);
 }
 
-// ── Tests ─────────────────────────────────────────────────────────────────
+async function postedBill(orgId: string, billNumber: string, billDate = '2026-10-05') {
+  const vendor = await vendorsSvc.create({ orgId, name: `Vendor ${billNumber}` });
+  const bill = await billsSvc.create({ orgId, vendorId: vendor._id.toString(), billNumber, billDate, amountsPaise: tenThousand });
+  return billsSvc.post(bill._id.toString(), orgId, ACTOR_ID);
+}
 
-describe('Bank accounts', () => {
-  it('creates and lists a bank account', async () => {
-    const account = await seedAccount();
-    expect(account.name).toBe('HDFC Current Account');
-    expect(account.openingBalancePaise).toBe(10000000);
+const linesOf = (statementId: unknown) => lineModel.find({ statementId }).sort({ date: 1, _id: 1 }).exec();
 
-    const accounts = await svc.listAccounts(ORG_ID);
-    expect(accounts.some((a) => a._id.toString() === account._id.toString())).toBe(true);
-  });
-});
+// ── Import ────────────────────────────────────────────────────────────────
 
 describe('Statement import', () => {
-  it('imports statement lines with UNMATCHED status', async () => {
-    const account = await seedAccount();
+  it('stores lines unmatched and flags a repeated line as a possible duplicate', async () => {
+    const orgId = newOrg();
+    const statement = await importLines(orgId, [
+      { date: '2026-10-10', description: 'NEFT CR SHARMA TEXTILES', creditPaise: 1000000 },
+      { date: '2026-10-10', description: 'NEFT CR  sharma textiles', creditPaise: 1000000 },
+      { date: '2026-10-11', description: 'UPI/9988776655', debitPaise: 499900 },
+    ]);
 
-    const statement = await svc.importStatement({
-      orgId: ORG_ID,
-      bankAccountId: account._id.toString(),
-      periodStart: '2025-04-01',
-      periodEnd: '2025-04-30',
-      openingBalancePaise: 10000000,
-      closingBalancePaise: 9500000,
-      lines: [
-        { date: '2025-04-05', description: 'NEFT OUT — Vendor A', debitPaise: 200000, creditPaise: 0 },
-        { date: '2025-04-10', description: 'NEFT IN — Customer B', debitPaise: 0, creditPaise: 100000 },
-        { date: '2025-04-15', description: 'NEFT OUT — Vendor C', debitPaise: 400000, creditPaise: 0 },
-      ],
-    });
-
-    expect(statement.totalLines).toBe(3);
-    expect(statement.matchedLines).toBe(0);
-
-    const lines = await lineModel.find({ statementId: statement._id }).exec();
-    expect(lines).toHaveLength(3);
+    const lines = await linesOf(statement._id);
     expect(lines.every((l) => l.matchStatus === MatchStatus.UNMATCHED)).toBe(true);
+    expect(lines.map((l) => l.possibleDuplicate)).toEqual([false, true, false]);
+  });
+
+  it('flags lines already imported from an overlapping statement', async () => {
+    const orgId = newOrg();
+    const account = await seedAccount(orgId);
+    await importInto(orgId, account._id.toString(), [{ date: '2026-10-10', description: 'NEFT CR A', creditPaise: 500000 }]);
+    const second = await importInto(orgId, account._id.toString(), [
+      { date: '2026-10-10', description: 'NEFT CR A', creditPaise: 500000 },
+      { date: '2026-10-12', description: 'NEFT CR B', creditPaise: 700000 },
+    ]);
+
+    expect((await linesOf(second._id)).map((l) => l.possibleDuplicate)).toEqual([true, false]);
   });
 });
 
-describe('autoMatch', () => {
-  it('matches bank debit to PAYMENT journal by amount ± date', async () => {
-    const account = await seedAccount();
+// ── Auto-match against vouchers already in the books ─────────────────────────
 
-    // Post a payment journal on Apr 3 for ₹20,000
-    await postPayment(2000000, '2025-04-03');
+describe('autoMatch — receipts and payments already posted', () => {
+  it('pairs money out with a PAYMENT and money in with a RECEIPT, within 3 days', async () => {
+    const orgId = newOrg();
+    const payment = await postVoucher(orgId, VoucherType.PAYMENT, 200000, '2026-10-06');
+    const receipt = await postVoucher(orgId, VoucherType.RECEIPT, 300000, '2026-10-09');
+    await postVoucher(orgId, VoucherType.RECEIPT, 400000, '2026-10-01'); // 9 days early — out of window
 
-    const statement = await svc.importStatement({
-      orgId: ORG_ID,
-      bankAccountId: account._id.toString(),
-      periodStart: '2025-04-01',
-      periodEnd: '2025-04-30',
-      openingBalancePaise: 5000000,
-      closingBalancePaise: 3000000,
-      lines: [
-        // Same amount, same date — should match
-        { date: '2025-04-03', description: 'NEFT OUT', debitPaise: 2000000, creditPaise: 0 },
-        // No matching journal
-        { date: '2025-04-20', description: 'ATM withdrawal', debitPaise: 500000, creditPaise: 0 },
-      ],
-    });
+    const statement = await importLines(orgId, [
+      { date: '2026-10-05', description: 'NEFT OUT', debitPaise: 200000 },
+      { date: '2026-10-10', description: 'NEFT IN', creditPaise: 300000 },
+      { date: '2026-10-10', description: 'NEFT IN 2', creditPaise: 400000 },
+    ]);
+    const result = await svc.autoMatch(statement._id.toString(), orgId);
 
-    const result = await svc.autoMatch(statement._id.toString(), ORG_ID);
-    expect(result.matched).toBe(1);
-    expect(result.unmatched).toBe(1);
+    expect(result).toEqual({ matched: 2, unmatched: 1 });
+    const lines = await linesOf(statement._id);
+    expect(String(lines[0].matchedJournalId)).toBe(String(payment._id));
+    expect(String(lines[1].matchedJournalId)).toBe(String(receipt._id));
+    expect(lines[2].matchStatus).toBe(MatchStatus.UNMATCHED);
+  });
 
-    const lines = await lineModel.find({ statementId: statement._id }).sort({ date: 1 }).exec();
-    expect(lines[0].matchStatus).toBe(MatchStatus.AUTO_MATCHED);
-    expect(lines[0].matchedJournalId).not.toBeNull();
+  it('never pairs a bank line with a sales or purchase journal, which does not touch the bank', async () => {
+    const orgId = newOrg();
+    await postVoucher(orgId, VoucherType.SALES, 1000000, '2026-10-08');
+    const statement = await importLines(orgId, [{ date: '2026-10-10', description: 'NEFT CR', creditPaise: 1000000 }]);
+
+    expect(await svc.autoMatch(statement._id.toString(), orgId)).toEqual({ matched: 0, unmatched: 1 });
+  });
+
+  it('does not hand a voucher already matched in an earlier run to another line', async () => {
+    // Found end to end: a second, identical deposit was paired with the same
+    // sale the first one had taken, hiding the duplicate.
+    const orgId = newOrg();
+    const account = await seedAccount(orgId);
+    await postVoucher(orgId, VoucherType.RECEIPT, 1000000, '2026-10-10');
+
+    const first = await importInto(orgId, account._id.toString(), [{ date: '2026-10-10', description: 'NEFT CR X', creditPaise: 1000000 }]);
+    expect((await svc.autoMatch(first._id.toString(), orgId)).matched).toBe(1);
+
+    const second = await importInto(orgId, account._id.toString(), [{ date: '2026-10-11', description: 'NEFT CR Y', creditPaise: 1000000 }]);
+    expect((await svc.autoMatch(second._id.toString(), orgId)).matched).toBe(0);
+  });
+
+  it('leaves possible duplicates for a person to decide', async () => {
+    const orgId = newOrg();
+    await postVoucher(orgId, VoucherType.RECEIPT, 1000000, '2026-10-10');
+    await postVoucher(orgId, VoucherType.RECEIPT, 1000000, '2026-10-10');
+    const statement = await importLines(orgId, [
+      { date: '2026-10-10', description: 'NEFT CR', creditPaise: 1000000 },
+      { date: '2026-10-10', description: 'NEFT CR', creditPaise: 1000000 },
+    ]);
+    expect(await svc.autoMatch(statement._id.toString(), orgId)).toEqual({ matched: 1, unmatched: 0 });
+    const lines = await linesOf(statement._id);
+    expect(lines[1].possibleDuplicate).toBe(true);
     expect(lines[1].matchStatus).toBe(MatchStatus.UNMATCHED);
   });
-
-  it('matches bank credit to RECEIPT journal by amount ± date', async () => {
-    const account = await seedAccount();
-
-    await postReceipt(1500000, '2025-05-05');
-
-    const statement = await svc.importStatement({
-      orgId: ORG_ID,
-      bankAccountId: account._id.toString(),
-      periodStart: '2025-05-01',
-      periodEnd: '2025-05-31',
-      openingBalancePaise: 5000000,
-      closingBalancePaise: 6500000,
-      lines: [
-        { date: '2025-05-05', description: 'NEFT IN — Customer', debitPaise: 0, creditPaise: 1500000 },
-      ],
-    });
-
-    const result = await svc.autoMatch(statement._id.toString(), ORG_ID);
-    expect(result.matched).toBe(1);
-
-    const line = await lineModel.findOne({ statementId: statement._id }).exec();
-    expect(line!.matchStatus).toBe(MatchStatus.AUTO_MATCHED);
-  });
-
-  it('matches within ±3-day date window', async () => {
-    const account = await seedAccount();
-
-    // Journal on Apr 1, bank line on Apr 3 (2 days apart)
-    await postPayment(800000, '2025-06-01');
-
-    const statement = await svc.importStatement({
-      orgId: ORG_ID,
-      bankAccountId: account._id.toString(),
-      periodStart: '2025-06-01',
-      periodEnd: '2025-06-30',
-      openingBalancePaise: 3000000,
-      closingBalancePaise: 2200000,
-      lines: [
-        { date: '2025-06-03', description: 'NEFT OUT', debitPaise: 800000, creditPaise: 0 },
-      ],
-    });
-
-    const result = await svc.autoMatch(statement._id.toString(), ORG_ID);
-    expect(result.matched).toBe(1);
-  });
-
-  it('does not double-match the same journal to two bank lines', async () => {
-    const account = await seedAccount();
-
-    // Only one payment journal for ₹300,000
-    await postPayment(300000, '2025-07-10');
-
-    const statement = await svc.importStatement({
-      orgId: ORG_ID,
-      bankAccountId: account._id.toString(),
-      periodStart: '2025-07-01',
-      periodEnd: '2025-07-31',
-      openingBalancePaise: 2000000,
-      closingBalancePaise: 1400000,
-      lines: [
-        // Two bank lines with same amount — only one should match
-        { date: '2025-07-10', description: 'NEFT OUT 1', debitPaise: 300000, creditPaise: 0 },
-        { date: '2025-07-10', description: 'NEFT OUT 2', debitPaise: 300000, creditPaise: 0 },
-      ],
-    });
-
-    const result = await svc.autoMatch(statement._id.toString(), ORG_ID);
-    expect(result.matched).toBe(1);
-    expect(result.unmatched).toBe(1);
-  });
 });
 
-describe('confirmMatches', () => {
-  it('promotes AUTO_MATCHED lines to CONFIRMED', async () => {
-    const account = await seedAccount();
-    await postPayment(500000, '2025-08-01');
-    await postReceipt(250000, '2025-08-05');
+// ── Settling invoices and bills ───────────────────────────────────────────
 
-    const statement = await svc.importStatement({
-      orgId: ORG_ID,
-      bankAccountId: account._id.toString(),
-      periodStart: '2025-08-01',
-      periodEnd: '2025-08-31',
-      openingBalancePaise: 5000000,
-      closingBalancePaise: 4750000,
-      lines: [
-        { date: '2025-08-01', description: 'NEFT OUT', debitPaise: 500000, creditPaise: 0 },
-        { date: '2025-08-05', description: 'NEFT IN', debitPaise: 0, creditPaise: 250000 },
-      ],
-    });
+describe('settling an open invoice or bill from the bank', () => {
+  it('a ₹10,000 deposit settles the invoice: receipt on the bank date, AR cleared, invoice paid', async () => {
+    const orgId = newOrg();
+    const invoice = await postedInvoice(orgId, 'KT/26-27/001');
+    const statement = await importLines(orgId, [
+      { date: '2026-10-10', description: 'NEFT CR SHARMA TEXTILES KT/26-27/001', creditPaise: 1000000 },
+    ]);
 
-    await svc.autoMatch(statement._id.toString(), ORG_ID);
-    const { confirmed } = await svc.confirmMatches(statement._id.toString(), ORG_ID);
-    expect(confirmed).toBe(2);
+    await svc.autoMatch(statement._id.toString(), orgId);
+    let [line] = await linesOf(statement._id);
+    expect(line.matchStatus).toBe(MatchStatus.AUTO_MATCHED);
+    expect(String(line.matchedInvoiceId)).toBe(String(invoice._id));
+    // Suggesting posts nothing.
+    expect(await journalModel.countDocuments({ orgId, voucherType: VoucherType.RECEIPT })).toBe(0);
 
-    const lines = await lineModel.find({ statementId: statement._id }).exec();
-    expect(lines.every((l) => l.matchStatus === MatchStatus.CONFIRMED)).toBe(true);
-  });
-});
+    const result = await svc.confirmMatches(statement._id.toString(), orgId, ACTOR_ID);
+    expect(result).toEqual({ confirmed: 1, failed: [] });
 
-describe('getDiffReport — reconciliation', () => {
-  it('GL balance reconciles to bank closing balance when fully matched', async () => {
-    const account = await seedAccount(10000000); // ₹1,00,000 opening
+    [line] = await linesOf(statement._id);
+    const receipt = await journalModel.findById(line.matchedJournalId).exec();
+    expect(line.matchStatus).toBe(MatchStatus.CONFIRMED);
+    expect(receipt?.voucherType).toBe(VoucherType.RECEIPT);
+    expect(receipt?.date).toBe('2026-10-10');
+    expect(receipt?.financialYear).toBe('2026-27');
+    expect((await invoiceModel.findById(invoice._id).exec())?.status).toBe(InvoiceStatus.PAID);
 
-    // Post 2 payments and 1 receipt
-    await postPayment(2000000, '2025-09-03'); // ₹20,000 out
-    await postReceipt(1500000, '2025-09-07'); // ₹15,000 in
-    await postPayment(800000,  '2025-09-12'); // ₹8,000 out
+    // Accounts Receivable: +₹10,000 on the sale, −₹10,000 on the receipt.
+    const posted = await journalModel.find({ orgId }).exec();
+    const ar = posted.flatMap((j) => j.lines).filter((l) => /receivable/i.test(l.description));
+    expect(ar.reduce((s, l) => s + l.debitPaise - l.creditPaise, 0)).toBe(0);
 
-    const statement = await svc.importStatement({
-      orgId: ORG_ID,
-      bankAccountId: account._id.toString(),
-      periodStart: '2025-09-01',
-      periodEnd: '2025-09-30',
-      openingBalancePaise:  10000000,
-      // closing = 100,000 - 20,000 + 15,000 - 8,000 = 87,000
-      closingBalancePaise:   8700000,
-      lines: [
-        { date: '2025-09-03', description: 'NEFT OUT — Vendor', debitPaise: 2000000, creditPaise: 0 },
-        { date: '2025-09-07', description: 'NEFT IN — Customer', debitPaise: 0, creditPaise: 1500000 },
-        { date: '2025-09-12', description: 'NEFT OUT — Vendor', debitPaise: 800000, creditPaise: 0 },
-      ],
-    });
-
-    await svc.autoMatch(statement._id.toString(), ORG_ID);
-    await svc.confirmMatches(statement._id.toString(), ORG_ID);
-
-    const report = await svc.getDiffReport(statement._id.toString(), ORG_ID);
-
-    expect(report.matchedLines).toBe(3);
-    expect(report.unmatchedLines).toBe(0);
-    // GL balance = 100,000 - 20,000 + 15,000 - 8,000 = 87,000
-    expect(report.glBalancePaise).toBe(8700000);
-    expect(report.differencePaise).toBe(0);
+    const report = await svc.getDiffReport(statement._id.toString(), orgId);
+    expect(report.glBalancePaise).toBe(1000000);
     expect(report.isReconciled).toBe(true);
+    expect(report.lines[0].matchLabel).toMatch(/^RCT\/2026-27\//);
   });
 
-  it('difference equals net of unmatched lines when partially matched', async () => {
-    const account = await seedAccount(5000000); // ₹50,000 opening
+  it('a payment out settles the matching bill', async () => {
+    const orgId = newOrg();
+    const bill = await postedBill(orgId, 'STS/0442');
+    const statement = await importLines(orgId, [{ date: '2026-10-12', description: 'NEFT DR STERLING', debitPaise: 1000000 }]);
 
-    await postPayment(1000000, '2025-10-05'); // ₹10,000 — will be matched
+    await svc.autoMatch(statement._id.toString(), orgId);
+    expect(await svc.confirmMatches(statement._id.toString(), orgId, ACTOR_ID)).toEqual({ confirmed: 1, failed: [] });
 
-    const statement = await svc.importStatement({
-      orgId: ORG_ID,
-      bankAccountId: account._id.toString(),
-      periodStart: '2025-10-01',
-      periodEnd: '2025-10-31',
-      openingBalancePaise: 5000000,
-      // closing = 50,000 - 10,000 + 30,000 - 5,000 = 65,000
-      closingBalancePaise: 6500000,
-      lines: [
-        { date: '2025-10-05', description: 'NEFT OUT', debitPaise: 1000000, creditPaise: 0 }, // matched
-        { date: '2025-10-15', description: 'NEFT IN — unknown', debitPaise: 0, creditPaise: 3000000 }, // unmatched
-        { date: '2025-10-22', description: 'ATM withdrawal', debitPaise: 500000, creditPaise: 0 },     // unmatched
-      ],
-    });
-
-    await svc.autoMatch(statement._id.toString(), ORG_ID);
-
-    const report = await svc.getDiffReport(statement._id.toString(), ORG_ID);
-
-    expect(report.matchedLines).toBe(1);
-    expect(report.unmatchedLines).toBe(2);
-    // GL = 50,000 - 10,000 (matched payment) = 40,000
-    expect(report.glBalancePaise).toBe(4000000);
-    // Bank closing = 65,000; difference = 65,000 - 40,000 = 25,000
-    expect(report.differencePaise).toBe(2500000);
-    expect(report.isReconciled).toBe(false);
-    // Net of unmatched: +30,000 - 5,000 = +25,000
-    expect(report.unmatchedAmountPaise).toBe(2500000);
+    const [line] = await linesOf(statement._id);
+    const payment = await journalModel.findById(line.matchedJournalId).exec();
+    expect(payment?.voucherType).toBe(VoucherType.PAYMENT);
+    expect(payment?.date).toBe('2026-10-12');
+    expect((await billModel.findById(bill._id).exec())?.status).toBe(BillStatus.PAID);
   });
 
-  it('unmatched lines are clearly surfaced in the report', async () => {
-    const account = await seedAccount(2000000);
+  it('with two open invoices for the same amount, matches only the one the narration names', async () => {
+    const orgId = newOrg();
+    await postedInvoice(orgId, 'INV-1001');
+    const named = await postedInvoice(orgId, 'INV-1002');
+    const statement = await importLines(orgId, [
+      { date: '2026-10-10', description: 'NEFT CR AGAINST INV-1002', creditPaise: 1000000 },
+      { date: '2026-10-11', description: 'NEFT CR NO REFERENCE', creditPaise: 1000000 },
+    ]);
 
-    const statement = await svc.importStatement({
-      orgId: ORG_ID,
-      bankAccountId: account._id.toString(),
-      periodStart: '2025-11-01',
-      periodEnd: '2025-11-30',
-      openingBalancePaise: 2000000,
-      closingBalancePaise: 1000000,
-      lines: [
-        { date: '2025-11-10', description: 'Unknown debit', debitPaise: 1000000, creditPaise: 0, reference: 'UTR123456' },
-      ],
-    });
+    await svc.autoMatch(statement._id.toString(), orgId);
+    const [withRef, without] = await linesOf(statement._id);
+    expect(String(withRef.matchedInvoiceId)).toBe(String(named._id));
+    // One candidate is left after the named one is taken, so it is matched too.
+    expect(without.matchStatus).toBe(MatchStatus.AUTO_MATCHED);
+  });
 
-    await svc.autoMatch(statement._id.toString(), ORG_ID);
-    const report = await svc.getDiffReport(statement._id.toString(), ORG_ID);
+  it('leaves a line alone when several invoices fit and none is named', async () => {
+    const orgId = newOrg();
+    await postedInvoice(orgId, 'INV-2001');
+    await postedInvoice(orgId, 'INV-2002');
+    const statement = await importLines(orgId, [{ date: '2026-10-10', description: 'NEFT CR', creditPaise: 1000000 }]);
 
-    expect(report.unmatchedLines).toBe(1);
-    expect(report.lines[0].matchStatus).toBe(MatchStatus.UNMATCHED);
-    expect(report.lines[0].reference).toBe('UTR123456');
+    expect(await svc.autoMatch(statement._id.toString(), orgId)).toEqual({ matched: 0, unmatched: 1 });
+  });
+
+  it('reports a line it cannot confirm and confirms the rest', async () => {
+    const orgId = newOrg();
+    const paidByHand = await postedInvoice(orgId, 'INV-3001');
+    await postedBill(orgId, 'BILL-3001');
+    const statement = await importLines(orgId, [
+      { date: '2026-10-10', description: 'NEFT CR INV-3001', creditPaise: 1000000 },
+      { date: '2026-10-12', description: 'NEFT DR BILL-3001', debitPaise: 1000000 },
+    ]);
+    await svc.autoMatch(statement._id.toString(), orgId);
+
+    // Someone clicks "mark paid" on the invoice before the bank match is confirmed.
+    await invoicesSvc.markPaid(paidByHand._id.toString(), orgId, ACTOR_ID);
+
+    const result = await svc.confirmMatches(statement._id.toString(), orgId, ACTOR_ID);
+    expect(result.confirmed).toBe(1);
+    expect(result.failed).toEqual([{ lineId: expect.any(String), reason: expect.stringMatching(/already been marked paid/) }]);
+    // Exactly one receipt — the hand-recorded one; no second receipt from the bank.
+    expect(await journalModel.countDocuments({ orgId, voucherType: VoucherType.RECEIPT })).toBe(1);
   });
 });
 
-describe('manualMatch', () => {
-  it('manually matches a bank line to a specific journal', async () => {
-    const account = await seedAccount();
+// ── Manual decisions ─────────────────────────────────────────────────────────
 
-    // Post a payment — won't auto-match due to date mismatch (>3 days)
-    const journal = await postPayment(999000, '2025-12-01');
+describe('manual matching', () => {
+  it('matches a deposit to an invoice by hand, and confirm settles it', async () => {
+    const orgId = newOrg();
+    await postedInvoice(orgId, 'INV-4001');
+    const target = await postedInvoice(orgId, 'INV-4002');
+    const statement = await importLines(orgId, [{ date: '2026-10-10', description: 'CASH DEPOSIT', creditPaise: 1000000 }]);
+    const [line] = await linesOf(statement._id);
 
-    const statement = await svc.importStatement({
-      orgId: ORG_ID,
-      bankAccountId: account._id.toString(),
-      periodStart: '2025-12-01',
-      periodEnd: '2025-12-31',
-      openingBalancePaise: 3000000,
-      closingBalancePaise: 2001000,
-      lines: [
-        // 5 days after the journal — outside auto-match window
-        { date: '2025-12-06', description: 'NEFT OUT (delayed)', debitPaise: 999000, creditPaise: 0 },
+    const matched = await svc.manualMatch(line._id.toString(), { invoiceId: target._id.toString() }, orgId, ACTOR_ID);
+    expect(matched.matchStatus).toBe(MatchStatus.MANUALLY_MATCHED);
+    expect((await svc.confirmMatches(statement._id.toString(), orgId, ACTOR_ID)).confirmed).toBe(1);
+    expect((await invoiceModel.findById(target._id).exec())?.status).toBe(InvoiceStatus.PAID);
+  });
+
+  it('refuses a part payment, money out against an invoice, and a target another line holds', async () => {
+    const orgId = newOrg();
+    const invoice = await postedInvoice(orgId, 'INV-5001');
+    const statement = await importLines(orgId, [
+      { date: '2026-10-10', description: 'PART PAYMENT', creditPaise: 400000 },
+      { date: '2026-10-10', description: 'REFUND OUT', debitPaise: 1000000 },
+      { date: '2026-10-11', description: 'FULL PAYMENT', creditPaise: 1000000 },
+      { date: '2026-10-12', description: 'FULL PAYMENT AGAIN', creditPaise: 1000000 },
+    ]);
+    const [part, out, full, again] = await linesOf(statement._id);
+    const target = { invoiceId: invoice._id.toString() };
+
+    await expect(svc.manualMatch(part._id.toString(), target, orgId, ACTOR_ID)).rejects.toThrow(/part payments are not supported/);
+    await expect(svc.manualMatch(out._id.toString(), target, orgId, ACTOR_ID)).rejects.toThrow(/Only money coming in/);
+    await svc.manualMatch(full._id.toString(), target, orgId, ACTOR_ID);
+    await expect(svc.manualMatch(again._id.toString(), target, orgId, ACTOR_ID)).rejects.toThrow(/already matched to another bank line/);
+  });
+
+  it('can unmatch, exclude, and clear a duplicate flag — but not undo a confirmed line', async () => {
+    const orgId = newOrg();
+    await postVoucher(orgId, VoucherType.RECEIPT, 1000000, '2026-10-10');
+    const statement = await importLines(orgId, [
+      { date: '2026-10-10', description: 'NEFT CR', creditPaise: 1000000 },
+      { date: '2026-10-10', description: 'NEFT CR', creditPaise: 1000000 },
+    ]);
+    await svc.autoMatch(statement._id.toString(), orgId);
+    const [matched, dup] = await linesOf(statement._id);
+
+    expect((await svc.unmatch(matched._id.toString(), orgId, ACTOR_ID)).matchStatus).toBe(MatchStatus.UNMATCHED);
+    expect((await svc.clearDuplicateFlag(dup._id.toString(), orgId, ACTOR_ID)).possibleDuplicate).toBe(false);
+    expect((await svc.setExcluded(dup._id.toString(), true, orgId, ACTOR_ID)).excluded).toBe(true);
+
+    await svc.autoMatch(statement._id.toString(), orgId);
+    await svc.confirmMatches(statement._id.toString(), orgId, ACTOR_ID);
+    await expect(svc.unmatch(matched._id.toString(), orgId, ACTOR_ID)).rejects.toThrow(/confirmed/);
+  });
+});
+
+// ── Report ───────────────────────────────────────────────────────────────────
+
+describe('getDiffReport', () => {
+  it('counts only movement in the books, and shows the rest as the difference', async () => {
+    const orgId = newOrg();
+    await postVoucher(orgId, VoucherType.RECEIPT, 300000, '2026-10-05');
+    await postedInvoice(orgId, 'INV-6001');
+    const statement = await importLines(
+      orgId,
+      [
+        { date: '2026-10-05', description: 'NEFT IN', creditPaise: 300000 }, // matches the receipt — in the books
+        { date: '2026-10-10', description: 'NEFT CR INV-6001', creditPaise: 1000000 }, // invoice — pending until confirmed
+        { date: '2026-10-11', description: 'UPI/unknown', debitPaise: 499900 }, // nothing records it
       ],
-    });
+      5000000,
+    );
+    await svc.autoMatch(statement._id.toString(), orgId);
 
-    // Auto-match won't work (outside date window)
-    const autoResult = await svc.autoMatch(statement._id.toString(), ORG_ID);
-    expect(autoResult.matched).toBe(0);
+    let report = await svc.getDiffReport(statement._id.toString(), orgId);
+    expect(report.glBalancePaise).toBe(5000000 + 300000);
+    expect(report.differencePaise).toBe(1000000 - 499900);
+    expect(report.unmatchedLines).toBe(1);
+    expect(report.pendingSettlements).toBe(1);
+    expect(report.isReconciled).toBe(false);
 
-    // Manual match
-    const lines = await lineModel.find({ statementId: statement._id }).exec();
-    const updated = await svc.manualMatch(lines[0]._id.toString(), journal._id.toString(), ORG_ID);
-    expect(updated.matchStatus).toBe(MatchStatus.MANUALLY_MATCHED);
-    expect(updated.matchedJournalId!.toString()).toBe(journal._id.toString());
+    await svc.confirmMatches(statement._id.toString(), orgId, ACTOR_ID);
+    report = await svc.getDiffReport(statement._id.toString(), orgId);
+    // Only the unknown ₹4,999 debit is left: the books do not have it.
+    expect(report.differencePaise).toBe(-499900);
+    expect(report.pendingSettlements).toBe(0);
+    expect(report.isReconciled).toBe(false);
   });
 });

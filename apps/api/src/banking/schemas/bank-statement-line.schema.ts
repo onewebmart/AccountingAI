@@ -40,9 +40,29 @@ export class BankStatementLine {
   })
   matchStatus: MatchStatus;
 
-  /** Journal matched to this bank line (null until matched). */
+  /**
+   * Journal matched to this bank line (null until matched). For a line matched
+   * to an invoice or bill, this is the receipt or payment posted on confirm.
+   */
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Journal', default: null })
   matchedJournalId: Types.ObjectId | null;
+
+  /** Open sales invoice this money-in line settles, until confirm posts the receipt. */
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'SalesInvoice', default: null })
+  matchedInvoiceId: Types.ObjectId | null;
+
+  /** Open purchase bill this money-out line settles, until confirm posts the payment. */
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'PurchaseBill', default: null })
+  matchedBillId: Types.ObjectId | null;
+
+  /**
+   * Same date, amount and narration as another line on this account — often an
+   * overlapping statement imported twice. Never auto-matched; a person decides.
+   */
+  @Prop({ type: Boolean, default: false }) possibleDuplicate: boolean;
+
+  /** Set aside by a reviewer (e.g. a confirmed duplicate); ignored by matching. */
+  @Prop({ type: Boolean, default: false }) excluded: boolean;
 }
 
 export const BankStatementLineSchema = SchemaFactory.createForClass(BankStatementLine);

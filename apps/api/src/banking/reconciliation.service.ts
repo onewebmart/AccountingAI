@@ -1,15 +1,30 @@
-import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException, HttpException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import { MatchStatus, StatementStatus, VoucherType } from '@ai-accounting/shared';
+import {
+  BillStatus,
+  InvoiceStatus,
+  JournalStatus,
+  MatchStatus,
+  StatementStatus,
+  VoucherType,
+} from '@ai-accounting/shared';
 import { BankAccount, BankAccountDocument } from './schemas/bank-account.schema';
 import { BankStatement, BankStatementDocument } from './schemas/bank-statement.schema';
 import { BankStatementLine, BankStatementLineDocument } from './schemas/bank-statement-line.schema';
 import { Journal, JournalDocument } from '../gl/schemas/journal.schema';
+import { SalesInvoice, SalesInvoiceDocument } from '../sales/schemas/sales-invoice.schema';
+import { PurchaseBill, PurchaseBillDocument } from '../purchase/schemas/purchase-bill.schema';
+import { PostingService } from '../gl/posting.service';
+import { AuditService } from '../gl/audit.service';
+import { SalesInvoicesService } from '../sales/sales-invoices.service';
+import { PurchaseBillsService } from '../purchase/purchase-bills.service';
+import { formatVoucherNumber } from '../journals/journals.service';
 import { withOrg } from '../database/tenant.plugin';
 
 export interface CreateBankAccountInput {
   orgId: string;
+  actorId?: string;
   name: string;
   accountNumber?: string | null;
   bankName?: string | null;
@@ -20,6 +35,8 @@ export interface CreateBankAccountInput {
 
 export interface ImportStatementInput {
   orgId: string;
+  /** Who imported it; absent when the upload worker imports a spreadsheet. */
+  actorId?: string;
   bankAccountId: string;
   periodStart: string;
   periodEnd: string;
@@ -35,6 +52,13 @@ export interface ImportStatementInput {
   }>;
 }
 
+/** What a bank line can be matched to by hand — exactly one of these. */
+export interface ManualMatchTarget {
+  journalId?: string;
+  invoiceId?: string;
+  billId?: string;
+}
+
 export interface DiffReport {
   bankAccountId: string;
   statementId: string;
@@ -42,14 +66,21 @@ export interface DiffReport {
   periodEnd: string;
   openingBalancePaise: number;
   closingBalancePaise: number;
-  /** GL balance = opening + matched receipts - matched payments */
+  /**
+   * The statement's opening balance plus every line whose movement is already
+   * in the books — confirmed, or matched to a posted receipt or payment.
+   */
   glBalancePaise: number;
-  /** Difference: bank closing balance - GL balance */
+  /** Bank closing balance − GL balance: money the books do not have yet. */
   differencePaise: number;
   totalLines: number;
   matchedLines: number;
   unmatchedLines: number;
   unmatchedAmountPaise: number;
+  /** Lines matched to an invoice or bill that will post when confirmed. */
+  pendingSettlements: number;
+  possibleDuplicates: number;
+  excludedLines: number;
   isReconciled: boolean;
   lines: Array<{
     id: string;
@@ -60,16 +91,63 @@ export interface DiffReport {
     creditPaise: number;
     matchStatus: MatchStatus;
     matchedJournalId: string | null;
+    matchedInvoiceId: string | null;
+    matchedBillId: string | null;
+    /** What the line is matched to, in words — e.g. "Invoice KT/001 · Sharma Textiles". */
+    matchLabel: string | null;
+    possibleDuplicate: boolean;
+    excluded: boolean;
   }>;
 }
 
-/** ±3-day window for auto-matching. */
+export interface ConfirmResult {
+  confirmed: number;
+  /** Lines that could not be confirmed, with the reason — e.g. invoice already paid by hand. */
+  failed: Array<{ lineId: string; reason: string }>;
+}
+
+/** ±3 days between a bank line and the voucher that records it. */
 const MATCH_DATE_WINDOW_MS = 3 * 86_400_000;
+const DAY_MS = 86_400_000;
 
-/** Bank statement debits (money out) match PAYMENT journals; credits (money in) match RECEIPT journals. */
-const BANK_DEBIT_VOUCHER_TYPES = [VoucherType.PAYMENT, VoucherType.PURCHASE];
-const BANK_CREDIT_VOUCHER_TYPES = [VoucherType.RECEIPT, VoucherType.SALES];
+/** Letters and digits only, so "KT/26-27/001" is found in "NEFT CR … KT2627001". */
+function refKey(value: string | null | undefined): string {
+  return (value ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
 
+/** Same date, amount and narration (and reference, if any) → same bank transaction. */
+function duplicateKey(l: { date: string; debitPaise: number; creditPaise: number; description: string; reference?: string | null }): string {
+  return [l.date, l.debitPaise, l.creditPaise, l.description.toLowerCase().replace(/\s+/g, ' ').trim(), l.reference ?? ''].join('|');
+}
+
+function lineAmount(l: { debitPaise: number; creditPaise: number }): number {
+  return l.debitPaise > 0 ? l.debitPaise : l.creditPaise;
+}
+
+function journalTotal(j: JournalDocument): number {
+  return j.lines.reduce((s, l) => s + l.creditPaise, 0);
+}
+
+function messageOf(err: unknown): string {
+  if (err instanceof HttpException) return err.message;
+  return err instanceof Error ? err.message : String(err);
+}
+
+/**
+ * Bank reconciliation: match each bank line to what records it in the books,
+ * and post the ones the books do not have yet.
+ *
+ * A line is matched to one of:
+ *   - a receipt or payment already posted (money that was recorded by hand), or
+ *   - an open sales invoice (money in) or purchase bill (money out).
+ *
+ * Matching only suggests. "Confirm matches" is the human step that commits:
+ * an invoice match posts Dr Bank / Cr Accounts Receivable dated the day the
+ * money arrived and marks the invoice paid, in one transaction with the line.
+ * It used to match bank lines to sales and purchase journals — which never
+ * touch the bank — and post nothing, so a "reconciled" statement left the
+ * receivable owed and the bank balance unchanged.
+ */
 @Injectable()
 export class ReconciliationService {
   private readonly logger = new Logger(ReconciliationService.name);
@@ -79,12 +157,18 @@ export class ReconciliationService {
     @InjectModel(BankStatement.name) private statementModel: Model<BankStatementDocument>,
     @InjectModel(BankStatementLine.name) private lineModel: Model<BankStatementLineDocument>,
     @InjectModel(Journal.name) private journalModel: Model<JournalDocument>,
+    @InjectModel(SalesInvoice.name) private invoiceModel: Model<SalesInvoiceDocument>,
+    @InjectModel(PurchaseBill.name) private billModel: Model<PurchaseBillDocument>,
+    private postingService: PostingService,
+    private auditService: AuditService,
+    private salesInvoices: SalesInvoicesService,
+    private purchaseBills: PurchaseBillsService,
   ) {}
 
   // ── Bank account ─────────────────────────────────────────────────────────
 
   async createAccount(input: CreateBankAccountInput): Promise<BankAccountDocument> {
-    return this.accountModel.create({
+    const account = await this.accountModel.create({
       orgId: input.orgId,
       name: input.name,
       accountNumber: input.accountNumber ?? null,
@@ -93,6 +177,15 @@ export class ReconciliationService {
       openingBalancePaise: input.openingBalancePaise ?? 0,
       openingBalanceDate: input.openingBalanceDate ?? null,
     });
+    await this.auditService.record({
+      orgId: input.orgId,
+      entityType: 'BankAccount',
+      entityId: account._id.toString(),
+      action: 'CREATE',
+      performedBy: input.actorId ?? 'system:ingest',
+      after: { name: account.name, openingBalancePaise: account.openingBalancePaise },
+    });
+    return account;
   }
 
   async listAccounts(orgId: string): Promise<BankAccountDocument[]> {
@@ -119,8 +212,29 @@ export class ReconciliationService {
       matchedLines: 0,
     });
 
-    await this.lineModel.insertMany(
-      input.lines.map((l) => ({
+    // Lines already on this account in the same dates — an overlapping
+    // statement imported twice would otherwise double every movement in it.
+    const dates = input.lines.map((l) => l.date).sort();
+    const earlier = dates.length
+      ? await withOrg(input.orgId, () =>
+          this.lineModel
+            .find({
+              bankAccountId: account._id,
+              statementId: { $ne: statement._id },
+              date: { $gte: dates[0], $lte: dates[dates.length - 1] },
+            })
+            .exec(),
+        )
+      : [];
+    const seen = new Set(earlier.map(duplicateKey));
+
+    let duplicates = 0;
+    const docs = input.lines.map((l) => {
+      const key = duplicateKey(l);
+      const possibleDuplicate = seen.has(key);
+      if (possibleDuplicate) duplicates++;
+      seen.add(key);
+      return {
         orgId: input.orgId,
         statementId: statement._id,
         bankAccountId: new Types.ObjectId(input.bankAccountId),
@@ -132,207 +246,388 @@ export class ReconciliationService {
         runningBalancePaise: l.runningBalancePaise ?? null,
         matchStatus: MatchStatus.UNMATCHED,
         matchedJournalId: null,
-      })),
-    );
+        possibleDuplicate,
+      };
+    });
+    await this.lineModel.insertMany(docs);
 
-    this.logger.log(`Imported statement ${statement._id} with ${input.lines.length} lines`);
+    await this.auditService.record({
+      orgId: input.orgId,
+      entityType: 'BankStatement',
+      entityId: statement._id.toString(),
+      action: 'IMPORT',
+      performedBy: input.actorId ?? 'system:ingest',
+      after: { periodStart: input.periodStart, periodEnd: input.periodEnd, lines: input.lines.length },
+      meta: { possibleDuplicates: duplicates },
+    });
+
+    this.logger.log(
+      `Imported statement ${statement._id} with ${input.lines.length} lines (${duplicates} possible duplicates)`,
+    );
     return statement;
   }
 
   // ── Auto-match ────────────────────────────────────────────────────────────
 
   /**
-   * Auto-match unmatched bank lines against posted journals by amount + date.
-   * - Bank debit (money out) → matches PAYMENT/PURCHASE journals
-   * - Bank credit (money in) → matches RECEIPT/SALES journals
+   * Suggest a match for each unmatched line: first a receipt or payment already
+   * in the books (same amount, within 3 days), else an open invoice or bill for
+   * exactly that amount — the one whose number appears in the bank narration,
+   * or the only candidate. Nothing is posted until the matches are confirmed.
    */
-  async autoMatch(statementId: string, orgId: string): Promise<{ matched: number; unmatched: number }> {
-    const statement = await withOrg(orgId, () =>
-      this.statementModel.findById(statementId).exec(),
-    );
+  async autoMatch(
+    statementId: string,
+    orgId: string,
+    actorId?: string,
+  ): Promise<{ matched: number; unmatched: number }> {
+    const statement = await withOrg(orgId, () => this.statementModel.findById(statementId).exec());
     if (!statement) throw new NotFoundException('Statement not found');
 
-    const unmatchedLines = await withOrg(orgId, () =>
-      this.lineModel.find({ statementId: new Types.ObjectId(statementId), matchStatus: MatchStatus.UNMATCHED }).exec(),
-    );
-
-    // Load all unmatched journals (PAYMENT, RECEIPT, PURCHASE, SALES) in the statement period
-    const periodStart = new Date(statement.periodStart);
-    const periodEnd = new Date(statement.periodEnd);
-    // Expand by ±3 days to catch edge cases
-    periodStart.setDate(periodStart.getDate() - 3);
-    periodEnd.setDate(periodEnd.getDate() + 3);
-
-    const journals = await withOrg(orgId, () =>
-      this.journalModel
+    const lines = await withOrg(orgId, () =>
+      this.lineModel
         .find({
-          voucherType: { $in: [...BANK_DEBIT_VOUCHER_TYPES, ...BANK_CREDIT_VOUCHER_TYPES] },
-          date: {
-            $gte: periodStart.toISOString().slice(0, 10),
-            $lte: periodEnd.toISOString().slice(0, 10),
-          },
+          statementId: statement._id,
+          matchStatus: MatchStatus.UNMATCHED,
+          excluded: { $ne: true },
+          possibleDuplicate: { $ne: true },
         })
+        .sort({ date: 1 })
         .exec(),
     );
 
-    // Index journals by id for fast lookup of already-matched ones
-    const matchedJournalIds = new Set<string>();
+    // One voucher, invoice or bill records one bank movement. Anything another
+    // line already points at — on any statement — is off the table; the old
+    // matcher forgot its previous runs and paired a duplicate deposit with the
+    // same sale twice.
+    const taken = await withOrg(orgId, () =>
+      this.lineModel
+        .find({ matchStatus: { $ne: MatchStatus.UNMATCHED } })
+        .select('matchedJournalId matchedInvoiceId matchedBillId')
+        .lean()
+        .exec(),
+    );
+    const takenIds = new Set(
+      taken.flatMap((t) => [t.matchedJournalId, t.matchedInvoiceId, t.matchedBillId]).filter(Boolean).map(String),
+    );
 
-    let matchedCount = 0;
+    const from = new Date(new Date(statement.periodStart).getTime() - MATCH_DATE_WINDOW_MS).toISOString().slice(0, 10);
+    const to = new Date(new Date(statement.periodEnd).getTime() + MATCH_DATE_WINDOW_MS).toISOString().slice(0, 10);
+    const vouchers = await withOrg(orgId, () =>
+      this.journalModel
+        .find({
+          voucherType: { $in: [VoucherType.RECEIPT, VoucherType.PAYMENT] },
+          status: JournalStatus.POSTED,
+          reversalOf: { $exists: false },
+          date: { $gte: from, $lte: to },
+        })
+        .exec(),
+    );
+    // A voucher that has been reversed no longer records anything.
+    const reversed = new Set(
+      (
+        await withOrg(orgId, () =>
+          this.journalModel.find({ reversalOf: { $in: vouchers.map((v) => v._id) } }).select('reversalOf').lean().exec(),
+        )
+      ).map((r) => String(r.reversalOf)),
+    );
+    const openInvoices = await withOrg(orgId, () =>
+      this.invoiceModel.find({ status: InvoiceStatus.POSTED }).exec(),
+    );
+    const openBills = await withOrg(orgId, () => this.billModel.find({ status: BillStatus.POSTED }).exec());
 
-    for (const line of unmatchedLines) {
-      const lineDate = new Date(line.date).getTime();
-      const isDebit = line.debitPaise > 0;
-      const lineAmount = isDebit ? line.debitPaise : line.creditPaise;
-      const targetVoucherTypes = isDebit ? BANK_DEBIT_VOUCHER_TYPES : BANK_CREDIT_VOUCHER_TYPES;
+    let matched = 0;
+    for (const line of lines) {
+      const moneyIn = line.creditPaise > 0;
+      const amount = lineAmount(line);
+      const lineTime = new Date(line.date).getTime();
 
-      // Find best matching journal: same amount, same side, date ±3 days, not already matched
-      const candidate = journals.find((j) => {
-        if (matchedJournalIds.has(j._id.toString())) return false;
-        if (!targetVoucherTypes.includes(j.voucherType)) return false;
+      // 1. A receipt or payment already posted, closest date first.
+      const voucher = vouchers
+        .filter(
+          (v) =>
+            !takenIds.has(String(v._id)) &&
+            !reversed.has(String(v._id)) &&
+            v.voucherType === (moneyIn ? VoucherType.RECEIPT : VoucherType.PAYMENT) &&
+            journalTotal(v) === amount &&
+            Math.abs(new Date(v.date).getTime() - lineTime) <= MATCH_DATE_WINDOW_MS,
+        )
+        .sort((a, b) => Math.abs(new Date(a.date).getTime() - lineTime) - Math.abs(new Date(b.date).getTime() - lineTime))[0];
 
-        // Journal total = sum of all credit lines (= sum of debit lines for a balanced journal)
-        const journalTotal = j.lines.reduce((s, l) => s + l.creditPaise, 0);
-        if (journalTotal !== lineAmount) return false;
+      let set: Record<string, unknown> | null = null;
+      if (voucher) {
+        set = { matchedJournalId: voucher._id };
+        takenIds.add(String(voucher._id));
+      } else {
+        // 2. An open invoice or bill for exactly this amount, dated on or before the money moved.
+        const candidates = (moneyIn
+          ? openInvoices.map((i) => ({ id: i._id, number: i.invoiceNumber, date: i.invoiceDate, total: i.amountsPaise.total }))
+          : openBills.map((b) => ({ id: b._id, number: b.billNumber, date: b.billDate, total: b.amountsPaise.total }))
+        ).filter((c) => !takenIds.has(String(c.id)) && c.total === amount && c.date <= line.date);
 
-        const journalDate = new Date(j.date).getTime();
-        return Math.abs(journalDate - lineDate) <= MATCH_DATE_WINDOW_MS;
-      });
+        const narration = refKey(`${line.description} ${line.reference ?? ''}`);
+        const byReference = candidates.filter((c) => refKey(c.number).length >= 4 && narration.includes(refKey(c.number)));
+        const pick = byReference.length === 1 ? byReference[0] : byReference.length === 0 && candidates.length === 1 ? candidates[0] : null;
 
-      if (candidate) {
-        await this.lineModel
-          .findByIdAndUpdate(line._id, {
-            $set: { matchStatus: MatchStatus.AUTO_MATCHED, matchedJournalId: candidate._id },
-          })
-          .exec();
-        matchedJournalIds.add(candidate._id.toString());
-        matchedCount++;
+        if (pick) {
+          set = moneyIn ? { matchedInvoiceId: pick.id } : { matchedBillId: pick.id };
+          takenIds.add(String(pick.id));
+        }
+      }
+
+      if (set) {
+        const res = await withOrg(orgId, () =>
+          this.lineModel
+            .updateOne({ _id: line._id, matchStatus: MatchStatus.UNMATCHED }, { $set: { ...set, matchStatus: MatchStatus.AUTO_MATCHED } })
+            .exec(),
+        );
+        if (res.modifiedCount === 1) matched++;
       }
     }
 
-    // Update statement counters
-    const totalMatched = await this.lineModel
-      .countDocuments({
-        statementId: new Types.ObjectId(statementId),
-        matchStatus: { $in: [MatchStatus.AUTO_MATCHED, MatchStatus.MANUALLY_MATCHED, MatchStatus.CONFIRMED] },
-      })
-      .exec();
+    await this.refreshCounts(statement._id, orgId);
+    await this.auditService.record({
+      orgId,
+      entityType: 'BankStatement',
+      entityId: statement._id.toString(),
+      action: 'AUTO_MATCH',
+      performedBy: actorId ?? 'system',
+      meta: { matched, considered: lines.length },
+    });
 
-    await this.statementModel
-      .findByIdAndUpdate(statementId, { $set: { matchedLines: totalMatched } })
-      .exec();
-
-    this.logger.log(`autoMatch: ${matchedCount} new matches for statement ${statementId}`);
-    return { matched: matchedCount, unmatched: unmatchedLines.length - matchedCount };
+    this.logger.log(`autoMatch: ${matched} new matches for statement ${statementId}`);
+    return { matched, unmatched: lines.length - matched };
   }
 
+  // ── Confirm ───────────────────────────────────────────────────────────────
+
   /**
-   * Promote all AUTO_MATCHED lines to CONFIRMED.
-   * "Confirm matches" action → chips turn green.
+   * Commit every suggested and manual match on the statement. A line matched to
+   * an invoice or bill posts its receipt or payment, dated the day the money
+   * moved, and the line, the voucher, the invoice's status and the audit row
+   * commit together. Each line stands alone: one that cannot be confirmed —
+   * say the invoice was paid by hand meanwhile — is reported, not fatal.
    */
-  async confirmMatches(statementId: string, orgId: string): Promise<{ confirmed: number }> {
-    const result = await this.lineModel
-      .updateMany(
-        { statementId: new Types.ObjectId(statementId), matchStatus: MatchStatus.AUTO_MATCHED },
-        { $set: { matchStatus: MatchStatus.CONFIRMED } },
-      )
-      .exec();
+  async confirmMatches(statementId: string, orgId: string, actorId: string): Promise<ConfirmResult> {
+    const statement = await withOrg(orgId, () => this.statementModel.findById(statementId).exec());
+    if (!statement) throw new NotFoundException('Statement not found');
 
-    const confirmed = result.modifiedCount;
+    const lines = await withOrg(orgId, () =>
+      this.lineModel
+        .find({
+          statementId: statement._id,
+          matchStatus: { $in: [MatchStatus.AUTO_MATCHED, MatchStatus.MANUALLY_MATCHED] },
+          excluded: { $ne: true },
+        })
+        .sort({ date: 1 })
+        .exec(),
+    );
 
-    // Mark statement reconciled if all lines are now matched
-    const unmatched = await this.lineModel
-      .countDocuments({ statementId: new Types.ObjectId(statementId), matchStatus: MatchStatus.UNMATCHED })
-      .exec();
+    let confirmed = 0;
+    const failed: ConfirmResult['failed'] = [];
 
-    if (unmatched === 0) {
-      await this.statementModel
-        .findByIdAndUpdate(statementId, { $set: { status: StatementStatus.RECONCILED } })
-        .exec();
+    for (const line of lines) {
+      try {
+        await this.postingService.inTransaction(async (session) => {
+          let journalId = line.matchedJournalId;
+          if (line.matchedInvoiceId) {
+            const { receipt } = await this.salesInvoices.settleWithin(
+              session, String(line.matchedInvoiceId), orgId, actorId, line.date,
+            );
+            journalId = receipt._id;
+          } else if (line.matchedBillId) {
+            const { payment } = await this.purchaseBills.settleWithin(
+              session, String(line.matchedBillId), orgId, actorId, line.date,
+            );
+            journalId = payment._id;
+          }
+
+          const res = await withOrg(orgId, () =>
+            this.lineModel
+              .updateOne(
+                { _id: line._id, matchStatus: line.matchStatus },
+                { $set: { matchStatus: MatchStatus.CONFIRMED, matchedJournalId: journalId } },
+                { session },
+              )
+              .exec(),
+          );
+          if (res.modifiedCount !== 1) throw new BadRequestException('This line changed while it was being confirmed');
+
+          await this.auditService.record(
+            {
+              orgId,
+              entityType: 'BankStatementLine',
+              entityId: line._id.toString(),
+              action: 'CONFIRM_MATCH',
+              performedBy: actorId,
+              before: { matchStatus: line.matchStatus },
+              after: { matchStatus: MatchStatus.CONFIRMED, matchedJournalId: String(journalId) },
+            },
+            session,
+          );
+        });
+        confirmed++;
+      } catch (err) {
+        failed.push({ lineId: line._id.toString(), reason: messageOf(err) });
+      }
     }
 
-    this.logger.log(`confirmMatches: ${confirmed} lines confirmed for statement ${statementId}`);
-    return { confirmed };
+    await this.refreshCounts(statement._id, orgId);
+    this.logger.log(`confirmMatches: ${confirmed} confirmed, ${failed.length} failed for statement ${statementId}`);
+    return { confirmed, failed };
   }
 
-  /**
-   * Manually match a single bank line to a journal.
-   */
+  // ── Manual decisions on one line ───────────────────────────────────────────
+
+  /** Match a line by hand to a posted voucher, an open invoice (money in) or an open bill (money out). */
   async manualMatch(
     bankLineId: string,
-    journalId: string,
+    target: ManualMatchTarget,
     orgId: string,
+    actorId: string,
   ): Promise<BankStatementLineDocument> {
-    const line = await withOrg(orgId, () => this.lineModel.findById(bankLineId).exec());
-    if (!line) throw new NotFoundException('Bank statement line not found');
-    if (line.matchStatus === MatchStatus.CONFIRMED) {
-      throw new BadRequestException('Line is already confirmed');
+    const line = await this.findOpenLine(bankLineId, orgId);
+    const given = [target.journalId, target.invoiceId, target.billId].filter(Boolean);
+    if (given.length !== 1) {
+      throw new BadRequestException('Match the line to exactly one of: a voucher, an invoice or a bill');
+    }
+    const amount = lineAmount(line);
+    const moneyIn = line.creditPaise > 0;
+    let set: Record<string, unknown>;
+    let label: string;
+
+    if (target.journalId) {
+      const journal = await withOrg(orgId, () => this.journalModel.findById(target.journalId).exec());
+      if (!journal || journal.status !== JournalStatus.POSTED) throw new NotFoundException('Voucher not found');
+      if (journalTotal(journal) !== amount) {
+        throw new BadRequestException(`The voucher is for ${rupees(journalTotal(journal))} but the bank line is ${rupees(amount)}`);
+      }
+      set = { matchedJournalId: journal._id };
+      label = formatVoucherNumber(journal.voucherType, journal.financialYear, journal.voucherNumber);
+    } else if (target.invoiceId) {
+      if (!moneyIn) throw new BadRequestException('Only money coming in can settle a sales invoice');
+      const invoice = await withOrg(orgId, () => this.invoiceModel.findById(target.invoiceId).exec());
+      if (!invoice) throw new NotFoundException('Invoice not found');
+      if (invoice.status !== InvoiceStatus.POSTED) {
+        throw new BadRequestException(`Only a posted, unpaid invoice can be settled (this one is ${invoice.status})`);
+      }
+      this.requireFullAmount(invoice.amountsPaise.total, amount, 'invoice');
+      set = { matchedInvoiceId: invoice._id };
+      label = `Invoice ${invoice.invoiceNumber ?? invoice._id}`;
+    } else {
+      if (moneyIn) throw new BadRequestException('Only money going out can settle a purchase bill');
+      const bill = await withOrg(orgId, () => this.billModel.findById(target.billId).exec());
+      if (!bill) throw new NotFoundException('Bill not found');
+      if (bill.status !== BillStatus.POSTED) {
+        throw new BadRequestException(`Only a posted, unpaid bill can be settled (this one is ${bill.status})`);
+      }
+      this.requireFullAmount(bill.amountsPaise.total, amount, 'bill');
+      set = { matchedBillId: bill._id };
+      label = `Bill ${bill.billNumber ?? bill._id}`;
     }
 
-    const journal = await withOrg(orgId, () => this.journalModel.findById(journalId).exec());
-    if (!journal) throw new NotFoundException('Journal not found');
+    const targetId = Object.values(set)[0];
+    const clash = await withOrg(orgId, () =>
+      this.lineModel
+        .exists({
+          _id: { $ne: line._id },
+          matchStatus: { $ne: MatchStatus.UNMATCHED },
+          $or: [{ matchedJournalId: targetId }, { matchedInvoiceId: targetId }, { matchedBillId: targetId }],
+        })
+        .exec(),
+    );
+    if (clash) throw new BadRequestException(`${label} is already matched to another bank line`);
 
-    const updated = await this.lineModel
-      .findByIdAndUpdate(
-        bankLineId,
-        { $set: { matchStatus: MatchStatus.MANUALLY_MATCHED, matchedJournalId: new Types.ObjectId(journalId) } },
-        { new: true },
-      )
-      .exec();
+    const updated = await withOrg(orgId, () =>
+      this.lineModel
+        .findOneAndUpdate(
+          { _id: line._id, matchStatus: { $ne: MatchStatus.CONFIRMED } },
+          {
+            $set: {
+              matchedJournalId: null,
+              matchedInvoiceId: null,
+              matchedBillId: null,
+              ...set,
+              matchStatus: MatchStatus.MANUALLY_MATCHED,
+              possibleDuplicate: false,
+            },
+          },
+          { new: true },
+        )
+        .exec(),
+    );
+    if (!updated) throw new BadRequestException('This line is already confirmed');
 
-    this.logger.log(`manualMatch: line ${bankLineId} → journal ${journalId}`);
-    return updated!;
+    await this.auditService.record({
+      orgId,
+      entityType: 'BankStatementLine',
+      entityId: line._id.toString(),
+      action: 'MATCH',
+      performedBy: actorId,
+      before: { matchStatus: line.matchStatus },
+      after: { matchStatus: MatchStatus.MANUALLY_MATCHED, matchedTo: label },
+    });
+    await this.refreshCounts(line.statementId, orgId);
+    return updated;
+  }
+
+  /** Undo a suggested or manual match that has not been confirmed. */
+  async unmatch(bankLineId: string, orgId: string, actorId: string): Promise<BankStatementLineDocument> {
+    const line = await this.findOpenLine(bankLineId, orgId);
+    const updated = await this.setLine(line, actorId, 'UNMATCH', {
+      matchStatus: MatchStatus.UNMATCHED,
+      matchedJournalId: null,
+      matchedInvoiceId: null,
+      matchedBillId: null,
+    });
+    await this.refreshCounts(line.statementId, orgId);
+    return updated;
+  }
+
+  /** Set a line aside (e.g. a duplicate the reviewer has confirmed), or bring it back. */
+  async setExcluded(bankLineId: string, excluded: boolean, orgId: string, actorId: string): Promise<BankStatementLineDocument> {
+    const line = await this.findOpenLine(bankLineId, orgId);
+    const updated = await this.setLine(line, actorId, excluded ? 'EXCLUDE' : 'INCLUDE', {
+      excluded,
+      matchStatus: MatchStatus.UNMATCHED,
+      matchedJournalId: null,
+      matchedInvoiceId: null,
+      matchedBillId: null,
+    });
+    await this.refreshCounts(line.statementId, orgId);
+    return updated;
+  }
+
+  /** The reviewer says a flagged line is a genuine, separate transaction. */
+  async clearDuplicateFlag(bankLineId: string, orgId: string, actorId: string): Promise<BankStatementLineDocument> {
+    const line = await this.findOpenLine(bankLineId, orgId);
+    return this.setLine(line, actorId, 'NOT_DUPLICATE', { possibleDuplicate: false });
   }
 
   // ── Diff report ───────────────────────────────────────────────────────────
 
-  /**
-   * Produce the reconciliation difference report for a statement.
-   *
-   * GL balance = bank account opening balance
-   *           + Σ credit lines (confirmed/auto_matched receipts → money in)
-   *           - Σ debit lines (confirmed/auto_matched payments → money out)
-   *
-   * Reconciled when: GL balance = bank closing balance.
-   */
   async getDiffReport(statementId: string, orgId: string): Promise<DiffReport> {
-    const statement = await withOrg(orgId, () =>
-      this.statementModel.findById(statementId).exec(),
-    );
+    const statement = await withOrg(orgId, () => this.statementModel.findById(statementId).exec());
     if (!statement) throw new NotFoundException('Statement not found');
 
-    const account = await withOrg(orgId, () =>
-      this.accountModel.findById(statement.bankAccountId).exec(),
-    );
-    if (!account) throw new NotFoundException('Bank account not found');
-
     const allLines = await withOrg(orgId, () =>
-      this.lineModel.find({ statementId: new Types.ObjectId(statementId) }).sort({ date: 1 }).exec(),
+      this.lineModel.find({ statementId: statement._id }).sort({ date: 1 }).exec(),
     );
 
-    const MATCHED_STATUSES: MatchStatus[] = [
-      MatchStatus.AUTO_MATCHED,
-      MatchStatus.MANUALLY_MATCHED,
-      MatchStatus.CONFIRMED,
-    ];
+    const labels = await this.matchLabels(allLines, orgId);
+    const active = allLines.filter((l) => !l.excluded);
+    const inBooks = (l: BankStatementLineDocument) =>
+      l.matchStatus === MatchStatus.CONFIRMED ||
+      ((l.matchStatus === MatchStatus.AUTO_MATCHED || l.matchStatus === MatchStatus.MANUALLY_MATCHED) && !!l.matchedJournalId);
+    const unmatched = active.filter((l) => l.matchStatus === MatchStatus.UNMATCHED);
+    const pending = active.filter((l) => !inBooks(l) && l.matchStatus !== MatchStatus.UNMATCHED);
 
-    const matchedLines = allLines.filter((l) => MATCHED_STATUSES.includes(l.matchStatus));
-    const unmatchedLines = allLines.filter((l) => l.matchStatus === MatchStatus.UNMATCHED);
-
-    // GL balance: opening + matched credits (money in) - matched debits (money out)
-    const matchedCredits = matchedLines.reduce((s, l) => s + l.creditPaise, 0);
-    const matchedDebits = matchedLines.reduce((s, l) => s + l.debitPaise, 0);
-    const glBalancePaise = account.openingBalancePaise + matchedCredits - matchedDebits;
-
+    const glBalancePaise =
+      statement.openingBalancePaise +
+      active.filter(inBooks).reduce((s, l) => s + l.creditPaise - l.debitPaise, 0);
     const differencePaise = statement.closingBalancePaise - glBalancePaise;
 
-    const unmatchedAmountPaise = unmatchedLines.reduce(
-      (s, l) => s + l.creditPaise - l.debitPaise,
-      0,
-    );
-
     return {
-      bankAccountId: account._id.toString(),
+      bankAccountId: statement.bankAccountId.toString(),
       statementId: statement._id.toString(),
       periodStart: statement.periodStart,
       periodEnd: statement.periodEnd,
@@ -341,10 +636,13 @@ export class ReconciliationService {
       glBalancePaise,
       differencePaise,
       totalLines: allLines.length,
-      matchedLines: matchedLines.length,
-      unmatchedLines: unmatchedLines.length,
-      unmatchedAmountPaise,
-      isReconciled: differencePaise === 0 && unmatchedLines.length === 0,
+      matchedLines: active.length - unmatched.length,
+      unmatchedLines: unmatched.length,
+      unmatchedAmountPaise: unmatched.reduce((s, l) => s + l.creditPaise - l.debitPaise, 0),
+      pendingSettlements: pending.length,
+      possibleDuplicates: active.filter((l) => l.possibleDuplicate).length,
+      excludedLines: allLines.length - active.length,
+      isReconciled: differencePaise === 0 && unmatched.length === 0 && pending.length === 0,
       lines: allLines.map((l) => ({
         id: l._id.toString(),
         date: l.date,
@@ -354,6 +652,11 @@ export class ReconciliationService {
         creditPaise: l.creditPaise,
         matchStatus: l.matchStatus,
         matchedJournalId: l.matchedJournalId?.toString() ?? null,
+        matchedInvoiceId: l.matchedInvoiceId?.toString() ?? null,
+        matchedBillId: l.matchedBillId?.toString() ?? null,
+        matchLabel: labels.get(l._id.toString()) ?? null,
+        possibleDuplicate: !!l.possibleDuplicate,
+        excluded: !!l.excluded,
       })),
     };
   }
@@ -364,4 +667,95 @@ export class ReconciliationService {
       this.statementModel.find(filter).sort({ periodStart: -1 }).exec(),
     );
   }
+
+  // ── Internals ─────────────────────────────────────────────────────────────
+
+  private async findOpenLine(bankLineId: string, orgId: string): Promise<BankStatementLineDocument> {
+    const line = await withOrg(orgId, () => this.lineModel.findById(bankLineId).exec());
+    if (!line) throw new NotFoundException('Bank statement line not found');
+    if (line.matchStatus === MatchStatus.CONFIRMED) {
+      throw new BadRequestException(
+        'This line is confirmed and its entry is in the ledger — reverse that voucher to undo it',
+      );
+    }
+    return line;
+  }
+
+  private async setLine(
+    line: BankStatementLineDocument,
+    actorId: string,
+    action: string,
+    set: Record<string, unknown>,
+  ): Promise<BankStatementLineDocument> {
+    const updated = await withOrg(line.orgId, () =>
+      this.lineModel
+        .findOneAndUpdate({ _id: line._id, matchStatus: { $ne: MatchStatus.CONFIRMED } }, { $set: set }, { new: true })
+        .exec(),
+    );
+    if (!updated) throw new BadRequestException('This line was confirmed in the meantime');
+    await this.auditService.record({
+      orgId: line.orgId,
+      entityType: 'BankStatementLine',
+      entityId: line._id.toString(),
+      action,
+      performedBy: actorId,
+      before: { matchStatus: line.matchStatus, excluded: line.excluded, possibleDuplicate: line.possibleDuplicate },
+      after: set,
+    });
+    return updated;
+  }
+
+  private requireFullAmount(documentTotal: number, bankAmount: number, kind: 'invoice' | 'bill'): void {
+    if (documentTotal !== bankAmount) {
+      throw new BadRequestException(
+        `The ${kind} is for ${rupees(documentTotal)} but the bank line is ${rupees(bankAmount)} — ` +
+          'part payments are not supported yet, so the amounts must match',
+      );
+    }
+  }
+
+  private async refreshCounts(statementId: Types.ObjectId, orgId: string): Promise<void> {
+    const lines = await withOrg(orgId, () =>
+      this.lineModel.find({ statementId }).select('matchStatus excluded').lean().exec(),
+    );
+    const active = lines.filter((l) => !l.excluded);
+    const matchedLines = active.filter((l) => l.matchStatus !== MatchStatus.UNMATCHED).length;
+    const allConfirmed = active.every((l) => l.matchStatus === MatchStatus.CONFIRMED);
+    await withOrg(orgId, () =>
+      this.statementModel
+        .updateOne(
+          { _id: statementId },
+          { $set: { matchedLines, status: allConfirmed ? StatementStatus.RECONCILED : StatementStatus.PENDING } },
+        )
+        .exec(),
+    );
+  }
+
+  /** line id → what it is matched to, in words. */
+  private async matchLabels(lines: BankStatementLineDocument[], orgId: string): Promise<Map<string, string>> {
+    const ids = (field: 'matchedJournalId' | 'matchedInvoiceId' | 'matchedBillId') =>
+      lines.map((l) => l[field]).filter((v): v is Types.ObjectId => !!v);
+    const [journals, invoices, bills] = await Promise.all([
+      withOrg(orgId, () => this.journalModel.find({ _id: { $in: ids('matchedJournalId') } }).exec()),
+      withOrg(orgId, () => this.invoiceModel.find({ _id: { $in: ids('matchedInvoiceId') } }).exec()),
+      withOrg(orgId, () => this.billModel.find({ _id: { $in: ids('matchedBillId') } }).exec()),
+    ]);
+    const byId = new Map<string, string>();
+    for (const j of journals) byId.set(String(j._id), formatVoucherNumber(j.voucherType, j.financialYear, j.voucherNumber));
+    for (const i of invoices) byId.set(String(i._id), `Invoice ${i.invoiceNumber ?? i._id}`);
+    for (const b of bills) byId.set(String(b._id), `Bill ${b.billNumber ?? b._id}`);
+
+    const labels = new Map<string, string>();
+    for (const l of lines) {
+      // Prefer the voucher once one exists — after confirm, that is what records the line.
+      const id = l.matchedJournalId ?? l.matchedInvoiceId ?? l.matchedBillId;
+      const label = id ? byId.get(String(id)) : undefined;
+      if (label) labels.set(l._id.toString(), label);
+    }
+    return labels;
+  }
+}
+
+function rupees(paise: number): string {
+  return `₹${(paise / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
