@@ -17,7 +17,7 @@ import { cn } from '@/lib/utils';
 export function DocumentUploadButton({
   label = 'Upload',
   hint,
-  accept = '.pdf,.jpg,.jpeg,.png,.webp,.tiff,.heic,.csv,.xlsx,.xls,.docx,.txt',
+  accept = '.pdf,.jpg,.jpeg,.png,.webp,.tif,.tiff,.heic,.heif,.csv,.xlsx,.xls,.docx,.txt,.md,.rtf',
   onUploaded,
   className,
 }: {

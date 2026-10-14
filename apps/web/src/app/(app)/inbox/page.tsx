@@ -221,7 +221,7 @@ function Dropzone({ onDrop }: { onDrop: (files: File[]) => void }) {
         ref={inputRef}
         type="file"
         multiple
-        accept=".pdf,.jpg,.jpeg,.png,.xlsx,.xls"
+        accept=".pdf,.jpg,.jpeg,.png,.webp,.tif,.tiff,.heic,.heif,.csv,.xlsx,.xls,.docx,.txt,.md,.rtf"
         className="hidden"
         onChange={(e) => handle(e.target.files)}
       />
@@ -230,7 +230,7 @@ function Dropzone({ onDrop }: { onDrop: (files: File[]) => void }) {
         Drop bank statements, bills, invoices, or receipts
       </p>
       <p className="text-caption text-ink-500">
-        PDF, image, or Excel. We&apos;ll figure out what each one is.
+        PDF, image, Excel or CSV, Word or text. We&apos;ll figure out what each one is.
       </p>
     </div>
   );
