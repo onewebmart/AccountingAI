@@ -145,8 +145,14 @@ export class PayInvoiceDto {
   /** Part of what is owed; everything outstanding when omitted. */
   @IsOptional()
   @IsInt({ message: 'amountPaise must be an integer number of paise' })
-  @Min(1)
+  @Min(0)
   amountPaise?: number;
+
+  /** TDS the customer deducted from this payment and paid to the government for us. */
+  @IsOptional()
+  @IsInt({ message: 'tdsPaise must be an integer number of paise' })
+  @Min(0)
+  tdsPaise?: number;
 }
 
 /** Body for raising a credit or debit note against a posted document. */

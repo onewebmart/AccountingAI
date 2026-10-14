@@ -10,6 +10,7 @@ import { PurchaseBill, PurchaseBillDocument } from '../purchase/schemas/purchase
 import { BankStatementLine, BankStatementLineDocument } from '../banking/schemas/bank-statement-line.schema';
 import { CreditNote, CreditNoteDocument } from '../sales/schemas/credit-note.schema';
 import { DebitNote, DebitNoteDocument } from '../purchase/schemas/debit-note.schema';
+import { TdsDeposit, TdsDepositDocument } from '../tds/schemas/tds-deposit.schema';
 import { withOrg } from '../database/tenant.plugin';
 
 /** An invoice or bill as a reversal of one of its payments or notes reads it. */
@@ -18,8 +19,8 @@ interface SettledDocument {
   status: string;
   amountPaidPaise?: number;
   adjustedPaise?: number;
-  payments?: Array<{ journalId: unknown; amountPaise: number }>;
-  adjustments?: Array<{ journalId: unknown; amountPaise: number }>;
+  payments?: Array<{ journalId: unknown; amountPaise: number; tdsPaise?: number }>;
+  adjustments?: Array<{ journalId: unknown; amountPaise: number; tdsPaise?: number }>;
 }
 
 /**
@@ -47,6 +48,7 @@ export class JournalReversalService {
     @InjectModel(BankStatementLine.name) private lineModel: Model<BankStatementLineDocument>,
     @InjectModel(CreditNote.name) private creditNoteModel: Model<CreditNoteDocument>,
     @InjectModel(DebitNote.name) private debitNoteModel: Model<DebitNoteDocument>,
+    @InjectModel(TdsDeposit.name) private depositModel: Model<TdsDepositDocument>,
   ) {}
 
   async reverse(journalId: string, orgId: string, actorId: string): Promise<JournalDocument> {
@@ -73,22 +75,51 @@ export class JournalReversalService {
         // the invoice or bill it settled or adjusted.
         for (const [field, amountField] of [['payments', 'amountPaidPaise'], ['adjustments', 'adjustedPaise']] as const) {
           const entryKey = `${field}.journalId`;
-          const undo = (status: string, amount: number) => ({
+          // A receipt's settled amount includes TDS the customer deducted; a
+          // debit note's TDS share goes back onto the bill's deduction.
+          const undo = (status: string, entry: { amountPaise: number; tdsPaise?: number }) => ({
             $pull: { [field]: { journalId: id } },
-            $inc: { [amountField]: -amount },
+            $inc:
+              field === 'payments'
+                ? { [amountField]: -(entry.amountPaise + (entry.tdsPaise ?? 0)) }
+                : { [amountField]: -entry.amountPaise, ...(entry.tdsPaise ? { 'tds.amountPaise': entry.tdsPaise } : {}) },
             $set: field === 'payments' ? { status, paidBy: null } : { status },
           });
           await this.takeBack('SalesInvoice', field, InvoiceStatus.POSTED, id, orgId, actorId, session,
             () => this.invoiceModel.findOne({ [entryKey]: id }).session(session).lean().exec(),
-            (docId, amount) => this.invoiceModel
-              .updateOne({ _id: docId, [entryKey]: id }, undo(InvoiceStatus.POSTED, amount), { session })
+            (docId, entry) => this.invoiceModel
+              .updateOne({ _id: docId, [entryKey]: id }, undo(InvoiceStatus.POSTED, entry), { session })
               .exec());
           await this.takeBack('PurchaseBill', field, BillStatus.POSTED, id, orgId, actorId, session,
             () => this.billModel.findOne({ [entryKey]: id }).session(session).lean().exec(),
-            (docId, amount) => this.billModel
-              .updateOne({ _id: docId, [entryKey]: id }, undo(BillStatus.POSTED, amount), { session })
+            (docId, entry) => this.billModel
+              .updateOne({ _id: docId, [entryKey]: id }, undo(BillStatus.POSTED, entry), { session })
               .exec());
         }
+        // A TDS deposit reversed: its bills' TDS is undeposited again.
+        const deposit = await withOrg(orgId, () =>
+          this.depositModel.findOneAndUpdate({ journalId: id, status: 'posted' }, { $set: { status: 'reversed' } }, { session }).exec(),
+        );
+        if (deposit) {
+          await withOrg(orgId, () =>
+            this.billModel
+              .updateMany({ 'tds.depositId': deposit._id }, { $set: { 'tds.depositId': null } }, { session })
+              .exec(),
+          );
+          await this.audit.record(
+            {
+              orgId,
+              entityType: 'TdsDeposit',
+              entityId: String(deposit._id),
+              action: 'REVERSE',
+              performedBy: actorId,
+              before: { status: 'posted' },
+              after: { status: 'reversed', reversedJournalId: String(id) },
+            },
+            session,
+          );
+        }
+
         // The note itself is kept, marked reversed — it was issued, then cancelled.
         await withOrg(orgId, () =>
           this.creditNoteModel.updateOne({ journalId: id }, { $set: { status: 'reversed' } }, { session }).exec(),
@@ -157,15 +188,16 @@ export class JournalReversalService {
     actorId: string,
     session: ClientSession,
     find: () => Promise<SettledDocument | null>,
-    update: (docId: unknown, amountPaise: number) => Promise<unknown>,
+    update: (docId: unknown, entry: { amountPaise: number; tdsPaise?: number }) => Promise<unknown>,
   ): Promise<void> {
     const doc = await withOrg(orgId, find);
     if (!doc) return;
     const entry = (doc[field] ?? []).find((p) => String(p.journalId) === String(journalId));
     if (!entry) return;
 
-    await withOrg(orgId, () => update(doc._id, entry.amountPaise));
+    await withOrg(orgId, () => update(doc._id, entry));
     const amountField = field === 'payments' ? 'amountPaidPaise' : 'adjustedPaise';
+    const taken = field === 'payments' ? entry.amountPaise + (entry.tdsPaise ?? 0) : entry.amountPaise;
     await this.audit.record(
       {
         orgId,
@@ -176,7 +208,7 @@ export class JournalReversalService {
         before: { status: doc.status, [amountField]: doc[amountField] ?? 0 },
         after: {
           status: openStatus,
-          [amountField]: (doc[amountField] ?? 0) - entry.amountPaise,
+          [amountField]: (doc[amountField] ?? 0) - taken,
           reversedJournalId: String(journalId),
         },
       },

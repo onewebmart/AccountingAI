@@ -87,6 +87,12 @@ const DEFAULT_COA: SeedNode[] = [
         type: AccountType.ASSETS,
         systemKey: SystemAccountKey.GST_INPUT_CESS,
       },
+      {
+        code: '1400',
+        name: 'TDS Receivable',
+        type: AccountType.ASSETS,
+        systemKey: SystemAccountKey.TDS_RECEIVABLE,
+      },
     ],
   },
   {
@@ -135,7 +141,13 @@ const DEFAULT_COA: SeedNode[] = [
         type: AccountType.LIABILITIES,
         systemKey: SystemAccountKey.GST_OUTPUT_CESS,
       },
-      { code: '2300', name: 'TDS Payable', type: AccountType.LIABILITIES },
+      {
+        code: '2240',
+        name: 'GST Payable (Reverse Charge)',
+        type: AccountType.LIABILITIES,
+        systemKey: SystemAccountKey.RCM_GST_PAYABLE,
+      },
+      { code: '2300', name: 'TDS Payable', type: AccountType.LIABILITIES, systemKey: SystemAccountKey.TDS_PAYABLE },
     ],
   },
   {
@@ -145,7 +157,7 @@ const DEFAULT_COA: SeedNode[] = [
     isGroup: true,
     children: [
       { code: '3100', name: "Owner's Capital", type: AccountType.CAPITAL },
-      { code: '3200', name: 'Retained Earnings', type: AccountType.CAPITAL },
+      { code: '3200', name: 'Retained Earnings', type: AccountType.CAPITAL, systemKey: SystemAccountKey.RETAINED_EARNINGS },
     ],
   },
   {
@@ -261,6 +273,67 @@ export class AccountsService {
     return created;
   }
 
+  /**
+   * Add any system account the default chart now has but this org's chart
+   * predates. seedDefaults does nothing once an org has accounts, so without
+   * this a new system account (TDS Receivable, say) would be missing for every
+   * existing business and every posting that needs it would fail.
+   *
+   * An account already sitting at the default code with the default name is
+   * adopted rather than duplicated — older charts had TDS Payable and Retained
+   * Earnings, just without a system key.
+   */
+  async ensureSystemAccounts(orgId: string): Promise<number> {
+    let added = 0;
+    for (const group of DEFAULT_COA) {
+      for (const node of [group, ...(group.children ?? [])]) {
+        if (!node.systemKey) continue;
+        const has = await withOrg(orgId, () => this.accountModel.exists({ systemKey: node.systemKey }).exec());
+        if (has) continue;
+
+        const sameSlot = await withOrg(orgId, () =>
+          this.accountModel.findOne({ code: node.code, name: node.name, systemKey: { $exists: false } }).exec(),
+        );
+        if (sameSlot) {
+          await withOrg(orgId, () =>
+            this.accountModel.updateOne({ _id: sameSlot._id }, { $set: { systemKey: node.systemKey, isSystem: true } }).exec(),
+          );
+          added++;
+          continue;
+        }
+
+        const parent =
+          node === group
+            ? null
+            : await withOrg(orgId, () => this.accountModel.findOne({ code: group.code, isGroup: true }).exec());
+        const code = await this.freeCode(orgId, node.code);
+        await this.accountModel.create({
+          orgId,
+          name: node.name,
+          code,
+          type: node.type,
+          parentId: parent?._id ?? null,
+          isGroup: node === group ? (group.isGroup ?? true) : false,
+          isSystem: true,
+          systemKey: node.systemKey,
+        });
+        added++;
+      }
+    }
+    if (added) this.logger.log(`Added ${added} missing system account(s) for org ${orgId}`);
+    return added;
+  }
+
+  /** `preferred`, or the next code after it nobody holds. */
+  private async freeCode(orgId: string, preferred: string): Promise<string> {
+    for (let n = Number(preferred); n < Number(preferred) + 100; n++) {
+      const code = String(n);
+      const taken = await withOrg(orgId, () => this.accountModel.exists({ code }).exec());
+      if (!taken) return code;
+    }
+    throw new Error(`No free account code near ${preferred}`);
+  }
+
   /** Resolve a system account by its stable key, seeding the chart first if needed. */
   async resolveSystemAccount(
     orgId: string,
@@ -272,6 +345,7 @@ export class AccountsService {
 
     if (!account) {
       await this.seedDefaults(orgId);
+      await this.ensureSystemAccounts(orgId);
       account = await withOrg(orgId, () =>
         this.accountModel.findOne({ systemKey: key }).exec(),
       );
@@ -312,6 +386,11 @@ export class AccountsService {
     let found = await load();
     if (found.size < unique.length) {
       await this.seedDefaults(orgId);
+      found = await load();
+    }
+    if (found.size < unique.length) {
+      // An org seeded before these system accounts existed.
+      await this.ensureSystemAccounts(orgId);
       found = await load();
     }
 

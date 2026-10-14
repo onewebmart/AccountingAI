@@ -14,7 +14,8 @@ import { SystemAccountKey } from '../gl/schemas/ledger-account.schema';
 import { PostingService, financialYearOf } from '../gl/posting.service';
 import { AuditService } from '../gl/audit.service';
 import { JournalDocument } from '../gl/schemas/journal.schema';
-import { outstandingPaise } from '../gl/schemas/settlement.schema';
+import { outstandingPaise, payablePaise } from '../gl/schemas/settlement.schema';
+import { TdsSection, defaultTdsRateBps, tdsOn } from '../gl/tds';
 import { withOrg } from '../database/tenant.plugin';
 
 /** The shape every list of bills is rendered from. */
@@ -40,6 +41,10 @@ export interface BillListItem {
   /** Paid so far, and what is still owed — integer paise. */
   amountPaidPaise: number;
   outstandingPaise: number;
+  /** TDS withheld from the vendor, and whether GST is ours under reverse charge. */
+  tdsPaise: number;
+  tdsSection: string | null;
+  isReverseCharge: boolean;
   financialYear: string | null;
   journalId: string | null;
   sourceDocumentId: string | null;
@@ -70,6 +75,11 @@ export interface CreateBillInput {
     taxRatePct?: number;
   }>;
   notes?: string | null;
+  /** GST on this purchase is ours to pay (reverse charge). */
+  isReverseCharge?: boolean;
+  /** Overrides the vendor's TDS section; 'none' deducts nothing. */
+  tdsSection?: string;
+  tdsRateBps?: number;
 }
 
 function getFY(dateStr: string): string {
@@ -82,6 +92,27 @@ function getFY(dateStr: string): string {
 /** Rupees for a message, e.g. 1000000 → "₹10,000.00". */
 function rupees(paise: number): string {
   return `₹${(paise / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+/**
+ * TDS on a new bill: the bill's own section if given ('none' for none),
+ * otherwise the vendor's. Deducted on the taxable value, never on GST.
+ */
+function billTds(
+  input: { tdsSection?: string; tdsRateBps?: number },
+  vendor: { tdsSection?: string | null; tdsRateBps?: number | null; pan?: string | null },
+  taxablePaise: number,
+): { section: string; rateBps: number; amountPaise: number; depositId: null } | null {
+  if (input.tdsSection === 'none') return null;
+  const section = input.tdsSection ?? vendor.tdsSection;
+  if (!section) return null;
+  const rateBps =
+    input.tdsRateBps ??
+    (section === vendor.tdsSection && vendor.tdsRateBps != null
+      ? vendor.tdsRateBps
+      : defaultTdsRateBps(section as TdsSection, vendor.pan));
+  const amountPaise = tdsOn(taxablePaise, rateBps);
+  return amountPaise > 0 ? { section, rateBps, amountPaise, depositId: null } : null;
 }
 
 @Injectable()
@@ -98,6 +129,9 @@ export class PurchaseBillsService {
   ) {}
 
   async create(input: CreateBillInput): Promise<PurchaseBillDocument> {
+    const vendor = await withOrg(input.orgId, () => this.vendorModel.findById(input.vendorId).exec());
+    if (!vendor) throw new NotFoundException('Vendor not found');
+    const tds = billTds(input, vendor, input.amountsPaise.taxableValue);
     const bill = await this.billModel.create({
       orgId: input.orgId,
       vendorId: new Types.ObjectId(input.vendorId),
@@ -108,6 +142,8 @@ export class PurchaseBillsService {
       amountsPaise: input.amountsPaise,
       lineItems: input.lineItems ?? [],
       notes: input.notes ?? null,
+      isReverseCharge: input.isReverseCharge ?? false,
+      tds,
     });
     await this.auditService.record({
       orgId: input.orgId,
@@ -115,7 +151,13 @@ export class PurchaseBillsService {
       entityId: bill._id.toString(),
       action: 'CREATE',
       performedBy: input.actorId ?? 'unknown',
-      after: { status: bill.status, billNumber: bill.billNumber, totalPaise: bill.amountsPaise.total },
+      after: {
+        status: bill.status,
+        billNumber: bill.billNumber,
+        totalPaise: bill.amountsPaise.total,
+        tdsPaise: bill.tds?.amountPaise ?? 0,
+        isReverseCharge: bill.isReverseCharge,
+      },
     });
     this.logger.log(`Created PurchaseBill ${bill._id} (draft) for vendor ${input.vendorId}`);
     return bill;
@@ -161,6 +203,9 @@ export class PurchaseBillsService {
         totalPaise: b.amountsPaise?.total ?? 0,
         amountPaidPaise: b.amountPaidPaise ?? 0,
         outstandingPaise: outstandingPaise(b),
+        tdsPaise: b.tds?.amountPaise ?? 0,
+        tdsSection: b.tds?.section ?? null,
+        isReverseCharge: b.isReverseCharge ?? false,
         financialYear: b.financialYear ?? null,
         journalId: b.journalId?.toString() ?? null,
         // Null for a manual entry; set when the bill was read off an upload.
@@ -181,7 +226,9 @@ export class PurchaseBillsService {
    * Journal entries:
    *   Dr  Purchase / Expense Account   (taxableValue)
    *   Dr  GST Input Tax Credit         (cgst + sgst + igst + cess)
-   *   Cr  Accounts Payable             (total)
+   *   Cr  Accounts Payable             (what the vendor is owed, less TDS)
+   *   Cr  TDS Payable                  (TDS withheld, if any)
+   *   Cr  GST Payable (Reverse Charge) (the tax, under reverse charge)
    */
   async post(id: string, orgId: string, actorId: string): Promise<PurchaseBillDocument> {
     const bill = await this.findById(id, orgId);
@@ -189,7 +236,7 @@ export class PurchaseBillsService {
       throw new BadRequestException(`Bill is already ${bill.status}`);
     }
 
-    const { taxableValue, cgst, sgst, igst, cess, total } = bill.amountsPaise;
+    const { taxableValue, cgst, sgst, igst, cess } = bill.amountsPaise;
     const fy = getFY(bill.billDate);
 
     // Real accounts from this org's chart, resolved by their stable system key.
@@ -205,6 +252,8 @@ export class PurchaseBillsService {
       SystemAccountKey.GST_INPUT_SGST,
       SystemAccountKey.GST_INPUT_IGST,
       SystemAccountKey.GST_INPUT_CESS,
+      SystemAccountKey.TDS_PAYABLE,
+      SystemAccountKey.RCM_GST_PAYABLE,
     ]);
     const expense = accounts.get(SystemAccountKey.PURCHASE_EXPENSE)!;
     const payable = accounts.get(SystemAccountKey.ACCOUNTS_PAYABLE)!;
@@ -238,12 +287,24 @@ export class PurchaseBillsService {
         });
       }
     }
+    // The vendor is owed the total — the taxable value only under reverse
+    // charge — less any TDS, which is owed to the government instead.
+    const tdsPaise = bill.tds?.amountPaise ?? 0;
+    const taxPaise = cgst + sgst + igst + cess;
     lines.push({
       accountId: payable._id.toString(),
       description: payable.name,
       debitPaise: 0,
-      creditPaise: total,
+      creditPaise: payablePaise(bill) - tdsPaise,
     });
+    if (tdsPaise > 0) {
+      const tdsAccount = accounts.get(SystemAccountKey.TDS_PAYABLE)!;
+      lines.push({ accountId: tdsAccount._id.toString(), description: tdsAccount.name, debitPaise: 0, creditPaise: tdsPaise });
+    }
+    if (bill.isReverseCharge && taxPaise > 0) {
+      const rcm = accounts.get(SystemAccountKey.RCM_GST_PAYABLE)!;
+      lines.push({ accountId: rcm._id.toString(), description: rcm.name, debitPaise: 0, creditPaise: taxPaise });
+    }
 
     const updated = await this.postingService.inTransaction(async (session) => {
       // Claim the transition before posting, in the same transaction, so a

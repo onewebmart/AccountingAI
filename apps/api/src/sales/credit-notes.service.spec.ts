@@ -37,6 +37,7 @@ import { PurchaseBill, PurchaseBillSchema, PurchaseBillDocument } from '../purch
 import { Vendor, VendorSchema } from '../purchase/schemas/vendor.schema';
 import { DebitNote, DebitNoteSchema } from '../purchase/schemas/debit-note.schema';
 import { JournalReversalService } from '../journals/journal-reversal.service';
+import { TdsDeposit, TdsDepositSchema } from '../tds/schemas/tds-deposit.schema';
 import {
   BankStatementLine,
   BankStatementLineSchema,
@@ -78,6 +79,7 @@ beforeAll(async () => {
         { name: Vendor.name, schema: VendorSchema },
         { name: DebitNote.name, schema: DebitNoteSchema },
         { name: BankStatementLine.name, schema: BankStatementLineSchema },
+        { name: TdsDeposit.name, schema: TdsDepositSchema },
       ]),
     ],
     providers: [

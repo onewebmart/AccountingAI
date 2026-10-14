@@ -28,6 +28,13 @@ export enum SystemAccountKey {
   CASH = 'CASH',
   ROUND_OFF = 'ROUND_OFF',
   SUSPENSE = 'SUSPENSE',
+  /** Tax we deducted from a vendor and owe the government. */
+  TDS_PAYABLE = 'TDS_PAYABLE',
+  /** Tax a customer deducted from what they paid us — claimable against our own tax. */
+  TDS_RECEIVABLE = 'TDS_RECEIVABLE',
+  /** GST we owe on purchases under reverse charge. */
+  RCM_GST_PAYABLE = 'RCM_GST_PAYABLE',
+  RETAINED_EARNINGS = 'RETAINED_EARNINGS',
 }
 
 @Schema({ timestamps: true, collection: 'ledger_accounts' })

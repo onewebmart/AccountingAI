@@ -1,14 +1,18 @@
 import { Type } from 'class-transformer';
 import {
   IsArray,
+  IsBoolean,
+  IsIn,
   IsInt,
   IsISO8601,
   IsOptional,
   IsString,
   Length,
+  Max,
   Min,
   ValidateNested,
 } from 'class-validator';
+import { TDS_SECTION_CODES } from '../../gl/tds';
 import { AmountsPaiseDto, LineItemDto } from '../../sales/dto/sales.dto';
 
 /**
@@ -51,6 +55,39 @@ export class CreateVendorDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  @IsOptional()
+  @IsString()
+  pan?: string;
+
+  /** TDS section deducted on this vendor's bills, e.g. 194C. */
+  @IsOptional()
+  @IsIn(TDS_SECTION_CODES)
+  tdsSection?: string;
+
+  @IsOptional()
+  @IsInt({ message: 'tdsRateBps is whole basis points: 100 = 1%' })
+  @Min(0)
+  @Max(10000)
+  tdsRateBps?: number;
+}
+
+/** PATCH /purchase/vendors/:id — PAN and the TDS applied to the vendor's bills. */
+export class UpdateVendorTaxDto {
+  @IsOptional()
+  @IsString()
+  pan?: string | null;
+
+  /** null stops deducting TDS for this vendor. */
+  @IsOptional()
+  @IsIn([...TDS_SECTION_CODES, null])
+  tdsSection?: string | null;
+
+  @IsOptional()
+  @IsInt({ message: 'tdsRateBps is whole basis points: 100 = 1%' })
+  @Min(0)
+  @Max(10000)
+  tdsRateBps?: number | null;
 }
 
 export class CreateBillDto {
@@ -81,6 +118,25 @@ export class CreateBillDto {
   @IsOptional()
   @IsString()
   notes?: string | null;
+
+  /** GST on this purchase is ours to pay (reverse charge). */
+  @IsOptional()
+  @IsBoolean()
+  isReverseCharge?: boolean;
+
+  /**
+   * TDS section for this bill, overriding the vendor's; 'none' deducts nothing.
+   * Omitted: the vendor's section and rate apply.
+   */
+  @IsOptional()
+  @IsIn([...TDS_SECTION_CODES, 'none'])
+  tdsSection?: string;
+
+  @IsOptional()
+  @IsInt({ message: 'tdsRateBps is whole basis points: 100 = 1%' })
+  @Min(0)
+  @Max(10000)
+  tdsRateBps?: number;
 }
 
 /** Optional body for recording a payment: when, and how much (default: all of it). */

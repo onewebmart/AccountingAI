@@ -236,7 +236,9 @@ export class GstService {
         totalPaise: bill.amountsPaise.total,
         itcEligiblePaise: itcPaise,
         isInterState: interState,
-        isReverseCharge: false,
+        // Read off the bill: it was hard-coded false, so reverse-charge purchases
+        // never reached GSTR-3B table 3.1(d).
+        isReverseCharge: bill.isReverseCharge ?? false,
         hsnSac,
       });
     }

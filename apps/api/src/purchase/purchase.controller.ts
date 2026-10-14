@@ -1,6 +1,7 @@
 import {
   Controller,
   Get,
+  Patch,
   Post,
   Param,
   Body,
@@ -14,7 +15,7 @@ import { PermissionGuard } from '../auth/guards/permission.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { VendorsService } from './vendors.service';
 import { PurchaseBillsService } from './purchase-bills.service';
-import { CreateVendorDto, CreateBillDto, PayBillDto, CreateDebitNoteDto } from './dto/purchase.dto';
+import { CreateVendorDto, CreateBillDto, PayBillDto, CreateDebitNoteDto, UpdateVendorTaxDto } from './dto/purchase.dto';
 import { DebitNotesService } from './debit-notes.service';
 
 interface AuthRequest {
@@ -42,6 +43,13 @@ export class PurchaseController {
   @RequirePermission(Permission.MANAGE_PURCHASE)
   createVendor(@Request() req: AuthRequest, @Body() body: CreateVendorDto) {
     return this.vendorsService.create({ ...body, orgId: req.user.orgId, actorId: req.user.sub });
+  }
+
+  /** PAN and the TDS section and rate applied to this vendor's bills from now on. */
+  @Patch('vendors/:id')
+  @RequirePermission(Permission.MANAGE_PURCHASE)
+  updateVendorTax(@Request() req: AuthRequest, @Param('id') id: string, @Body() body: UpdateVendorTaxDto) {
+    return this.vendorsService.updateTax(id, req.user.orgId, req.user.sub, body);
   }
 
   @Get('vendors/:id')

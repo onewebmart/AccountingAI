@@ -505,3 +505,40 @@ describe('what a proposal carries into the books', () => {
     expect(journal?.voucherType).toBe(VoucherType.PAYMENT);
   });
 });
+
+describe('TDS and reverse charge on proposed bills', () => {
+  const vendors = () => moduleRef.get<Model<{ name: string }>>(getModelToken(Vendor.name));
+  const bills = () => moduleRef.get<Model<{ journalId: unknown; tds: { amountPaise: number } | null; isReverseCharge: boolean }>>(getModelToken(PurchaseBill.name));
+
+  it("withholds a known vendor's TDS in the suggestion, and the bill carries what was posted", async () => {
+    await vendors().create({ orgId: ORG_ID, name: 'TDS Builders', gstin: '29AABCT1234C1ZX', tdsSection: '194C', tdsRateBps: 200 });
+    const extracted = await seedExtracted(extractedModel, {
+      vendor: { name: 'TDS Builders', gstin: '29AABCT1234C1ZX', confidence: 0.95 },
+      invoiceNumber: { value: 'TB-77', confidence: 0.98 },
+    });
+    const proposal = await svc.createFromExtracted(extracted._id.toString(), ORG_ID);
+
+    expect(proposal.tds).toEqual({ section: '194C', rateBps: 200, amountPaise: 20000 }); // 2% of ₹10,000
+    const credits = proposal.suggestedLines.filter((l) => l.creditPaise > 0).map((l) => [l.accountName, l.creditPaise]);
+    expect(credits).toEqual([['Accounts Payable', 1160000], ['TDS Payable', 20000]]);
+
+    const approved = await svc.approve({ proposalId: proposal._id.toString(), orgId: ORG_ID, actorId: ACTOR_ID });
+    const bill = await bills().findOne({ journalId: approved.journalId }).exec();
+    expect(bill?.tds?.amountPaise).toBe(20000);
+  });
+
+  it('books a reverse-charge purchase: vendor owed the taxable value, tax as our liability', async () => {
+    const extracted = await seedExtracted(extractedModel, {
+      vendor: { name: 'Goods Transport Agency', gstin: null, confidence: 0.9 },
+      invoiceNumber: { value: 'GTA-9', confidence: 0.98 },
+      isReverseCharge: true,
+    });
+    const proposal = await svc.createFromExtracted(extracted._id.toString(), ORG_ID);
+    expect(proposal.isReverseCharge).toBe(true);
+    const credits = proposal.suggestedLines.filter((l) => l.creditPaise > 0).map((l) => [l.accountName, l.creditPaise]);
+    expect(credits).toEqual([['Accounts Payable', 1000000], ['GST Payable (Reverse Charge)', 180000]]);
+
+    const approved = await svc.approve({ proposalId: proposal._id.toString(), orgId: ORG_ID, actorId: ACTOR_ID });
+    expect((await bills().findOne({ journalId: approved.journalId }).exec())?.isReverseCharge).toBe(true);
+  });
+});

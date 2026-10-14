@@ -73,6 +73,10 @@ export class ProposedEntry {
   /** Printed due date, else derived from the payment terms; null when neither says. */
   @Prop({ type: String, default: null }) dueDate: string | null;
   @Prop({ type: String, default: null }) paymentTerms: string | null;
+  /** GST on this purchase is ours to pay (reverse charge), as extraction read it. */
+  @Prop({ type: Boolean, default: false }) isReverseCharge: boolean;
+  /** TDS the suggested lines withhold, from the vendor's section — null when none. */
+  @Prop({ type: Object, default: null }) tds: { section: string; rateBps: number; amountPaise: number } | null;
   @Prop({ type: AmountSummary, required: true }) amountsPaise: AmountSummary;
   @Prop({ type: Number, required: true, min: 0, max: 1 }) confidenceOverall: number;
   @Prop({ type: FieldConfidence, required: true }) fieldConfidence: FieldConfidence;

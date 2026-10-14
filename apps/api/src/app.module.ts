@@ -25,6 +25,7 @@ import { WhiteLabelModule } from './white-label/white-label.module';
 import { CrmModule } from './crm/crm.module';
 import { WorkspaceModule } from './workspace/workspace.module';
 import { IngestModule } from './ingest/ingest.module';
+import { TdsModule } from './tds/tds.module';
 
 @Module({
   imports: [
@@ -63,6 +64,7 @@ import { IngestModule } from './ingest/ingest.module';
     PlatformAdminModule,
     WhiteLabelModule,
     IngestModule,
+    TdsModule,
     CrmModule,
     WorkspaceModule,
   ],

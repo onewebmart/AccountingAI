@@ -18,6 +18,8 @@ import { LearningService } from './learning.service';
 import { SubledgerSyncService } from './subledger-sync.service';
 import { withOrg } from '../database/tenant.plugin';
 import { dueDateFromTerms } from '../extraction/invoice-checks';
+import { Vendor, VendorDocument } from '../purchase/schemas/vendor.schema';
+import { TdsSection, defaultTdsRateBps, tdsOn } from '../gl/tds';
 
 export interface ApproveInput {
   proposalId: string;
@@ -84,6 +86,8 @@ export class ProposalsService {
     @InjectModel(ProposedEntry.name) private proposalModel: Model<ProposedEntryDocument>,
     @InjectModel(ExtractedDocument.name) private extractedModel: Model<ExtractedDocumentDocument>,
     @InjectModel(UploadedDocument.name) private documentModel: Model<DocumentDocument>,
+    // Read-only: a known vendor's TDS section shapes the suggested lines.
+    @InjectModel(Vendor.name) private vendorModel: Model<VendorDocument>,
     private postingService: PostingService,
     private learningService: LearningService,
     private accountsService: AccountsService,
@@ -99,6 +103,7 @@ export class ProposalsService {
   private async buildSuggestedLines(
     orgId: string,
     extracted: ExtractedDocumentDocument,
+    tds: { section: string; rateBps: number; amountPaise: number } | null = null,
   ): Promise<SuggestedLineDraft[]> {
     const a = extracted.amountsPaise;
     const conf = a.confidence;
@@ -133,8 +138,19 @@ export class ProposalsService {
       // instead made a misread total vanish; now any difference lands on a
       // visible Round Off line, and extraction has already flagged anything
       // larger than rounding.
-      const parts = a.taxableValue + a.cgst + a.sgst + a.igst + a.cess;
-      await add(SystemAccountKey.ACCOUNTS_PAYABLE, 0, a.total > 0 ? a.total : parts);
+      const tax = a.cgst + a.sgst + a.igst + a.cess;
+      const parts = a.taxableValue + tax;
+      const withheld = tds?.amountPaise ?? 0;
+      if (extracted.isReverseCharge) {
+        // Reverse charge: the vendor is owed the taxable value; the tax is ours
+        // to pay the government, with input credit taken above.
+        await add(SystemAccountKey.ACCOUNTS_PAYABLE, 0, a.taxableValue - withheld);
+        await add(SystemAccountKey.RCM_GST_PAYABLE, 0, tax);
+      } else {
+        await add(SystemAccountKey.ACCOUNTS_PAYABLE, 0, (a.total > 0 ? a.total : parts) - withheld);
+      }
+      // TDS under the vendor's section, withheld from what they are paid.
+      await add(SystemAccountKey.TDS_PAYABLE, 0, withheld);
       return this.balance(orgId, lines);
     }
 
@@ -193,7 +209,9 @@ export class ProposalsService {
     );
     if (!extracted) throw new NotFoundException('ExtractedDocument not found');
 
-    const suggestedLines = await this.buildSuggestedLines(orgId, extracted);
+    const isPurchase = extracted.documentType === 'purchase_invoice' || extracted.documentType === 'bill';
+    const tds = isPurchase ? await this.vendorTds(orgId, extracted) : null;
+    const suggestedLines = await this.buildSuggestedLines(orgId, extracted, tds);
 
     // Apply learned vendor mapping to the primary expense debit line if one exists.
     if (extracted.vendor?.name) {
@@ -231,6 +249,8 @@ export class ProposalsService {
         extracted.dueDate?.value ??
         dueDateFromTerms(extracted.invoiceDate?.value ?? null, extracted.paymentTerms ?? null),
       paymentTerms: extracted.paymentTerms ?? null,
+      isReverseCharge: isPurchase && !!extracted.isReverseCharge,
+      tds,
       amountsPaise: extracted.amountsPaise,
       confidenceOverall: extracted.confidenceOverall,
       fieldConfidence: {
@@ -261,6 +281,29 @@ export class ProposalsService {
 
   async findById(id: string, orgId: string): Promise<ProposedEntryDocument | null> {
     return withOrg(orgId, () => this.proposalModel.findById(id).exec());
+  }
+
+  /**
+   * TDS for a purchase from a vendor already on file with a TDS section —
+   * matched by GSTIN, else by name, as the approval will match them.
+   */
+  private async vendorTds(
+    orgId: string,
+    extracted: ExtractedDocumentDocument,
+  ): Promise<{ section: string; rateBps: number; amountPaise: number } | null> {
+    const gstin = extracted.vendor?.gstin?.trim().toUpperCase();
+    const name = extracted.vendor?.name?.trim();
+    const vendor =
+      (gstin ? await withOrg(orgId, () => this.vendorModel.findOne({ gstin }).lean().exec()) : null) ??
+      (name
+        ? await withOrg(orgId, () =>
+            this.vendorModel.findOne({ name: new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }).lean().exec(),
+          )
+        : null);
+    if (!vendor?.tdsSection) return null;
+    const rateBps = vendor.tdsRateBps ?? defaultTdsRateBps(vendor.tdsSection as TdsSection, vendor.pan);
+    const amountPaise = tdsOn(extracted.amountsPaise.taxableValue, rateBps);
+    return amountPaise > 0 ? { section: vendor.tdsSection, rateBps, amountPaise } : null;
   }
 
   /** Move the uploaded document to the outcome of its review. */
@@ -354,11 +397,19 @@ export class ProposalsService {
       // Mirror the posting into the purchase/sales sub-ledgers so the Purchase,
       // Sales, GST and ageing screens reflect this document without re-entry —
       // in the same transaction, so there is never a journal without its bill.
+      // The TDS actually posted — the reviewer may have changed or removed it.
+      const tdsAccount = await this.accountsService.resolveSystemAccount(orgId, SystemAccountKey.TDS_PAYABLE);
+      const tdsPosted = linesToPost
+        .filter((l) => String(l.accountId) === String(tdsAccount._id))
+        .reduce((s, l) => s + l.creditPaise - l.debitPaise, 0);
       const mirrored = await this.subledgerSync.syncApprovedProposal(
         proposal,
         posted._id,
         actorId,
         session,
+        tdsPosted > 0
+          ? { section: proposal.tds?.section ?? 'unspecified', rateBps: proposal.tds?.rateBps ?? 0, amountPaise: tdsPosted }
+          : null,
       );
 
       // The upload itself moves on too; it used to sit at PROPOSED forever.

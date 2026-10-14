@@ -17,6 +17,7 @@ import { BillStatus, InvoiceStatus, MatchStatus } from '@ai-accounting/shared';
 import configuration from '../config/configuration';
 import { testMongoUri } from '../test-utils/mongo';
 import { JournalReversalService } from './journal-reversal.service';
+import { TdsDeposit, TdsDepositSchema } from '../tds/schemas/tds-deposit.schema';
 import { PostingService } from '../gl/posting.service';
 import { AccountsService } from '../gl/accounts.service';
 import { AuditService } from '../gl/audit.service';
@@ -69,6 +70,7 @@ beforeAll(async () => {
         { name: PurchaseBill.name, schema: PurchaseBillSchema },
         { name: Vendor.name, schema: VendorSchema },
         { name: BankStatementLine.name, schema: BankStatementLineSchema },
+        { name: TdsDeposit.name, schema: TdsDepositSchema },
         { name: CreditNote.name, schema: CreditNoteSchema },
         { name: DebitNote.name, schema: DebitNoteSchema },
       ]),

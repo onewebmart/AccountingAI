@@ -9,6 +9,7 @@ import { PurchaseBill, PurchaseBillSchema } from '../purchase/schemas/purchase-b
 import { BankStatementLine, BankStatementLineSchema } from '../banking/schemas/bank-statement-line.schema';
 import { CreditNote, CreditNoteSchema } from '../sales/schemas/credit-note.schema';
 import { DebitNote, DebitNoteSchema } from '../purchase/schemas/debit-note.schema';
+import { TdsDeposit, TdsDepositSchema } from '../tds/schemas/tds-deposit.schema';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { DebitNote, DebitNoteSchema } from '../purchase/schemas/debit-note.schem
       { name: BankStatementLine.name, schema: BankStatementLineSchema },
       { name: CreditNote.name, schema: CreditNoteSchema },
       { name: DebitNote.name, schema: DebitNoteSchema },
+      { name: TdsDeposit.name, schema: TdsDepositSchema },
     ]),
   ],
   controllers: [JournalsController],

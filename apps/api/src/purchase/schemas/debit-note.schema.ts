@@ -37,6 +37,9 @@ export class DebitNote {
 
   @Prop({ type: NoteAmounts, required: true }) amountsPaise: NoteAmounts;
 
+  /** The share of the bill's TDS this note gave back (debited to TDS Payable). */
+  @Prop({ type: Number, default: 0 }) tdsPaise: number;
+
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Journal', required: true })
   journalId: Types.ObjectId;
 

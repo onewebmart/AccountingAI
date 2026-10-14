@@ -97,7 +97,7 @@ export class SalesController {
   @Post('invoices/:id/pay')
   @RequirePermission(Permission.POST_JOURNAL)
   payInvoice(@Request() req: AuthRequest, @Param('id') id: string, @Body() body: PayInvoiceDto) {
-    return this.invoicesService.markPaid(id, req.user.orgId, req.user.sub, body?.paidOn, body?.amountPaise);
+    return this.invoicesService.markPaid(id, req.user.orgId, req.user.sub, body?.paidOn, body?.amountPaise, body?.tdsPaise);
   }
 
   /** Raise and post a credit note against a posted invoice — Dr/Cr in proportion, numbered by its voucher. */

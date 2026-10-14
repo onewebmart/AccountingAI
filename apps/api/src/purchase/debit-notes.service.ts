@@ -11,6 +11,7 @@ import { AccountsService } from '../gl/accounts.service';
 import { PostingService, financialYearOf } from '../gl/posting.service';
 import { AuditService } from '../gl/audit.service';
 import { addSplits, noteAmounts, rupees } from '../gl/note-amounts';
+import { tdsOn } from '../gl/tds';
 import { outstandingPaise } from '../gl/schemas/settlement.schema';
 import { formatVoucherNumber } from '../journals/journals.service';
 import { withOrg } from '../database/tenant.plugin';
@@ -88,9 +89,21 @@ export class DebitNotesService {
       );
       const amounts = noteAmounts(doc.amountsPaise, addSplits(earlier.map((n) => n.amountsPaise)), input.taxableValuePaise);
       const owed = outstandingPaise(doc);
-      if (amounts.total > owed) {
+      // What the note takes off the vendor's balance: its total — its taxable
+      // value only under reverse charge, where the tax was never theirs — less
+      // the share of the TDS deducted on that taxable value, which comes back
+      // off TDS Payable instead.
+      const payablePart = doc.isReverseCharge ? amounts.taxableValue : amounts.total;
+      const noteTds = doc.tds ? Math.min(tdsOn(amounts.taxableValue, doc.tds.rateBps), doc.tds.amountPaise) : 0;
+      const reduction = payablePart - noteTds;
+      if (noteTds > 0 && doc.tds?.depositId) {
         throw new BadRequestException(
-          `A debit note of ${rupees(amounts.total)} is more than the ${rupees(owed)} still owed on ${docLabel}` +
+          `The TDS on ${docLabel} has already been deposited — a debit note now would need the TDS corrected in the return. Raise it after the next deposit is adjusted, or take it up with your CA.`,
+        );
+      }
+      if (reduction > owed) {
+        throw new BadRequestException(
+          `A debit note of ${rupees(reduction)} is more than the ${rupees(owed)} still owed on ${docLabel}` +
             ' — taking back what has already been paid would mean a refund, which is not supported yet',
         );
       }
@@ -99,6 +112,8 @@ export class DebitNotesService {
         SystemAccountKey.PURCHASE_EXPENSE,
         SystemAccountKey.ACCOUNTS_PAYABLE,
         SystemAccountKey.ROUND_OFF,
+        SystemAccountKey.TDS_PAYABLE,
+        SystemAccountKey.RCM_GST_PAYABLE,
         ...TAX_KEYS.map(([, key]) => key),
       ]);
       const control = accounts.get(SystemAccountKey.ACCOUNTS_PAYABLE)!;
@@ -119,7 +134,17 @@ export class DebitNotesService {
           lines.push({ accountId: tax._id.toString(), description: tax.name, debitPaise: 0, creditPaise: amounts[head] });
         }
       }
-      lines.push({ accountId: control._id.toString(), description: control.name, debitPaise: amounts.total, creditPaise: 0 });
+      lines.push({ accountId: control._id.toString(), description: control.name, debitPaise: reduction, creditPaise: 0 });
+      if (noteTds > 0) {
+        const tdsAccount = accounts.get(SystemAccountKey.TDS_PAYABLE)!;
+        lines.push({ accountId: tdsAccount._id.toString(), description: tdsAccount.name, debitPaise: noteTds, creditPaise: 0 });
+      }
+      const noteTax = amounts.total - amounts.taxableValue;
+      if (doc.isReverseCharge && noteTax > 0) {
+        // The reverse-charge liability on the returned part falls away with it.
+        const rcm = accounts.get(SystemAccountKey.RCM_GST_PAYABLE)!;
+        lines.push({ accountId: rcm._id.toString(), description: rcm.name, debitPaise: noteTax, creditPaise: 0 });
+      }
 
       const financialYear = financialYearOf(input.noteDate);
       const journal = await this.postingService.post(
@@ -148,6 +173,7 @@ export class DebitNotesService {
             financialYear,
             reason: input.reason,
             amountsPaise: amounts,
+            tdsPaise: noteTds,
             journalId: journal._id,
             createdBy: actorId,
           },
@@ -156,14 +182,22 @@ export class DebitNotesService {
       );
 
       // Nothing left owed closes the bill.
-      const closes = amounts.total === owed;
+      const closes = reduction === owed;
       const updated = await withOrg(orgId, () =>
         this.docModel
           .findOneAndUpdate(
             { _id: doc._id, status: BillStatus.POSTED, adjustedPaise: doc.adjustedPaise ?? 0 },
             {
-              $inc: { adjustedPaise: amounts.total },
-              $push: { adjustments: { noteId, journalId: journal._id, amountPaise: amounts.total, noteDate: input.noteDate } },
+              $inc: { adjustedPaise: payablePart, ...(noteTds > 0 ? { 'tds.amountPaise': -noteTds } : {}) },
+              $push: {
+                adjustments: {
+                  noteId,
+                  journalId: journal._id,
+                  amountPaise: payablePart,
+                  tdsPaise: noteTds,
+                  noteDate: input.noteDate,
+                },
+              },
               $set: closes ? { status: BillStatus.PAID } : {},
             },
             { new: true, session },

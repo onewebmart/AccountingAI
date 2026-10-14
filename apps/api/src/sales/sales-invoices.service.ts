@@ -330,6 +330,7 @@ export class SalesInvoicesService {
     actorId: string,
     paidOn?: string,
     amountPaise?: number,
+    tdsPaise?: number,
   ): Promise<SalesInvoiceDocument> {
     await this.findById(id, orgId); // 404 for an unknown invoice, before any transaction
 
@@ -337,6 +338,7 @@ export class SalesInvoicesService {
       this.settleWithin(session, id, orgId, actorId, {
         paidOn: paidOn ?? new Date().toISOString().slice(0, 10),
         amountPaise,
+        tdsPaise,
       }),
     );
 
@@ -353,13 +355,18 @@ export class SalesInvoicesService {
    * amount paid so far, so two payments recorded at once cannot overpay it —
    * the second either sees the first or conflicts and retries. Bank
    * reconciliation calls this with the date and amount of the bank line.
+   *
+   * `tdsPaise` is tax the customer deducted at source: it settles the invoice
+   * as surely as cash does, but goes to TDS Receivable — claimable against our
+   * own tax — instead of the bank. A customer paying ₹9,000 on a ₹10,000 fee
+   * after 10% TDS settles it in full.
    */
   async settleWithin(
     session: ClientSession,
     id: string,
     orgId: string,
     actorId: string,
-    opts: { paidOn: string; amountPaise?: number; bankLineId?: string | null },
+    opts: { paidOn: string; amountPaise?: number; tdsPaise?: number; bankLineId?: string | null },
   ): Promise<{ invoice: SalesInvoiceDocument; receipt: JournalDocument }> {
     const current = await withOrg(orgId, () =>
       this.invoiceModel.findById(id).session(session).exec(),
@@ -371,22 +378,26 @@ export class SalesInvoicesService {
     }
 
     const owed = outstandingPaise(current);
-    const amount = opts.amountPaise ?? owed;
-    if (!Number.isInteger(amount) || amount <= 0) {
+    const tds = opts.tdsPaise ?? 0;
+    const amount = opts.amountPaise ?? owed - tds;
+    if (!Number.isInteger(amount) || !Number.isInteger(tds) || amount < 0 || tds < 0 || amount + tds === 0) {
       throw new BadRequestException('A payment must be a positive whole number of paise');
     }
-    if (amount > owed) {
+    if (amount + tds > owed) {
       throw new BadRequestException(
-        `A payment of ${rupees(amount)} is more than the ${rupees(owed)} still owed on this invoice`,
+        `A payment of ${rupees(amount + tds)} is more than the ${rupees(owed)} still owed on this invoice`,
       );
     }
 
     const accounts = await this.accountsService.resolveSystemAccounts(orgId, [
       SystemAccountKey.BANK,
       SystemAccountKey.ACCOUNTS_RECEIVABLE,
+      SystemAccountKey.TDS_RECEIVABLE,
     ]);
     const bank = accounts.get(SystemAccountKey.BANK)!;
     const receivable = accounts.get(SystemAccountKey.ACCOUNTS_RECEIVABLE)!;
+    const tdsReceivable = accounts.get(SystemAccountKey.TDS_RECEIVABLE)!;
+    const settled = amount + tds;
     const number = current.invoiceNumber ?? id;
 
     const receipt = await this.postingService.post(
@@ -397,27 +408,36 @@ export class SalesInvoicesService {
         // invoice paid after 31 March.
         financialYear: financialYearOf(opts.paidOn),
         date: opts.paidOn,
-        narration: amount < owed ? `Receipt for invoice ${number} (part)` : `Receipt for invoice ${number}`,
+        narration:
+          `Receipt for invoice ${number}` +
+          (settled < owed ? ' (part)' : '') +
+          (tds > 0 ? ` — ${rupees(tds)} TDS deducted by the customer` : ''),
         postedBy: actorId,
         lines: [
-          { accountId: bank._id.toString(), description: bank.name, debitPaise: amount, creditPaise: 0 },
-          { accountId: receivable._id.toString(), description: receivable.name, debitPaise: 0, creditPaise: amount },
+          ...(amount > 0
+            ? [{ accountId: bank._id.toString(), description: bank.name, debitPaise: amount, creditPaise: 0 }]
+            : []),
+          ...(tds > 0
+            ? [{ accountId: tdsReceivable._id.toString(), description: tdsReceivable.name, debitPaise: tds, creditPaise: 0 }]
+            : []),
+          { accountId: receivable._id.toString(), description: receivable.name, debitPaise: 0, creditPaise: settled },
         ],
       },
       session,
     );
 
-    const paidInFull = amount === owed;
+    const paidInFull = settled === owed;
     const updated = await withOrg(orgId, () =>
       this.invoiceModel
         .findOneAndUpdate(
           { _id: current._id, status: InvoiceStatus.POSTED, amountPaidPaise: current.amountPaidPaise ?? 0 },
           {
-            $inc: { amountPaidPaise: amount },
+            $inc: { amountPaidPaise: settled },
             $push: {
               payments: {
                 journalId: receipt._id,
                 amountPaise: amount,
+                tdsPaise: tds,
                 paidOn: opts.paidOn,
                 bankLineId: opts.bankLineId ? new Types.ObjectId(opts.bankLineId) : null,
               },

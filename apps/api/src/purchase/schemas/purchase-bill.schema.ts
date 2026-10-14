@@ -32,6 +32,21 @@ class BillLineItem {
   @Prop({ type: Number, default: 0 }) taxRatePct: number;
 }
 
+/** TDS deducted from this bill — booked when the bill is, as the law expects. */
+@Schema({ _id: false })
+export class BillTds {
+  @Prop({ type: String, required: true }) section: string;
+  /** Basis points: 100 = 1%. */
+  @Prop({ type: Number, required: true }) rateBps: number;
+  /** Integer paise withheld from the vendor and owed to the government. */
+  @Prop({ type: Number, required: true, min: 0, validate: { validator: Number.isInteger, message: 'TDS must be integer paise' } })
+  amountPaise: number;
+  /** The TDS deposit (challan) that paid it over, once one has. */
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'TdsDeposit', default: null })
+  depositId: Types.ObjectId | null;
+}
+const BillTdsSchema = SchemaFactory.createForClass(BillTds);
+
 @Schema({ collection: 'purchase_bills', timestamps: true })
 export class PurchaseBill {
   @Prop({ required: true, index: true }) orgId: string;
@@ -72,6 +87,16 @@ export class PurchaseBill {
 
   /** Each payment against this document — part payments add one each. */
   @Prop({ type: [SettlementSchema], default: [] }) payments: Settlement[];
+
+  /** TDS withheld from the vendor, if their section applies. */
+  @Prop({ type: BillTdsSchema, default: null }) tds: BillTds | null;
+
+  /**
+   * GST on this purchase is ours to pay the government (reverse charge): the
+   * vendor is owed the taxable value only, and the tax is booked as a liability
+   * with input credit taken alongside.
+   */
+  @Prop({ type: Boolean, default: false }) isReverseCharge: boolean;
 
   /** Reduced by debit notes, in integer paise — counted against what is owed. */
   @Prop(settledAmountProp) adjustedPaise: number;

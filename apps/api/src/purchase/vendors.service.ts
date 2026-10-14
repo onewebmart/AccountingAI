@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { InjectModel } from '@nestjs/mongoose';
 import { AuditService } from '../gl/audit.service';
 import { gstinProblem } from '../extraction/invoice-checks';
+import { TDS_SECTION_CODES, TdsSection, defaultTdsRateBps, panFromGstin } from '../gl/tds';
 import { Model, Types } from 'mongoose';
 import { BillStatus } from '@ai-accounting/shared';
 import { Vendor, VendorDocument } from './schemas/vendor.schema';
@@ -21,6 +22,16 @@ export interface CreateVendorInput {
   address?: string | null;
   openingBalancePaise?: number;
   notes?: string | null;
+  pan?: string | null;
+  tdsSection?: string | null;
+  tdsRateBps?: number | null;
+}
+
+export interface UpdateVendorTaxInput {
+  pan?: string | null;
+  /** null stops deducting TDS for this vendor. */
+  tdsSection?: string | null;
+  tdsRateBps?: number | null;
 }
 
 @Injectable()
@@ -47,6 +58,7 @@ export class VendorsService {
       address: input.address ?? null,
       openingBalancePaise: input.openingBalancePaise ?? 0,
       notes: input.notes ?? null,
+      ...this.taxSettings({ pan: input.pan ?? panFromGstin(gstin), tdsSection: input.tdsSection, tdsRateBps: input.tdsRateBps }),
     });
     await this.auditService.record({
       orgId: input.orgId,
@@ -54,7 +66,7 @@ export class VendorsService {
       entityId: vendor._id.toString(),
       action: 'CREATE',
       performedBy: input.actorId ?? 'unknown',
-      after: { name: vendor.name, gstin: vendor.gstin },
+      after: { name: vendor.name, gstin: vendor.gstin, tdsSection: vendor.tdsSection, tdsRateBps: vendor.tdsRateBps },
     });
     return vendor;
   }
@@ -75,6 +87,47 @@ export class VendorsService {
       owed.set(key, (owed.get(key) ?? 0) + outstandingPaise(bill));
     }
     return vendors.map((v) => ({ ...v, outstandingPaise: owed.get(String(v._id)) ?? 0 }));
+  }
+
+  /** Set a vendor's PAN and the TDS section and rate applied to their bills from now on. */
+  async updateTax(id: string, orgId: string, actorId: string, input: UpdateVendorTaxInput): Promise<VendorDocument> {
+    const vendor = await this.findById(id, orgId);
+    const set = this.taxSettings({
+      pan: input.pan !== undefined ? input.pan : vendor.pan ?? panFromGstin(vendor.gstin),
+      tdsSection: input.tdsSection !== undefined ? input.tdsSection : vendor.tdsSection,
+      tdsRateBps: input.tdsSection === undefined && input.tdsRateBps === undefined ? vendor.tdsRateBps : input.tdsRateBps,
+    });
+    const updated = await withOrg(orgId, () =>
+      this.vendorModel.findOneAndUpdate({ _id: vendor._id }, { $set: set }, { new: true }).exec(),
+    );
+    await this.auditService.record({
+      orgId,
+      entityType: 'Vendor',
+      entityId: id,
+      action: 'UPDATE_TAX',
+      performedBy: actorId,
+      before: { pan: vendor.pan, tdsSection: vendor.tdsSection, tdsRateBps: vendor.tdsRateBps },
+      after: set,
+    });
+    return updated!;
+  }
+
+  /**
+   * Validated PAN and TDS settings. A section with no rate takes the
+   * section's default for this payee (194C: 1% for an individual or HUF).
+   */
+  private taxSettings(input: { pan?: string | null; tdsSection?: string | null; tdsRateBps?: number | null }) {
+    const pan = input.pan?.trim() ? input.pan.trim().toUpperCase() : null;
+    if (pan && !/^[A-Z]{5}\d{4}[A-Z]$/.test(pan)) throw new BadRequestException(`PAN ${pan} is not in the format ABCDE1234F`);
+    if (!input.tdsSection) return { pan, tdsSection: null, tdsRateBps: null };
+    if (!(TDS_SECTION_CODES as string[]).includes(input.tdsSection)) {
+      throw new BadRequestException(`Unknown TDS section ${input.tdsSection} — use one of ${TDS_SECTION_CODES.join(', ')}`);
+    }
+    const rate = input.tdsRateBps ?? defaultTdsRateBps(input.tdsSection as TdsSection, pan);
+    if (!Number.isInteger(rate) || rate < 0 || rate > 10_000) {
+      throw new BadRequestException('The TDS rate must be whole basis points between 0 and 10000 (100 = 1%)');
+    }
+    return { pan, tdsSection: input.tdsSection, tdsRateBps: rate };
   }
 
   async findById(id: string, orgId: string): Promise<VendorDocument> {

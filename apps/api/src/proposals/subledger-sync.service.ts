@@ -58,11 +58,12 @@ export class SubledgerSyncService {
     journalId: Types.ObjectId,
     actorId: string,
     session?: ClientSession,
+    tds: { section: string; rateBps: number; amountPaise: number } | null = null,
   ): Promise<SyncResult> {
     const orgId = proposal.orgId;
 
     if (proposal.documentType === 'purchase_invoice' || proposal.documentType === 'bill') {
-      return this.syncPurchase(proposal, journalId, actorId, orgId, session);
+      return this.syncPurchase(proposal, journalId, actorId, orgId, session, tds);
     }
     if (proposal.documentType === 'sales_invoice') {
       return this.syncSales(proposal, journalId, actorId, orgId, session);
@@ -76,6 +77,7 @@ export class SubledgerSyncService {
     actorId: string,
     orgId: string,
     session?: ClientSession,
+    tds: { section: string; rateBps: number; amountPaise: number } | null = null,
   ): Promise<SyncResult> {
     const vendor = await this.upsertVendor(orgId, proposal.vendorName, proposal.vendorGstin, session);
     const billDate = proposal.invoiceDate ?? new Date().toISOString().slice(0, 10);
@@ -108,6 +110,8 @@ export class SubledgerSyncService {
         total: proposal.amountsPaise.total,
       },
       lineItems: [],
+      isReverseCharge: proposal.isReverseCharge ?? false,
+      tds: tds ? { ...tds, depositId: null } : null,
       financialYear: proposal.financialYear,
       journalId,
       // Marks this row as read off an upload rather than typed in, and links
