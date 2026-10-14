@@ -27,6 +27,7 @@ import {
   ShieldCheck,
   MessageSquare,
   Palette,
+  Lock,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -88,6 +89,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: '/reports', label: 'Reports', icon: <BarChart3 size={18} /> },
       { href: '/insights', label: 'Insights', icon: <Lightbulb size={18} /> },
+      { href: '/closing', label: 'Close the books', icon: <Lock size={18} /> },
     ],
   },
   {

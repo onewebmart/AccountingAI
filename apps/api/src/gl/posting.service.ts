@@ -1,10 +1,11 @@
-import { Injectable, BadRequestException, NotFoundException, HttpException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException, HttpException, Optional } from '@nestjs/common';
 import { InjectModel, InjectConnection } from '@nestjs/mongoose';
 import { Model, Connection, Types, ClientSession } from 'mongoose';
 import { VoucherType, JournalStatus } from '@ai-accounting/shared';
 import { Journal, JournalDocument } from './schemas/journal.schema';
 import { Counter, CounterDocument } from './schemas/counter.schema';
 import { AuditLog, AuditLogDocument } from './schemas/audit-log.schema';
+import { PeriodLock, PeriodLockDocument } from './schemas/period-lock.schema';
 import { withOrg } from '../database/tenant.plugin';
 
 export interface PostJournalInput {
@@ -16,6 +17,8 @@ export interface PostJournalInput {
   postedBy: string;
   /** Set only by reverse(): the journal this entry cancels. */
   reversalOf?: string;
+  /** Set only by year-end close: moves a year's income and expense to retained earnings. */
+  isClosingEntry?: boolean;
   lines: Array<{
     accountId: string;
     description?: string;
@@ -42,6 +45,9 @@ export class PostingService {
     @InjectModel(Counter.name) private counterModel: Model<CounterDocument>,
     @InjectModel(AuditLog.name) private auditLogModel: Model<AuditLogDocument>,
     @InjectConnection() private connection: Connection,
+    // GlModule always registers it. Optional only so specs that build
+    // PostingService by hand need not — they have no locks to enforce.
+    @Optional() @InjectModel(PeriodLock.name) private lockModel?: Model<PeriodLockDocument>,
   ) {}
 
   /**
@@ -90,6 +96,20 @@ export class PostingService {
   }
 
   private async postInSession(input: PostJournalInput, session: ClientSession): Promise<JournalDocument> {
+    // A closed period stays closed: nothing may be dated on or before the lock.
+    // Read inside the transaction, so a lock taken meanwhile is honoured. The
+    // one exception is the year-end closing entry (and its reversal on
+    // reopening), which is dated the last day of the year by definition.
+    const lock = input.isClosingEntry
+      ? null
+      : await this.lockModel?.findOne({ orgId: input.orgId }).session(session).lean().exec();
+    if (lock?.lockedThrough && input.date <= lock.lockedThrough) {
+      throw new BadRequestException(
+        `The books are locked through ${lock.lockedThrough}, and this entry is dated ${input.date}. ` +
+          'Date it after the lock, or unlock the period first.',
+      );
+    }
+
     const counterId = `${input.orgId}:${input.voucherType}:${input.financialYear}`;
     const counter = await this.counterModel
       .findByIdAndUpdate(
@@ -115,6 +135,7 @@ export class PostingService {
         narration: input.narration,
         status: JournalStatus.POSTED,
         reversalOf: input.reversalOf ? new Types.ObjectId(input.reversalOf) : undefined,
+        isClosingEntry: input.isClosingEntry ?? false,
         postedBy: new Types.ObjectId(input.postedBy),
         postedAt: new Date(),
         lines: input.lines.map((l) => ({

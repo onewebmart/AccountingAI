@@ -4,6 +4,7 @@ import { Journal, JournalSchema } from './schemas/journal.schema';
 import { Counter, CounterSchema } from './schemas/counter.schema';
 import { AuditLog, AuditLogSchema } from './schemas/audit-log.schema';
 import { LedgerAccount, LedgerAccountSchema } from './schemas/ledger-account.schema';
+import { PeriodLock, PeriodLockSchema } from './schemas/period-lock.schema';
 import { PostingService } from './posting.service';
 import { AccountsService } from './accounts.service';
 import { AuditService } from './audit.service';
@@ -16,6 +17,7 @@ import { GlController } from './gl.controller';
       { name: Counter.name, schema: CounterSchema },
       { name: AuditLog.name, schema: AuditLogSchema },
       { name: LedgerAccount.name, schema: LedgerAccountSchema },
+      { name: PeriodLock.name, schema: PeriodLockSchema },
     ]),
   ],
   controllers: [GlController],

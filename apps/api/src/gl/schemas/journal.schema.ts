@@ -36,6 +36,14 @@ export class Journal {
   @Prop()
   narration?: string;
 
+  /**
+   * The year-end entry moving a year's income and expense into retained
+   * earnings. Left out of that year's P&L and trial balance — which would
+   * otherwise read zero — and kept in the balance sheet and ledgers.
+   */
+  @Prop({ type: Boolean, default: false })
+  isClosingEntry: boolean;
+
   @Prop({ type: String })
   date: string;
 

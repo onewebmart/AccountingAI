@@ -143,8 +143,12 @@ export class ReportsService {
     orgId: string,
     financialYear: string,
     period?: string | null,
+    { includeClosing = false }: { includeClosing?: boolean } = {},
   ): Promise<JournalDocument[]> {
     const filter: Record<string, unknown> = { orgId, financialYear, status: JournalStatus.POSTED };
+    // The year-end closing entry would zero that year's P&L and trial balance;
+    // ledgers keep it, since it is a real movement on retained earnings.
+    if (!includeClosing) filter.isClosingEntry = { $ne: true };
     if (period) {
       // period is YYYY-MM — filter journals whose date starts with it
       filter.date = { $regex: `^${period}` };
@@ -426,7 +430,7 @@ export class ReportsService {
       }
     }
 
-    const journals = await this.loadJournals(orgId, financialYear);
+    const journals = await this.loadJournals(orgId, financialYear, null, { includeClosing: true });
     let running = opening;
     const entries: LedgerEntry[] = [];
 
