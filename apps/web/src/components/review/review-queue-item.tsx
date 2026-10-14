@@ -4,6 +4,7 @@ import { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { ConfidenceField } from './confidence-field';
 import { WarningsBanner } from './warnings-banner';
+import { JournalLinesEditor, JournalLineDraft, PostingAccount, linesStatus } from './journal-lines-editor';
 import { cn } from '@/lib/utils';
 import { CheckCircle, X, Pencil, FileText } from 'lucide-react';
 
@@ -14,6 +15,9 @@ export interface ProposedEntryData {
   vendorGstin: string | null;
   invoiceNumber: string | null;
   invoiceDate: string | null;
+  /** Printed due date, or one worked out from the payment terms. */
+  dueDate: string | null;
+  paymentTerms: string | null;
   confidenceOverall: number;
   fieldConfidence?: {
     vendor: number;
@@ -32,26 +36,35 @@ export interface ProposedEntryData {
   };
   /** Presigned S3 URL for the source document */
   documentUrl?: string;
+  /** The journal the AI proposes to post. */
+  suggestedLines: JournalLineDraft[];
 }
 
 interface ReviewQueueItemProps {
   entry: ProposedEntryData;
-  onApprove: (id: string) => Promise<void>;
+  /** Accounts a line can be moved to while editing. */
+  accounts: PostingAccount[];
+  /** `lines` is set only when the reviewer changed the AI's lines. */
+  onApprove: (id: string, lines?: JournalLineDraft[]) => Promise<void>;
   onReject: (id: string) => void;
-  onEdit: (id: string) => void;
 }
 
 type AnimationState = 'idle' | 'approving' | 'approved' | 'rejected';
 
-export function ReviewQueueItem({ entry, onApprove, onReject, onEdit }: ReviewQueueItemProps) {
+export function ReviewQueueItem({ entry, accounts, onApprove, onReject }: ReviewQueueItemProps) {
   const [animState, setAnimState] = useState<AnimationState>('idle');
   const [highlightedField, setHighlightedField] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [edited, setEdited] = useState(false);
+  const [lines, setLines] = useState<JournalLineDraft[]>(entry.suggestedLines);
   const cardRef = useRef<HTMLDivElement>(null);
+  const { postable } = linesStatus(lines);
 
   const handleApprove = async () => {
     setAnimState('approving');
     try {
-      await onApprove(entry.id);
+      // Untouched lines are left to the server, which posts its own suggestion.
+      await onApprove(entry.id, edited ? lines : undefined);
       setAnimState('approved');
     } catch {
       setAnimState('idle');
@@ -62,6 +75,11 @@ export function ReviewQueueItem({ entry, onApprove, onReject, onEdit }: ReviewQu
     setAnimState('rejected');
     setTimeout(() => onReject(entry.id), 300);
   };
+
+  // The largest debit that is not a tax line is the ledger the AI chose.
+  const mainLine = [...lines]
+    .filter((l) => l.debitPaise > 0 && !/gst|cess/i.test(l.accountName))
+    .sort((a, b) => b.debitPaise - a.debitPaise)[0];
 
   const gstTotal = entry.amountsPaise.cgst + entry.amountsPaise.sgst + entry.amountsPaise.igst + entry.amountsPaise.cess;
   const fc = entry.fieldConfidence ?? {
@@ -151,6 +169,14 @@ export function ReviewQueueItem({ entry, onApprove, onReject, onEdit }: ReviewQu
             confidence={fc.invoiceDate}
             onHighlight={() => setHighlightedField('Date')}
           />
+          {(entry.dueDate || entry.paymentTerms) && (
+            <ConfidenceField
+              label="Due"
+              value={[entry.dueDate, entry.paymentTerms && `(${entry.paymentTerms})`].filter(Boolean).join(' ')}
+              confidence={fc.invoiceDate}
+              onHighlight={() => setHighlightedField('Due date')}
+            />
+          )}
           <ConfidenceField
             label="Taxable"
             value={String(entry.amountsPaise.taxableValue)}
@@ -176,10 +202,23 @@ export function ReviewQueueItem({ entry, onApprove, onReject, onEdit }: ReviewQu
           />
         </div>
 
-        {/* Ledger suggestion microcopy */}
-        <p className="text-caption text-ink-400 italic">
-          I think this is a Purchase Expense — change it if I&apos;m wrong.
-        </p>
+        {/* The journal that will post */}
+        <div className="space-y-1.5">
+          {!editing && mainLine && (
+            <p className="text-caption text-ink-400 italic">
+              I&apos;ve booked this to {mainLine.accountName} — change it if I&apos;m wrong.
+            </p>
+          )}
+          <JournalLinesEditor
+            lines={lines}
+            editing={editing}
+            accounts={accounts}
+            onChange={(next) => {
+              setLines(next);
+              setEdited(true);
+            }}
+          />
+        </div>
 
         {/* Warnings */}
         <WarningsBanner warnings={entry.rawWarnings} />
@@ -203,17 +242,19 @@ export function ReviewQueueItem({ entry, onApprove, onReject, onEdit }: ReviewQu
             </button>
             <button
               type="button"
-              onClick={() => onEdit(entry.id)}
+              onClick={() => setEditing((on) => !on)}
               disabled={animState !== 'idle'}
+              aria-pressed={editing}
               className="flex items-center gap-1.5 px-3 py-2 rounded-md text-body text-ink-700 border border-line-200 hover:bg-surface-sink transition-colors disabled:opacity-50 min-h-[40px]"
             >
               <Pencil size={14} />
-              Edit
+              {editing ? 'Done editing' : 'Edit lines'}
             </button>
             <Button
               variant="primary"
               onClick={handleApprove}
-              disabled={animState !== 'idle'}
+              disabled={animState !== 'idle' || !postable}
+              title={postable ? undefined : 'Every line needs an account, and debits must equal credits'}
               className="ml-auto"
             >
               {animState === 'approving' ? 'Posting…' : 'Approve & post'}

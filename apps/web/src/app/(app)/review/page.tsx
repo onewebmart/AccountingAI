@@ -4,7 +4,8 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { ReviewQueueItem, ProposedEntryData } from '@/components/review/review-queue-item';
-import { api } from '@/lib/api';
+import { JournalLineDraft, PostingAccount } from '@/components/review/journal-lines-editor';
+import { api, ApiError } from '@/lib/api';
 import { QueryError } from '@/components/ui/query-error';
 import { CheckCircle, ChevronLeft, ChevronRight, Loader2, Sparkles } from 'lucide-react';
 
@@ -17,6 +18,15 @@ interface ApiProposal {
   vendorGstin?: string | null;
   invoiceNumber?: string | null;
   invoiceDate?: string | null;
+  dueDate?: string | null;
+  paymentTerms?: string | null;
+  documentId?: string | null;
+  suggestedLines?: Array<{
+    accountId: string;
+    accountName: string;
+    debitPaise: number;
+    creditPaise: number;
+  }>;
   confidenceOverall?: number;
   confidence?: number;
   fieldConfidence?: {
@@ -64,12 +74,25 @@ function mapApiProposal(p: ApiProposal): ProposedEntryData {
     vendorGstin: p.vendorGstin ?? null,
     invoiceNumber: p.invoiceNumber ?? null,
     invoiceDate: p.invoiceDate ?? null,
+    dueDate: p.dueDate ?? null,
+    paymentTerms: p.paymentTerms ?? null,
     confidenceOverall: p.confidenceOverall ?? p.confidence ?? 0,
     fieldConfidence: p.fieldConfidence,
     rawWarnings: p.rawWarnings ?? p.warnings ?? [],
     amountsPaise: amounts,
     documentUrl: p.documentUrl,
+    suggestedLines: (p.suggestedLines ?? []).map((l) => ({
+      accountId: String(l.accountId),
+      accountName: l.accountName,
+      debitPaise: l.debitPaise,
+      creditPaise: l.creditPaise,
+    })),
   };
+}
+
+/** The server's own sentence when there is one, else a fallback. */
+function failureMessage(err: unknown, fallback: string): string {
+  return err instanceof ApiError && err.message ? err.message : fallback;
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────────
@@ -106,12 +129,25 @@ export default function ReviewQueuePage() {
   })();
 
   const allEntries = apiProposals.filter((e) => !removedIds.has(e.id));
+  const apiDocumentIds = new Map(
+    (Array.isArray(apiResponse) ? apiResponse : apiResponse && 'data' in apiResponse ? apiResponse.data : [])
+      .filter((p) => p.documentId)
+      .map((p) => [p._id, String(p.documentId)]),
+  );
+
+  // Accounts a reviewer can move a line to — posting accounts only, not groups.
+  const { data: accountsResponse } = useQuery({
+    queryKey: ['gl', 'accounts'],
+    queryFn: () => api.get<Array<PostingAccount & { isGroup?: boolean }>>('/gl/accounts'),
+  });
+  const postingAccounts = (accountsResponse ?? []).filter((a) => !a.isGroup);
 
   // ── Approve mutation ────────────────────────────────────────────────────
   const approveMutation = useMutation({
     // An empty body accepts the AI-suggested lines as they stand. Sending
     // `lines: []` would instead post a journal with no lines at all.
-    mutationFn: (id: string) => api.post(`/proposals/${id}/approve`, {}),
+    mutationFn: ({ id, lines }: { id: string; lines?: JournalLineDraft[] }) =>
+      api.post(`/proposals/${id}/approve`, lines ? { lines } : {}),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['proposals'] });
       // The posting also creates a voucher, a bill/invoice and ledger movement.
@@ -145,28 +181,27 @@ export default function ReviewQueuePage() {
     });
   };
 
-  const handleApprove = async (id: string) => {
+  const handleApprove = async (id: string, lines?: JournalLineDraft[]) => {
     try {
-      await approveMutation.mutateAsync(id);
+      await approveMutation.mutateAsync({ id, lines });
       removeEntry(id);
       showToast('Posted to ledger');
-    } catch {
-      showToast('Failed to post. Try again.', 'error');
+    } catch (err) {
+      showToast(failureMessage(err, "Couldn't post — try again."), 'error');
       throw new Error('approve failed'); // re-throw so ReviewQueueItem resets its state
     }
   };
 
-  const handleReject = (id: string) => {
-    rejectMutation.mutate(id, {
-      onError: () => showToast('Failed to reject. Try again.', 'error'),
-    });
-    removeEntry(id);
-    showToast('Rejected and kept for audit');
-  };
-
-  const handleEdit = (id: string) => {
-    // Edit sheet/modal — Phase 9
-    console.log('edit', id);
+  const handleReject = async (id: string) => {
+    // Wait for the server before dropping the card: it used to vanish with a
+    // "Rejected" toast even when the request failed.
+    try {
+      await rejectMutation.mutateAsync(id);
+      removeEntry(id);
+      showToast('Rejected and kept for audit');
+    } catch (err) {
+      showToast(failureMessage(err, "Couldn't reject — try again."), 'error');
+    }
   };
 
   const handleApproveHighConfidence = async () => {
@@ -182,6 +217,16 @@ export default function ReviewQueuePage() {
 
   const current = allEntries[currentIndex];
   const total = allEntries.length;
+
+  // The source file beside the extracted fields. Proposals carry the upload's
+  // id, not a link, so the preview pane was always the placeholder.
+  const currentDocumentId = current ? apiDocumentIds.get(current.id) : undefined;
+  const { data: documentLink } = useQuery({
+    queryKey: ['documents', currentDocumentId, 'url'],
+    queryFn: () => api.get<{ url: string }>(`/documents/${currentDocumentId}/url`),
+    enabled: !!currentDocumentId,
+    staleTime: 5 * 60 * 1000,
+  });
 
   // ── Loading state ────────────────────────────────────────────────────────
   if (isLoading) {
@@ -276,10 +321,10 @@ export default function ReviewQueuePage() {
       {current && (
         <ReviewQueueItem
           key={current.id}
-          entry={current}
+          entry={{ ...current, documentUrl: current.documentUrl ?? documentLink?.url }}
+          accounts={postingAccounts}
           onApprove={handleApprove}
           onReject={handleReject}
-          onEdit={handleEdit}
         />
       )}
 
