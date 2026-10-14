@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { ReportBarChart } from '@/components/reports/report-chart';
 import { CheckCircle, Download, Send, FileText } from 'lucide-react';
 import { api } from '@/lib/api';
+import { currentFinancialYear, recentFinancialYears } from '@/lib/financial-year';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -125,6 +126,31 @@ interface ApiDayBookEntry {
   narration: string;
   totalAmountPaise: number;
   lines: { description: string; debitPaise: number; creditPaise: number }[];
+}
+
+/** GET /reports/ledger — one account's postings with a running balance. */
+interface ApiLedger {
+  accountDescription: string;
+  openingBalancePaise: number;
+  closingBalancePaise: number;
+  entries: Array<{
+    date: string;
+    journalId: string;
+    voucherType: string;
+    voucherNumber: number;
+    narration: string;
+    debitPaise: number;
+    creditPaise: number;
+    runningBalancePaise: number;
+  }>;
+}
+
+interface LedgerAccountOption {
+  _id: string;
+  name: string;
+  code: string;
+  isGroup: boolean;
+  systemKey?: string;
 }
 
 interface AgeingResponse {
@@ -258,9 +284,10 @@ function exportPathFor(reportType: ReportType): string {
 
 export default function ReportsPage() {
   const [reportType, setReportType] = useState<ReportType>('pl');
-  const [financialYear, setFinancialYear] = useState('2025-26');
+  const [financialYear, setFinancialYear] = useState(currentFinancialYear);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [ledgerAccountId, setLedgerAccountId] = useState<string>('');
 
   const exportPath = exportPathFor(reportType);
 
@@ -372,6 +399,32 @@ export default function ReportsPage() {
     enabled: reportType === 'ageing',
   });
 
+  const ledgerAccountsQuery = useQuery<LedgerAccountOption[]>({
+    queryKey: ['gl', 'accounts'],
+    queryFn: () => api.get<LedgerAccountOption[]>('/gl/accounts'),
+    enabled: reportType === 'ledger',
+  });
+  const postingAccounts = (ledgerAccountsQuery.data ?? []).filter((a) => !a.isGroup);
+  // Open on Accounts Receivable, the ledger most often asked for, until one is picked.
+  const selectedLedgerAccount =
+    ledgerAccountId ||
+    postingAccounts.find((a) => a.systemKey === 'ACCOUNTS_RECEIVABLE')?._id ||
+    postingAccounts[0]?._id ||
+    '';
+
+  // The ledger export is for one account; without it the file came back empty.
+  const exportAccountParam =
+    reportType === 'ledger' ? `&account=${encodeURIComponent(selectedLedgerAccount)}` : '';
+
+  const ledgerQuery = useQuery<ApiLedger>({
+    queryKey: ['reports', 'ledger', financialYear, selectedLedgerAccount],
+    queryFn: () =>
+      api.get<ApiLedger>(
+        `/reports/ledger?financialYear=${financialYear}&account=${encodeURIComponent(selectedLedgerAccount)}`,
+      ),
+    enabled: reportType === 'ledger' && !!selectedLedgerAccount,
+  });
+
   // ── Derived data ───────────────────────────────────────────────────────────
 
   const EMPTY_BUCKET: AgeingBucket = {
@@ -435,7 +488,7 @@ export default function ReportsPage() {
             onChange={(e) => setFinancialYear(e.target.value)}
             className="rounded-md border border-line-200 bg-surface-card px-3 py-1.5 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-brand-500"
           >
-            {['2024-25', '2025-26', '2026-27'].map((fy) => (
+            {recentFinancialYears().map((fy) => (
               <option key={fy} value={fy}>FY {fy}</option>
             ))}
           </select>
@@ -468,7 +521,7 @@ export default function ReportsPage() {
           title={EXPORTABLE.has(reportType) ? undefined : 'Not available for this report yet'}
           onClick={async () => {
             const ok = await downloadFile(
-              `/exports/${exportPath}.xlsx?financialYear=${financialYear}`,
+              `/exports/${exportPath}.xlsx?financialYear=${financialYear}${exportAccountParam}`,
               `${exportPath}-${financialYear}.xlsx`,
             );
             showToast(ok ? 'Downloaded Excel' : "Couldn't export — try again");
@@ -484,7 +537,7 @@ export default function ReportsPage() {
           title={EXPORTABLE.has(reportType) ? undefined : 'Not available for this report yet'}
           onClick={async () => {
             const ok = await downloadFile(
-              `/exports/${exportPath}.csv?financialYear=${financialYear}`,
+              `/exports/${exportPath}.csv?financialYear=${financialYear}${exportAccountParam}`,
               `${exportPath}-${financialYear}.csv`,
             );
             showToast(ok ? 'Downloaded CSV' : "Couldn't export — try again");
@@ -688,39 +741,86 @@ export default function ReportsPage() {
         </div>
       )}
 
-      {/* ── Ledger ── (static — no dedicated API endpoint yet) */}
+      {/* ── Ledger ── */}
       {reportType === 'ledger' && (
         <div>
-          <h2 className="text-h2 font-display text-ink-900 mb-6">
-            Ledger — Accounts Receivable · FY {financialYear}
-          </h2>
-          <table className="w-full text-left">
-            <thead>
-              <tr className="border-b border-line-200">
-                {['Date', 'Voucher', 'Narration', 'Debit', 'Credit', 'Balance'].map((h) => (
-                  <th key={h} className="pb-2 pr-6 text-caption font-semibold text-ink-500 uppercase tracking-wide">
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {[
-                { date: '2025-04-01', voucher: 'Opening', narration: 'Opening balance', dr: 0, cr: 0, bal: 0 },
-                { date: '2025-04-15', voucher: 'SAL-014', narration: 'Sale — Rahul Enterprises', dr: 2950000, cr: 0, bal: 2950000 },
-                { date: '2025-04-18', voucher: 'RCT-022', narration: 'Payment received', dr: 0, cr: 2950000, bal: 0 },
-              ].map((row, i) => (
-                <tr key={i} className="border-b border-line-100 hover:bg-surface-sink/50">
-                  <td className="py-2.5 pr-6 text-body text-ink-600">{fmtDate(row.date)}</td>
-                  <td className="py-2.5 pr-6 font-mono text-caption text-ink-500">{row.voucher}</td>
-                  <td className="py-2.5 pr-6 text-body text-ink-900">{row.narration}</td>
-                  <td className="py-2.5 pr-6 font-mono text-body text-ink-900">{row.dr > 0 ? fmt(row.dr) : '—'}</td>
-                  <td className="py-2.5 pr-6 font-mono text-body text-ink-900">{row.cr > 0 ? fmt(row.cr) : '—'}</td>
-                  <td className="py-2.5 font-mono font-semibold text-body text-ink-900">{fmt(row.bal)} Dr</td>
-                </tr>
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-h2 font-display text-ink-900">
+              Ledger — {ledgerQuery.data?.accountDescription ?? '…'} · FY {financialYear}
+            </h2>
+            <select
+              aria-label="Ledger account"
+              value={selectedLedgerAccount}
+              onChange={(e) => setLedgerAccountId(e.target.value)}
+              className="rounded-md border border-line-200 bg-surface-card px-3 py-1.5 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-brand-500"
+            >
+              {postingAccounts.map((a) => (
+                <option key={a._id} value={a._id}>
+                  {a.code} · {a.name}
+                </option>
               ))}
-            </tbody>
-          </table>
+            </select>
+          </div>
+          {ledgerQuery.isLoading || ledgerAccountsQuery.isLoading ? (
+            <ReportSkeleton />
+          ) : ledgerQuery.isError ? (
+            <p className="text-body text-error-fg">Couldn&apos;t load this ledger — try again.</p>
+          ) : (
+            <table className="w-full text-left">
+              <thead>
+                <tr className="border-b border-line-200">
+                  {['Date', 'Voucher', 'Narration', 'Debit', 'Credit', 'Balance'].map((h) => (
+                    <th key={h} className="pb-2 pr-6 text-caption font-semibold text-ink-500 uppercase tracking-wide">
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="border-b border-line-100">
+                  <td className="py-2.5 pr-6 text-body text-ink-600" />
+                  <td className="py-2.5 pr-6 font-mono text-caption text-ink-500">Opening</td>
+                  <td className="py-2.5 pr-6 text-body text-ink-900">Brought forward</td>
+                  <td className="py-2.5 pr-6 font-mono text-body text-ink-900">—</td>
+                  <td className="py-2.5 pr-6 font-mono text-body text-ink-900">—</td>
+                  <td className="py-2.5 font-mono font-semibold text-body text-ink-900">
+                    {fmt(Math.abs(ledgerQuery.data?.openingBalancePaise ?? 0))}{' '}
+                    {(ledgerQuery.data?.openingBalancePaise ?? 0) < 0 ? 'Cr' : 'Dr'}
+                  </td>
+                </tr>
+                {(ledgerQuery.data?.entries ?? []).map((row, i) => (
+                  <tr key={`${row.journalId}-${i}`} className="border-b border-line-100 hover:bg-surface-sink/50">
+                    <td className="py-2.5 pr-6 text-body text-ink-600">{fmtDate(row.date)}</td>
+                    <td className="py-2.5 pr-6 font-mono text-caption text-ink-500">
+                      {row.voucherType.toUpperCase()}/{row.voucherNumber}
+                    </td>
+                    <td className="py-2.5 pr-6 text-body text-ink-900">{row.narration || '—'}</td>
+                    <td className="py-2.5 pr-6 font-mono text-body text-ink-900">{row.debitPaise > 0 ? fmt(row.debitPaise) : '—'}</td>
+                    <td className="py-2.5 pr-6 font-mono text-body text-ink-900">{row.creditPaise > 0 ? fmt(row.creditPaise) : '—'}</td>
+                    <td className="py-2.5 font-mono font-semibold text-body text-ink-900">
+                      {fmt(Math.abs(row.runningBalancePaise))} {row.runningBalancePaise < 0 ? 'Cr' : 'Dr'}
+                    </td>
+                  </tr>
+                ))}
+                {(ledgerQuery.data?.entries ?? []).length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="py-6 text-center text-body text-ink-500">
+                      Nothing posted to this account in FY {financialYear}.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-ink-900">
+                  <td colSpan={5} className="py-3 font-bold text-body text-ink-900">Closing balance</td>
+                  <td className="py-3 font-mono font-bold text-ink-900">
+                    {fmt(Math.abs(ledgerQuery.data?.closingBalancePaise ?? 0))}{' '}
+                    {(ledgerQuery.data?.closingBalancePaise ?? 0) < 0 ? 'Cr' : 'Dr'}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          )}
         </div>
       )}
 

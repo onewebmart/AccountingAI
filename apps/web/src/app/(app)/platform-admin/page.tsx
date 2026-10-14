@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { currentFinancialYear } from '@/lib/financial-year';
 import { useWorkspace } from '@/lib/use-workspace';
 import {
   AlertTriangle,
@@ -595,7 +596,7 @@ export default function PlatformAdminPage() {
                 <AlertTriangle size={12} /> {alertCount} margin alert{alertCount !== 1 ? 's' : ''}
               </span>
             )}
-            <span className="text-caption text-white/50">FY 2025-26 · {period}</span>
+            <span className="text-caption text-white/50">FY {currentFinancialYear()} · {period}</span>
           </div>
         </header>
 

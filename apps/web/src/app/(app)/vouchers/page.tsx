@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { api } from '@/lib/api';
+import { currentFinancialYear, recentFinancialYears } from '@/lib/financial-year';
 import { QueryError } from '@/components/ui/query-error';
 import { FileText, Loader2, RotateCcw, X } from 'lucide-react';
 
@@ -82,7 +83,8 @@ const TYPE_COLORS: Record<Exclude<VoucherType, 'all'>, string> = {
   journal: 'bg-surface-sink text-ink-500 border-line-200',
 };
 
-const FY_OPTIONS = ['2025-26', '2024-25', '2023-24'];
+// Was a fixed list that stopped at 2025-26, so the current year could not be picked.
+const FY_OPTIONS = recentFinancialYears(3);
 
 function fmt(paise: number) {
   return new Intl.NumberFormat('en-IN', {
@@ -141,7 +143,7 @@ function ReverseModal({
 
 export default function VouchersPage() {
   const [typeFilter, setTypeFilter] = useState<VoucherType>('all');
-  const [fy, setFy] = useState('2025-26');
+  const [fy, setFy] = useState(currentFinancialYear);
   const [reversing, setReversing] = useState<Voucher | null>(null);
   // Optimistic local overrides: id → 'reversed'
   const [localReversed, setLocalReversed] = useState<Set<string>>(new Set());

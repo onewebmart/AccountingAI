@@ -14,6 +14,7 @@ import {
   Lightbulb,
 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { currentFinancialYear, recentFinancialYears } from '@/lib/financial-year';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -177,7 +178,7 @@ function EmptyState() {
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function InsightsPage() {
-  const [financialYear, setFinancialYear] = useState('2025-26');
+  const [financialYear, setFinancialYear] = useState(currentFinancialYear);
 
   const insightsQuery = useQuery<InsightsApiResponse>({
     queryKey: ['insights', financialYear],
@@ -206,7 +207,7 @@ export default function InsightsPage() {
             onChange={(e) => setFinancialYear(e.target.value)}
             className="rounded-md border border-line-200 bg-surface-card px-3 py-1.5 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-brand-500"
           >
-            {['2024-25', '2025-26', '2026-27'].map((fy) => (
+            {recentFinancialYears().map((fy) => (
               <option key={fy} value={fy}>FY {fy}</option>
             ))}
           </select>

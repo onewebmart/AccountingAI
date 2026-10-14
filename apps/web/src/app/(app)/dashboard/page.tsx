@@ -46,9 +46,9 @@ interface DocumentListResponse {
   total?: number;
 }
 
+/** GET /insights — each insight is a headline plus a sentence explaining it. */
 interface InsightsResponse {
-  insights?: { text: string }[];
-  items?: { text: string }[];
+  insights?: { headline: string; explanation?: string }[];
 }
 
 // ── Page ───────────────────────────────────────────────────────────────────
@@ -84,7 +84,7 @@ export default function DashboardPage() {
 
   const { data: gstReconLines } = useQuery({
     queryKey: ['gst', 'recon-lines'],
-    queryFn: () => api.get<{ status?: string }[]>('/gst/recon-lines'),
+    queryFn: () => api.get<{ reconStatus?: string }[]>('/gst/recon-lines'),
   });
 
   const { data: insightsData } = useQuery({
@@ -122,10 +122,11 @@ export default function DashboardPage() {
   // Resolve AI insights text
   const insightItems = (() => {
     if (!insightsData) return null;
+    // These used to read `i.text`, a field the API never sends, so every bullet
+    // rendered as an empty "•".
     const raw = insightsData as InsightsResponse;
-    if (Array.isArray(raw.insights) && raw.insights.length > 0) return raw.insights.map((i) => i.text);
-    if (Array.isArray(raw.items) && raw.items.length > 0) return raw.items.map((i) => i.text);
-    return null;
+    if (!Array.isArray(raw.insights) || raw.insights.length === 0) return null;
+    return raw.insights.map((i) => (i.explanation ? `${i.headline} — ${i.explanation}` : i.headline));
   })();
 
   /**
@@ -142,8 +143,11 @@ export default function DashboardPage() {
     (arAgeing?.days61_90 ?? 0) +
     (arAgeing?.over90 ?? 0);
 
-  const gstMismatches = (gstReconLines ?? []).filter(
-    (l) => l.status && l.status !== 'MATCHED',
+  // The API field is `reconStatus`, lowercase. Reading `status !== 'MATCHED'`
+  // matched nothing, so this always showed zero mismatches. `pending` lines
+  // have simply not been reconciled yet, so they are not counted either.
+  const gstMismatches = (gstReconLines ?? []).filter((l) =>
+    ['mismatched', 'missing_in_books', 'missing_in_2b'].includes(l.reconStatus ?? ''),
   ).length;
 
   const gstDueLabel = (() => {
