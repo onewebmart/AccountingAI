@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation';
 import { useMutation } from '@tanstack/react-query';
 import { Check, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { api } from '@/lib/api';
+import { api, ApiError } from '@/lib/api';
+import { GST_STATES } from '@/lib/gst';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -125,16 +126,11 @@ function Step1({
             className="w-full rounded-md border border-line-200 bg-white px-3 py-2.5 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-marigold-400/40 focus:border-marigold-400"
           >
             <option value="">Select a state…</option>
-            <option value="27">27 — Maharashtra</option>
-            <option value="07">07 — Delhi</option>
-            <option value="29">29 — Karnataka</option>
-            <option value="33">33 — Tamil Nadu</option>
-            <option value="09">09 — Uttar Pradesh</option>
-            <option value="06">06 — Haryana</option>
-            <option value="24">24 — Gujarat</option>
-            <option value="19">19 — West Bengal</option>
-            <option value="36">36 — Telangana</option>
-            <option value="32">32 — Kerala</option>
+            {GST_STATES.map((st) => (
+              <option key={st.code} value={st.code}>
+                {st.code} — {st.name}
+              </option>
+            ))}
           </select>
         </div>
       </div>
@@ -280,6 +276,7 @@ export default function OnboardingPage() {
   const [step1, setStep1] = useState<Step1Data>({ orgName: '', gstin: '', pan: '', state: '' });
   const [step2, setStep2] = useState<Step2Data>({ financialYearStart: 4, timezone: 'Asia/Kolkata' });
   const [step3, setStep3] = useState<Step3Data>({ inviteEmail: '', inviteRole: 'ACCOUNTANT' });
+  const [error, setError] = useState<string | null>(null);
 
   const TOTAL_STEPS = 3;
 
@@ -293,32 +290,46 @@ export default function OnboardingPage() {
       api.post('/settings/team', body),
   });
 
+  // Each step used to swallow its save error and move on, so a rejected GSTIN
+  // left the business without one — and extraction relies on it to tell a
+  // purchase from a sale. Stay on the step and say why instead.
+  const save = async (work: () => Promise<unknown>): Promise<boolean> => {
+    setError(null);
+    try {
+      await work();
+      return true;
+    } catch (err) {
+      setError(err instanceof ApiError && err.message ? err.message : "Couldn't save that — try again.");
+      return false;
+    }
+  };
+
   const handleNext = async () => {
     if (step === 0) {
-      // Save step 1
-      await patchMutation.mutateAsync({
-        orgName: step1.orgName,
-        gstin: step1.gstin || undefined,
-        pan: step1.pan || undefined,
-        state: step1.state || undefined,
-      }).catch(() => {/* silently proceed on API error — mock env */});
-      setStep(1);
+      const ok = await save(() =>
+        // The API's names. These were orgName / state / financialYearStart, which
+        // the settings endpoint does not know — so they were never saved.
+        patchMutation.mutateAsync({
+          displayName: step1.orgName,
+          gstin: step1.gstin || undefined,
+          pan: step1.pan || undefined,
+          stateCode: step1.state || undefined,
+        }),
+      );
+      if (ok) setStep(1);
     } else if (step === 1) {
-      // Save step 2
-      await patchMutation.mutateAsync({
-        financialYearStart: step2.financialYearStart,
-        timezone: step2.timezone,
-      }).catch(() => {});
-      setStep(2);
+      const ok = await save(() =>
+        patchMutation.mutateAsync({
+          financialYearStartMonth: step2.financialYearStart,
+          timezone: step2.timezone,
+        }),
+      );
+      if (ok) setStep(2);
     } else if (step === 2) {
-      // Invite + finish
-      if (step3.inviteEmail) {
-        await inviteMutation.mutateAsync({
-          email: step3.inviteEmail,
-          role: step3.inviteRole,
-        }).catch(() => {});
-      }
-      router.push('/dashboard');
+      const ok = step3.inviteEmail
+        ? await save(() => inviteMutation.mutateAsync({ email: step3.inviteEmail, role: step3.inviteRole }))
+        : true;
+      if (ok) router.push('/dashboard');
     }
   };
 
@@ -380,6 +391,12 @@ export default function OnboardingPage() {
           )}
           {step === 2 && (
             <Step3 data={step3} onChange={(d) => setStep3((s) => ({ ...s, ...d }))} />
+          )}
+
+          {error && (
+            <p role="alert" className="mt-6 rounded-md border border-error-fg/30 bg-error-bg px-3 py-2 text-body text-error-fg">
+              {error}
+            </p>
           )}
 
           {/* Actions */}

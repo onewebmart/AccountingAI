@@ -151,14 +151,27 @@ const PERIOD_OPTIONS = [
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
+/** YYYY-MM of the month before `at`. */
+function previousMonth(at: Date = new Date()): string {
+  const d = new Date(at.getFullYear(), at.getMonth() - 1, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
 export default function GstPage() {
   const [tab, setTab] = useState<Tab>('recon');
-  const [period, setPeriod] = useState('2025-03');
+  // Last month: the one being filed. This was pinned to '2025-03'.
+  const [period, setPeriod] = useState(previousMonth);
   const file2bInputRef = useRef<HTMLInputElement>(null);
   const [toast, setToast] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
-  const STATE_CODE = '27';
+  // The business's own state decides CGST/SGST versus IGST on every register.
+  // It was hard-coded to Maharashtra (27) for every business.
+  const { data: orgSettings } = useQuery({
+    queryKey: ['settings'],
+    queryFn: () => api.get<{ gstin?: string | null; stateCode?: string }>('/settings'),
+  });
+  const STATE_CODE = orgSettings?.gstin?.slice(0, 2) || orgSettings?.stateCode || '';
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -168,7 +181,8 @@ export default function GstPage() {
   // ── Queries ────────────────────────────────────────────────────────────────
 
   const purchaseQuery = useQuery<PurchaseRegisterEntry[]>({
-    queryKey: ['gst', 'purchase-register', period],
+    queryKey: ['gst', 'purchase-register', period, STATE_CODE],
+    enabled: !!STATE_CODE,
     queryFn: () =>
       api.get<PurchaseRegisterEntry[]>(
         `/gst/purchase-register?period=${period}&buyerStateCode=${STATE_CODE}`,
@@ -176,7 +190,8 @@ export default function GstPage() {
   });
 
   const salesQuery = useQuery<SalesRegisterEntry[]>({
-    queryKey: ['gst', 'sales-register', period],
+    queryKey: ['gst', 'sales-register', period, STATE_CODE],
+    enabled: !!STATE_CODE,
     queryFn: () =>
       api.get<SalesRegisterEntry[]>(
         `/gst/sales-register?period=${period}&buyerStateCode=${STATE_CODE}`,

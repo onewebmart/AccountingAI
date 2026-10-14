@@ -4,7 +4,8 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/auth-context';
-import { api } from '@/lib/api';
+import { api, ApiError } from '@/lib/api';
+import { GST_STATES } from '@/lib/gst';
 import {
   Building2,
   Users,
@@ -26,13 +27,24 @@ import {
 
 type Tab = 'general' | 'team' | 'tax-gst' | 'integrations' | 'invoice' | 'branding';
 
+/**
+ * GET/PATCH /settings, in the API's own field names. The page used orgName,
+ * state and financialYearStart, which the API does not have — so the company
+ * name, state and year start were never saved, whatever "Saved" said.
+ */
 interface OrgSettings {
-  orgName: string;
-  gstin?: string;
-  pan?: string;
-  state?: string;
-  financialYearStart?: number;
+  displayName?: string | null;
+  gstin?: string | null;
+  pan?: string | null;
+  stateCode?: string;
+  financialYearStartMonth?: number;
   timezone?: string;
+  gstFilingFrequency?: 'monthly' | 'quarterly';
+}
+
+/** The server's own sentence when there is one. */
+function saveError(err: unknown): string {
+  return err instanceof ApiError && err.message ? err.message : "Couldn't save — try again.";
 }
 
 interface TeamMember {
@@ -90,17 +102,17 @@ function GeneralTab() {
   const settings = remoteSettings ?? ({} as OrgSettings);
 
   const [form, setForm] = useState({
-    orgName: '',
+    displayName: '',
     timezone: '',
-    financialYearStart: '',
+    financialYearStartMonth: '',
   });
   const [initialised, setInitialised] = useState(false);
 
   if (!initialised && remoteSettings) {
     setForm({
-      orgName: remoteSettings.orgName ?? '',
+      displayName: remoteSettings.displayName ?? '',
       timezone: remoteSettings.timezone ?? 'Asia/Kolkata',
-      financialYearStart: String(remoteSettings.financialYearStart ?? 4),
+      financialYearStartMonth: String(remoteSettings.financialYearStartMonth ?? 4),
     });
     setInitialised(true);
   }
@@ -111,21 +123,27 @@ function GeneralTab() {
   });
 
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSave = async () => {
-    await updateMutation.mutateAsync({
-      orgName: form.orgName || settings.orgName,
-      timezone: form.timezone || settings.timezone,
-      financialYearStart: Number(form.financialYearStart || settings.financialYearStart),
-    });
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    setError(null);
+    try {
+      await updateMutation.mutateAsync({
+        displayName: form.displayName || settings.displayName || undefined,
+        timezone: form.timezone || settings.timezone,
+        financialYearStartMonth: Number(form.financialYearStartMonth || settings.financialYearStartMonth || 4),
+      });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (err) {
+      setError(saveError(err));
+    }
   };
 
   const displayForm = {
-    orgName: form.orgName || settings.orgName,
+    displayName: form.displayName || settings.displayName || '',
     timezone: form.timezone || settings.timezone || 'Asia/Kolkata',
-    financialYearStart: form.financialYearStart || String(settings.financialYearStart ?? 4),
+    financialYearStartMonth: form.financialYearStartMonth || String(settings.financialYearStartMonth ?? 4),
   };
 
   return (
@@ -140,8 +158,8 @@ function GeneralTab() {
           <label className="block text-caption font-medium text-ink-700 mb-1">Company name</label>
           <input
             type="text"
-            value={displayForm.orgName}
-            onChange={(e) => setForm({ ...form, orgName: e.target.value })}
+            value={displayForm.displayName}
+            onChange={(e) => setForm({ ...form, displayName: e.target.value })}
             className="w-full rounded-md border border-line-200 bg-surface-card px-3 py-2 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-brand-500"
           />
         </div>
@@ -162,8 +180,8 @@ function GeneralTab() {
         <div>
           <label className="block text-caption font-medium text-ink-700 mb-1">Financial year start</label>
           <select
-            value={displayForm.financialYearStart}
-            onChange={(e) => setForm({ ...form, financialYearStart: e.target.value })}
+            value={displayForm.financialYearStartMonth}
+            onChange={(e) => setForm({ ...form, financialYearStartMonth: e.target.value })}
             className="w-full rounded-md border border-line-200 bg-surface-card px-3 py-2 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-brand-500"
           >
             <option value="4">April (Indian FY)</option>
@@ -172,6 +190,11 @@ function GeneralTab() {
         </div>
       </div>
 
+      {error && (
+        <p role="alert" className="rounded-md border border-error-fg/30 bg-error-bg px-3 py-2 text-body text-error-fg">
+          {error}
+        </p>
+      )}
       <div className="flex justify-end pt-2">
         <Button onClick={handleSave} disabled={updateMutation.isPending} className="flex items-center gap-2">
           {saved ? <><Check size={14} /> Saved</> : updateMutation.isPending ? 'Saving…' : 'Save changes'}
@@ -338,27 +361,22 @@ function TaxGstTab() {
   const [form, setForm] = useState({
     gstin: '',
     pan: '',
-    state: '',
-    gstFilingFrequency: 'monthly',
+    stateCode: '',
+    gstFilingFrequency: 'monthly' as 'monthly' | 'quarterly',
   });
   const [initialised, setInitialised] = useState(false);
 
+  // Real values only. Empty fields used to be pre-filled with a sample GSTIN
+  // and PAN, so pressing Save registered the business under someone else's.
   if (!initialised && remoteSettings) {
     setForm({
-      gstin: remoteSettings.gstin ?? '27AAPFU0939F1ZV',
-      pan: remoteSettings.pan ?? 'AAPFU0939F',
-      state: remoteSettings.state ?? '27',
-      gstFilingFrequency: 'monthly',
+      gstin: remoteSettings.gstin ?? '',
+      pan: remoteSettings.pan ?? '',
+      stateCode: remoteSettings.stateCode ?? '',
+      gstFilingFrequency: remoteSettings.gstFilingFrequency ?? 'monthly',
     });
     setInitialised(true);
   }
-
-  const displayForm = {
-    gstin: form.gstin || settings.gstin || '',
-    pan: form.pan || settings.pan || '',
-    state: form.state || settings.state || '27',
-    gstFilingFrequency: form.gstFilingFrequency,
-  };
 
   const updateMutation = useMutation({
     mutationFn: (body: Partial<OrgSettings>) => api.patch<OrgSettings>('/settings', body),
@@ -366,16 +384,25 @@ function TaxGstTab() {
   });
 
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSave = async () => {
-    await updateMutation.mutateAsync({
-      gstin: displayForm.gstin,
-      pan: displayForm.pan,
-      state: displayForm.state,
-    });
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    setError(null);
+    try {
+      await updateMutation.mutateAsync({
+        gstin: form.gstin || undefined,
+        pan: form.pan || undefined,
+        stateCode: form.stateCode || undefined,
+        gstFilingFrequency: form.gstFilingFrequency,
+      });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (err) {
+      setError(saveError(err));
+    }
   };
+
+  const displayForm = form;
 
   return (
     <div className="space-y-6">
@@ -391,7 +418,12 @@ function TaxGstTab() {
             type="text"
             value={displayForm.gstin}
             maxLength={15}
-            onChange={(e) => setForm({ ...form, gstin: e.target.value.toUpperCase() })}
+            onChange={(e) => {
+              const gstin = e.target.value.toUpperCase();
+              // A GSTIN's first two digits are its state; keep the picker in step.
+              const state = /^\d{2}/.test(gstin) ? gstin.slice(0, 2) : form.stateCode;
+              setForm({ ...form, gstin, stateCode: state });
+            }}
             className="w-full rounded-md border border-line-200 bg-surface-card px-3 py-2 font-mono text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-brand-500"
           />
           <p className="text-caption text-ink-400 mt-1">15 characters — state code + PAN + entity type</p>
@@ -411,17 +443,16 @@ function TaxGstTab() {
         <div>
           <label className="block text-caption font-medium text-ink-700 mb-1">State</label>
           <select
-            value={displayForm.state}
-            onChange={(e) => setForm({ ...form, state: e.target.value })}
+            value={displayForm.stateCode}
+            onChange={(e) => setForm({ ...form, stateCode: e.target.value })}
             className="w-full rounded-md border border-line-200 bg-surface-card px-3 py-2 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-brand-500"
           >
-            <option value="27">27 — Maharashtra</option>
-            <option value="07">07 — Delhi</option>
-            <option value="29">29 — Karnataka</option>
-            <option value="33">33 — Tamil Nadu</option>
-            <option value="09">09 — Uttar Pradesh</option>
-            <option value="06">06 — Haryana</option>
-            <option value="24">24 — Gujarat</option>
+            <option value="">Select a state…</option>
+            {GST_STATES.map((st) => (
+              <option key={st.code} value={st.code}>
+                {st.code} — {st.name}
+              </option>
+            ))}
           </select>
         </div>
 
@@ -429,7 +460,7 @@ function TaxGstTab() {
           <label className="block text-caption font-medium text-ink-700 mb-1">GST filing frequency</label>
           <select
             value={displayForm.gstFilingFrequency}
-            onChange={(e) => setForm({ ...form, gstFilingFrequency: e.target.value })}
+            onChange={(e) => setForm({ ...form, gstFilingFrequency: e.target.value as 'monthly' | 'quarterly' })}
             className="w-full rounded-md border border-line-200 bg-surface-card px-3 py-2 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-brand-500"
           >
             <option value="monthly">Monthly (GSTR-3B by 20th)</option>
@@ -438,6 +469,11 @@ function TaxGstTab() {
         </div>
       </div>
 
+      {error && (
+        <p role="alert" className="rounded-md border border-error-fg/30 bg-error-bg px-3 py-2 text-body text-error-fg">
+          {error}
+        </p>
+      )}
       <div className="flex justify-end pt-2">
         <Button onClick={handleSave} disabled={updateMutation.isPending} className="flex items-center gap-2">
           {saved ? <><Check size={14} /> Saved</> : updateMutation.isPending ? 'Saving…' : 'Save changes'}
