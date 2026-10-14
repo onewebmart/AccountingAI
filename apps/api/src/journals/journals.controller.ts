@@ -13,6 +13,7 @@ import { Permission, VoucherType } from '@ai-accounting/shared';
 import { RequirePermission, CurrentUser, JwtPayload } from '../auth/decorators';
 import { JournalsService } from './journals.service';
 import { PostingService } from '../gl/posting.service';
+import { JournalReversalService } from './journal-reversal.service';
 
 interface ManualJournalBody {
   voucherType?: VoucherType;
@@ -41,6 +42,7 @@ export class JournalsController {
   constructor(
     private readonly journals: JournalsService,
     private readonly posting: PostingService,
+    private readonly reversals: JournalReversalService,
   ) {}
 
   @Get()
@@ -107,7 +109,7 @@ export class JournalsController {
     const exists = await this.journals.exists(user.orgId, id);
     if (!exists) throw new BadRequestException('Voucher not found.');
 
-    const reversal = await this.posting.reverse(id, user.sub);
+    const reversal = await this.reversals.reverse(id, user.orgId, user.sub);
     return this.journals.findOne(user.orgId, reversal._id.toString());
   }
 }
