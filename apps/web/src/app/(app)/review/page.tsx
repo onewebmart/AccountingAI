@@ -140,9 +140,10 @@ export default function ReviewQueuePage() {
   // Accounts a reviewer can move a line to — posting accounts only, not groups.
   const { data: accountsResponse } = useQuery({
     queryKey: ['gl', 'accounts'],
-    queryFn: () => api.get<Array<PostingAccount & { isGroup?: boolean }>>('/gl/accounts'),
+    queryFn: () => api.get<Array<PostingAccount & { isGroup?: boolean; isActive?: boolean }>>('/gl/accounts'),
   });
-  const postingAccounts = (accountsResponse ?? []).filter((a) => !a.isGroup);
+  // Deactivated accounts are closed to new postings, so they are not offered.
+  const postingAccounts = (accountsResponse ?? []).filter((a) => !a.isGroup && a.isActive !== false);
 
   // ── Approve mutation ────────────────────────────────────────────────────
   const approveMutation = useMutation({

@@ -20,7 +20,18 @@ export interface AccountListItem {
   isGroup: boolean;
   isSystem: boolean;
   systemKey?: string;
+  /** False once deactivated: kept for history, closed to new postings. */
+  isActive: boolean;
   balancePaise: number;
+}
+
+/** Only the fields given change. */
+export interface UpdateAccountInput {
+  name?: string;
+  code?: string;
+  /** A group of the same type, or null for top level. */
+  parentId?: string | null;
+  isActive?: boolean;
 }
 
 export interface CreateAccountInput {
@@ -459,6 +470,7 @@ export class AccountsService {
       isGroup: a.isGroup,
       isSystem: a.isSystem,
       systemKey: a.systemKey,
+      isActive: a.isActive !== false,
       balancePaise: rolled.get(a._id.toString()) ?? 0,
     }));
   }
@@ -511,6 +523,96 @@ export class AccountsService {
       after: { name: account.name, code: account.code, type: account.type },
     });
     return account;
+  }
+
+  /**
+   * Rename, recode, move under another group, or deactivate an account.
+   *
+   * The type never changes: it decides which statement every past entry on
+   * the account appears in. A deactivated account keeps its history and
+   * still shows in reports, but nothing new can be posted to it. A system
+   * account (Bank, GST, Receivables…) can be renamed and moved, but not
+   * deactivated: postings depend on it.
+   */
+  async update(orgId: string, actorId: string, id: string, input: UpdateAccountInput): Promise<AccountListItem> {
+    if (!Types.ObjectId.isValid(id)) throw new NotFoundException('Account not found.');
+    const account = await withOrg(orgId, () => this.accountModel.findById(id).exec());
+    if (!account) throw new NotFoundException('Account not found.');
+    const set: Record<string, unknown> = {};
+
+    if (input.name !== undefined) {
+      const name = input.name.trim();
+      if (!name) throw new BadRequestException('Account name is required.');
+      if (name.length > 120) throw new BadRequestException('The name can be at most 120 characters.');
+      const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const twin = await withOrg(orgId, () =>
+        this.accountModel.findOne({ _id: { $ne: account._id }, isGroup: account.isGroup, name: new RegExp(`^${escaped}$`, 'i') }).exec(),
+      );
+      if (twin) throw new BadRequestException(`Another ${account.isGroup ? 'group' : 'account'} is already called "${twin.name}" (${twin.code}).`);
+      set.name = name;
+    }
+
+    if (input.code !== undefined) {
+      const code = input.code.trim();
+      if (!/^[A-Za-z0-9.-]{1,12}$/.test(code)) throw new BadRequestException('A code is 1 to 12 letters, digits, dots or dashes.');
+      const clash = await withOrg(orgId, () => this.accountModel.findOne({ _id: { $ne: account._id }, code }).exec());
+      if (clash) throw new BadRequestException(`Account code "${code}" is already in use by ${clash.name}.`);
+      set.code = code;
+    }
+
+    if (input.parentId !== undefined) {
+      const parentId = input.parentId;
+      if (parentId === null) {
+        set.parentId = null;
+      } else {
+        if (!Types.ObjectId.isValid(parentId)) throw new BadRequestException('Invalid parent group.');
+        const parent = await withOrg(orgId, () => this.accountModel.findById(parentId).exec());
+        if (!parent || !parent.isGroup) throw new BadRequestException('An account can only be moved under a group.');
+        if (parent.type !== account.type) {
+          const kind = { ASSETS: 'an asset', LIABILITIES: 'a liability', INCOME: 'an income', EXPENSE: 'an expense', CAPITAL: 'a capital' }[account.type];
+          throw new BadRequestException(`This is ${kind} account, so it can only go under ${kind} group.`);
+        }
+        // A group cannot go under itself or one of its own sub-groups.
+        for (let at: typeof parent | null = parent, depth = 0; at && depth < 50; depth++) {
+          if (at._id.equals(account._id)) throw new BadRequestException('A group cannot be moved under itself or one of its own sub-groups.');
+          const up: Types.ObjectId | null = (at.parentId as unknown as Types.ObjectId | null) ?? null;
+          at = up ? await withOrg(orgId, () => this.accountModel.findById(up).exec()) : null;
+        }
+        set.parentId = parent._id;
+      }
+    }
+
+    if (input.isActive !== undefined && input.isActive !== account.isActive) {
+      if (!input.isActive) {
+        if (account.isSystem || account.systemKey) {
+          throw new BadRequestException(`${account.name} is one the books depend on, so it cannot be deactivated. Rename it instead.`);
+        }
+        const children = await withOrg(orgId, () => this.accountModel.countDocuments({ parentId: account._id, isActive: { $ne: false } }).exec());
+        if (children > 0) throw new BadRequestException(`Move or deactivate the ${children} account${children === 1 ? '' : 's'} under ${account.name} first.`);
+        const balance = (await this.balancesByAccount(orgId)).get(account._id.toString()) ?? 0;
+        if (balance !== 0) {
+          throw new BadRequestException(
+            `${account.name} has a balance of ${(Math.abs(balance) / 100).toFixed(2)} ${balance > 0 ? 'Dr' : 'Cr'}. Move it to another account with a journal first.`,
+          );
+        }
+      }
+      set.isActive = input.isActive;
+    }
+
+    const changed = Object.keys(set).filter((k) => String(set[k]) !== String((account as unknown as Record<string, unknown>)[k] ?? null));
+    if (changed.length > 0) {
+      await withOrg(orgId, () => this.accountModel.updateOne({ _id: account._id }, { $set: set }).exec());
+      await this.auditService.record({
+        orgId,
+        entityType: 'LedgerAccount',
+        entityId: id,
+        action: set.isActive === false && changed.includes('isActive') ? 'DEACTIVATE' : set.isActive === true && changed.includes('isActive') ? 'REACTIVATE' : 'UPDATE',
+        performedBy: actorId,
+        before: Object.fromEntries(changed.map((k) => [k, (account as unknown as Record<string, unknown>)[k] ?? null])),
+        after: Object.fromEntries(changed.map((k) => [k, set[k]])),
+      });
+    }
+    return (await this.list(orgId)).find((a) => a._id === id)!;
   }
 
   /** Next free code in the block that belongs to this account type. */

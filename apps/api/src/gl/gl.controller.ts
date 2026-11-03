@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, Post } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
 import { AccountType, Permission } from '@ai-accounting/shared';
 import { CurrentUser, JwtPayload, RequirePermission } from '../auth/decorators';
 import { AccountsService } from './accounts.service';
@@ -9,6 +9,13 @@ interface CreateAccountBody {
   code?: string;
   parentId?: string | null;
   isGroup?: boolean;
+}
+
+interface UpdateAccountBody {
+  name?: unknown;
+  code?: unknown;
+  parentId?: unknown;
+  isActive?: unknown;
 }
 
 @Controller('gl')
@@ -47,7 +54,29 @@ export class GlController {
       parentId: account.parentId ? account.parentId.toString() : null,
       isGroup: account.isGroup,
       isSystem: account.isSystem,
+      isActive: true,
       balancePaise: 0,
     };
+  }
+
+  /** Rename, recode, move under another group, or (de)activate. Only the fields sent change. */
+  @Patch('accounts/:id')
+  @RequirePermission(Permission.MANAGE_COA)
+  update(@CurrentUser() user: JwtPayload, @Param('id') id: string, @Body() body: UpdateAccountBody) {
+    const str = (v: unknown, field: string) => {
+      if (v === undefined) return undefined;
+      if (typeof v !== 'string') throw new BadRequestException(`${field} must be text.`);
+      return v;
+    };
+    if (body.parentId !== undefined && body.parentId !== null && typeof body.parentId !== 'string') {
+      throw new BadRequestException('parentId must be a group id or null.');
+    }
+    if (body.isActive !== undefined && typeof body.isActive !== 'boolean') throw new BadRequestException('isActive must be true or false.');
+    return this.accounts.update(user.orgId, user.sub, id, {
+      name: str(body.name, 'name'),
+      code: str(body.code, 'code'),
+      parentId: body.parentId as string | null | undefined,
+      isActive: body.isActive as boolean | undefined,
+    });
   }
 }

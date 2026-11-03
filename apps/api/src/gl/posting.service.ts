@@ -2,6 +2,7 @@ import { Injectable, BadRequestException, NotFoundException, HttpException, Opti
 import { InjectModel, InjectConnection } from '@nestjs/mongoose';
 import { Model, Connection, Types, ClientSession } from 'mongoose';
 import { VoucherType, JournalStatus } from '@ai-accounting/shared';
+import { LedgerAccount, LedgerAccountDocument } from './schemas/ledger-account.schema';
 import { Journal, JournalDocument } from './schemas/journal.schema';
 import { Counter, CounterDocument } from './schemas/counter.schema';
 import { AuditLog, AuditLogDocument } from './schemas/audit-log.schema';
@@ -48,6 +49,8 @@ export class PostingService {
     // GlModule always registers it. Optional only so specs that build
     // PostingService by hand need not — they have no locks to enforce.
     @Optional() @InjectModel(PeriodLock.name) private lockModel?: Model<PeriodLockDocument>,
+    // Optional for the same reason: specs that build PostingService by hand.
+    @Optional() @InjectModel(LedgerAccount.name) private accountModel?: Model<LedgerAccountDocument>,
   ) {}
 
   /**
@@ -127,6 +130,26 @@ export class PostingService {
         `The books are locked through ${lock.lockedThrough}, and this entry is dated ${input.date}. ` +
           'Date it after the lock, or unlock the period first.',
       );
+    }
+
+    // Nothing new goes to a deactivated account or straight to a group header.
+    // A reversal and the year-end closing entry are exempt: a correction must
+    // always be possible, whatever has happened to the account since.
+    if (this.accountModel && !input.reversalOf && !input.isClosingEntry) {
+      const ids = [...new Set(input.lines.map((l) => l.accountId))].filter((a) => Types.ObjectId.isValid(a));
+      const closed = await this.accountModel
+        .find({ orgId: input.orgId, _id: { $in: ids }, $or: [{ isActive: false }, { isGroup: true }] }, { name: 1, isGroup: 1 })
+        .session(session)
+        .lean()
+        .exec();
+      if (closed.length > 0) {
+        const a = closed[0];
+        throw new BadRequestException(
+          a.isGroup
+            ? `${a.name} is a group, not an account. Post to an account under it.`
+            : `${a.name} is deactivated. Post to another account, or reactivate it in the chart of accounts.`,
+        );
+      }
     }
 
     const counterId = `${input.orgId}:${input.voucherType}:${input.financialYear}`;
