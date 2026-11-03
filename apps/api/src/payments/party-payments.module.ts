@@ -5,6 +5,9 @@ import { SalesInvoice, SalesInvoiceSchema } from '../sales/schemas/sales-invoice
 import { Customer, CustomerSchema } from '../sales/schemas/customer.schema';
 import { PurchaseBill, PurchaseBillSchema } from '../purchase/schemas/purchase-bill.schema';
 import { Vendor, VendorSchema } from '../purchase/schemas/vendor.schema';
+import { PaymentRun, PaymentRunSchema } from './schemas/payment-run.schema';
+import { PaymentRunsService } from './payment-runs.service';
+import { PaymentRunsController } from './payment-runs.controller';
 import { GlModule } from '../gl/gl.module';
 import { PartyPaymentsService } from './party-payments.service';
 import { PartyPaymentsController } from './party-payments.controller';
@@ -18,11 +21,12 @@ import { PartyPaymentsController } from './party-payments.controller';
       { name: Customer.name, schema: CustomerSchema },
       { name: PurchaseBill.name, schema: PurchaseBillSchema },
       { name: Vendor.name, schema: VendorSchema },
+      { name: PaymentRun.name, schema: PaymentRunSchema },
     ]),
     GlModule,
   ],
-  controllers: [PartyPaymentsController],
-  providers: [PartyPaymentsService],
+  controllers: [PartyPaymentsController, PaymentRunsController],
+  providers: [PartyPaymentsService, PaymentRunsService],
   exports: [PartyPaymentsService],
 })
 export class PartyPaymentsModule {}

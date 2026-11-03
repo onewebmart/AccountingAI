@@ -11,6 +11,7 @@ import { AdjustmentNoteDialog } from '@/components/shell/adjustment-note-dialog'
 import { AgeingBuckets } from '@/components/shell/ageing-buckets';
 import { RecordPartyPaymentDialog } from '@/components/payments/record-party-payment-dialog';
 import { AdvancesPanel } from '@/components/payments/advances-panel';
+import { PaymentRunsPanel } from '@/components/payments/payment-runs-panel';
 import { Plus, ChevronRight } from 'lucide-react';
 import { api } from '@/lib/api';
 import { GST_RATES, GstRate, splitGst, rupeesToPaise, formatPaise } from '@/lib/gst';
@@ -80,7 +81,7 @@ function BillStatusBadge({ status }: { status: BillStatus }) {
 
 // ── Tabs ──────────────────────────────────────────────────────────────────
 
-type Tab = 'Bills' | 'Vendors' | 'Outstanding';
+type Tab = 'Bills' | 'Vendors' | 'Outstanding' | 'Payment runs';
 
 // ── Add Bill Modal ────────────────────────────────────────────────────────
 
@@ -545,7 +546,7 @@ export default function PurchasePage() {
       {/* Tabs */}
       <div className="border-b border-line-200">
         <nav className="flex gap-0">
-          {(['Bills', 'Vendors', 'Outstanding'] as Tab[]).map((tab) => (
+          {(['Bills', 'Vendors', 'Outstanding', 'Payment runs'] as Tab[]).map((tab) => (
             <button
               key={tab}
               type="button"
@@ -561,6 +562,8 @@ export default function PurchasePage() {
           ))}
         </nav>
       </div>
+
+      {activeTab === 'Payment runs' && <PaymentRunsPanel onToast={(m) => showToast(m)} />}
 
       {/* Bills tab */}
       {activeTab === 'Bills' && (
