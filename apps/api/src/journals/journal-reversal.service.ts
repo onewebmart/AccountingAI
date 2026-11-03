@@ -1,4 +1,4 @@
-import { BadRequestException, HttpException, Injectable } from '@nestjs/common';
+import { BadRequestException, HttpException, Injectable, Optional } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { ClientSession, Model, Types } from 'mongoose';
 import { BillStatus, InvoiceStatus, MatchStatus } from '@ai-accounting/shared';
@@ -12,6 +12,7 @@ import { CreditNote, CreditNoteDocument } from '../sales/schemas/credit-note.sch
 import { DebitNote, DebitNoteDocument } from '../purchase/schemas/debit-note.schema';
 import { TdsDeposit, TdsDepositDocument } from '../tds/schemas/tds-deposit.schema';
 import { withOrg } from '../database/tenant.plugin';
+import { PartyPayment, PartyPaymentDocument } from '../payments/schemas/party-payment.schema';
 
 /** An invoice or bill as a reversal of one of its payments or notes reads it. */
 interface SettledDocument {
@@ -49,6 +50,8 @@ export class JournalReversalService {
     @InjectModel(CreditNote.name) private creditNoteModel: Model<CreditNoteDocument>,
     @InjectModel(DebitNote.name) private debitNoteModel: Model<DebitNoteDocument>,
     @InjectModel(TdsDeposit.name) private depositModel: Model<TdsDepositDocument>,
+    // Optional so specs that build this by hand need not register it.
+    @Optional() @InjectModel(PartyPayment.name) private paymentModel?: Model<PartyPaymentDocument>,
   ) {}
 
   async reverse(journalId: string, orgId: string, actorId: string): Promise<JournalDocument> {
@@ -58,6 +61,9 @@ export class JournalReversalService {
         await this.refuseWhilePaid(id, orgId, session);
 
         const reversal = await this.posting.reverse(journalId, actorId, session);
+
+        // A receipt or payment across several documents, or an advance applied.
+        await this.undoPartyPayment(id, orgId, actorId, session);
 
         // Opening balances imported with this entry go with it: they have no
         // posting of their own, so sending them back to draft would let one be
@@ -91,12 +97,12 @@ export class JournalReversalService {
             $set: field === 'payments' ? { status, paidBy: null } : { status },
           });
           await this.takeBack('SalesInvoice', field, InvoiceStatus.POSTED, id, orgId, actorId, session,
-            () => this.invoiceModel.findOne({ [entryKey]: id }).session(session).lean().exec(),
+            () => this.invoiceModel.find({ [entryKey]: id }).session(session).lean().exec(),
             (docId, entry) => this.invoiceModel
               .updateOne({ _id: docId, [entryKey]: id }, undo(InvoiceStatus.POSTED, entry), { session })
               .exec());
           await this.takeBack('PurchaseBill', field, BillStatus.POSTED, id, orgId, actorId, session,
-            () => this.billModel.findOne({ [entryKey]: id }).session(session).lean().exec(),
+            () => this.billModel.find({ [entryKey]: id }).session(session).lean().exec(),
             (docId, entry) => this.billModel
               .updateOne({ _id: docId, [entryKey]: id }, undo(BillStatus.POSTED, entry), { session })
               .exec());
@@ -178,6 +184,45 @@ export class JournalReversalService {
     if (bills.length) await this.billModel.deleteMany(filter, { session }).exec();
   }
 
+  /**
+   * Keep receipts and payments that span documents in step with the ledger.
+   * Reversing the receipt itself is refused while part of its advance stands
+   * applied by a later journal (reverse that first): the receipt is then
+   * marked reversed. Reversing an advance application gives the amount back
+   * to the advance.
+   */
+  private async undoPartyPayment(journalId: Types.ObjectId, orgId: string, actorId: string, session: ClientSession): Promise<void> {
+    if (!this.paymentModel) return;
+    const own = await this.paymentModel.findOne({ orgId, journalId, status: 'posted' }).session(session).exec();
+    if (own) {
+      const later = own.allocations.filter((a) => String(a.journalId) !== String(journalId));
+      if (later.length) {
+        throw new BadRequestException(
+          `Part of this ${own.kind}'s advance was applied later (to ${later.map((a) => a.documentNumber ?? 'a document').join(', ')}). Reverse ${later.length === 1 ? 'that journal' : 'those journals'} first.`,
+        );
+      }
+      await this.paymentModel.updateOne({ _id: own._id, orgId }, { $set: { status: 'reversed' } }, { session }).exec();
+      await this.audit.record(
+        { orgId, entityType: 'PartyPayment', entityId: String(own._id), action: 'REVERSE', performedBy: actorId, before: { status: 'posted' }, after: { status: 'reversed', reversedJournalId: String(journalId) } },
+        session,
+      );
+      return;
+    }
+    const applied = await this.paymentModel.findOne({ orgId, 'allocations.journalId': journalId }).session(session).exec();
+    if (!applied) return;
+    const allocation = applied.allocations.find((a) => String(a.journalId) === String(journalId))!;
+    await this.paymentModel
+      .updateOne({ _id: applied._id, orgId }, { $pull: { allocations: { journalId } }, $inc: { unappliedPaise: allocation.amountPaise } }, { session })
+      .exec();
+    await this.audit.record(
+      {
+        orgId, entityType: 'PartyPayment', entityId: String(applied._id), action: 'UNAPPLY_ADVANCE', performedBy: actorId,
+        before: { unappliedPaise: applied.unappliedPaise }, after: { unappliedPaise: applied.unappliedPaise + allocation.amountPaise, reversedJournalId: String(journalId) },
+      },
+      session,
+    );
+  }
+
   private async refuseWhilePaid(journalId: Types.ObjectId, orgId: string, session: ClientSession): Promise<void> {
     const paidAtAll = {
       journalId,
@@ -198,9 +243,10 @@ export class JournalReversalService {
   }
 
   /**
-   * Reversing a receipt, payment or note takes that one back off the invoice
-   * or bill: its amount comes off what was paid or adjusted, and a closed
-   * document is open again. The others stand.
+   * Reversing a receipt, payment or note takes that one back off each invoice
+   * or bill it settled (one receipt can settle several): its amount comes off
+   * what was paid or adjusted, and a closed document is open again. The
+   * others stand.
    */
   private async takeBack(
     entityType: string,
@@ -210,11 +256,23 @@ export class JournalReversalService {
     orgId: string,
     actorId: string,
     session: ClientSession,
-    find: () => Promise<SettledDocument | null>,
+    find: () => Promise<SettledDocument[]>,
     update: (docId: unknown, entry: { amountPaise: number; tdsPaise?: number }) => Promise<unknown>,
   ): Promise<void> {
-    const doc = await withOrg(orgId, find);
-    if (!doc) return;
+    for (const doc of await withOrg(orgId, find)) await this.takeBackOne(entityType, field, openStatus, journalId, orgId, actorId, session, doc, update);
+  }
+
+  private async takeBackOne(
+    entityType: string,
+    field: 'payments' | 'adjustments',
+    openStatus: string,
+    journalId: Types.ObjectId,
+    orgId: string,
+    actorId: string,
+    session: ClientSession,
+    doc: SettledDocument,
+    update: (docId: unknown, entry: { amountPaise: number; tdsPaise?: number }) => Promise<unknown>,
+  ): Promise<void> {
     const entry = (doc[field] ?? []).find((p) => String(p.journalId) === String(journalId));
     if (!entry) return;
 

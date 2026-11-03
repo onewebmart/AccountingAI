@@ -9,6 +9,8 @@ import { DocumentDetailDialog, PartyDetailDialog } from '@/components/shell/reco
 import { RecordPaymentDialog } from '@/components/shell/record-payment-dialog';
 import { AdjustmentNoteDialog } from '@/components/shell/adjustment-note-dialog';
 import { AgeingBuckets } from '@/components/shell/ageing-buckets';
+import { RecordPartyPaymentDialog } from '@/components/payments/record-party-payment-dialog';
+import { AdvancesPanel } from '@/components/payments/advances-panel';
 import { Plus, ChevronRight } from 'lucide-react';
 import { api } from '@/lib/api';
 import { GST_RATES, GstRate, splitGst, rupeesToPaise, formatPaise } from '@/lib/gst';
@@ -449,6 +451,7 @@ export default function PurchasePage() {
   const [showVendorModal, setShowVendorModal] = useState(false);
 
   const queryClient = useQueryClient();
+  const [recordingPayment, setRecordingPayment] = useState(false);
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -482,6 +485,10 @@ export default function PurchasePage() {
   });
 
   const bills = billsQuery.data ?? [];
+  // Open bills, for recording a payment across several and applying advances.
+  const openDocuments = bills
+    .filter((d) => d.status === 'posted' && d.outstandingPaise > 0)
+    .map((d) => ({ id: d._id, partyId: d.vendorId ?? null, number: d.billNumber, date: d.billDate, owedPaise: d.outstandingPaise }));
   const vendors = vendorsQuery.data ?? [];
 
   const totalOutstanding = vendors.reduce((s, v) => s + v.outstandingPaise, 0);
@@ -506,6 +513,9 @@ export default function PurchasePage() {
             label="Upload bill"
             onUploaded={(msg) => showToast(msg)}
           />
+          <Button variant="secondary" onClick={() => setRecordingPayment(true)}>
+            Record payment
+          </Button>
           <Button
             onClick={() => setShowBillModal(true)}
             className="flex items-center gap-2"
@@ -780,6 +790,7 @@ export default function PurchasePage() {
         <div className="space-y-4">
           <p className="text-caption text-ink-500">AP ageing — what you still owe vendors, by days past the due date.</p>
           <AgeingBuckets kind="payable" />
+          <AdvancesPanel kind="payment" documents={openDocuments} onDone={(m) => showToast(m)} />
 
           <div className="rounded-lg border border-line-200 overflow-hidden">
             <table className="w-full text-body">
@@ -874,6 +885,15 @@ export default function PurchasePage() {
         partyName={openBill?.vendorName ?? ''}
         onClose={() => setOpenBill(null)}
       />
+      <RecordPartyPaymentDialog
+        open={recordingPayment}
+        kind="payment"
+        parties={vendors}
+        documents={openDocuments}
+        onClose={() => setRecordingPayment(false)}
+        onDone={(m) => showToast(m)}
+      />
+
       <PartyDetailDialog
         kind="vendor"
         party={

@@ -9,6 +9,7 @@ import { PurchaseBill, PurchaseBillSchema } from '../purchase/schemas/purchase-b
 import { BankStatementLine, BankStatementLineSchema } from '../banking/schemas/bank-statement-line.schema';
 import { CreditNote, CreditNoteSchema } from '../sales/schemas/credit-note.schema';
 import { DebitNote, DebitNoteSchema } from '../purchase/schemas/debit-note.schema';
+import { PartyPayment, PartyPaymentSchema } from '../payments/schemas/party-payment.schema';
 import { TdsDeposit, TdsDepositSchema } from '../tds/schemas/tds-deposit.schema';
 
 @Module({
@@ -22,6 +23,8 @@ import { TdsDeposit, TdsDepositSchema } from '../tds/schemas/tds-deposit.schema'
       { name: CreditNote.name, schema: CreditNoteSchema },
       { name: DebitNote.name, schema: DebitNoteSchema },
       { name: TdsDeposit.name, schema: TdsDepositSchema },
+      // A reversed receipt or payment across several documents, or an applied advance.
+      { name: PartyPayment.name, schema: PartyPaymentSchema },
     ]),
   ],
   controllers: [JournalsController],

@@ -31,6 +31,7 @@ import { AutomationModule } from './automation/automation.module';
 import { MigrationModule } from './migration/migration.module';
 import { BankFeedsModule } from './bank-feeds/bank-feeds.module';
 import { AuditTrailModule } from './audit/audit-trail.module';
+import { PartyPaymentsModule } from './payments/party-payments.module';
 
 @Module({
   imports: [
@@ -75,6 +76,7 @@ import { AuditTrailModule } from './audit/audit-trail.module';
     MigrationModule,
     BankFeedsModule,
     AuditTrailModule,
+    PartyPaymentsModule,
     CrmModule,
     WorkspaceModule,
   ],

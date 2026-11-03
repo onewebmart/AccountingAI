@@ -9,6 +9,8 @@ import { DocumentDetailDialog, PartyDetailDialog } from '@/components/shell/reco
 import { RecordPaymentDialog } from '@/components/shell/record-payment-dialog';
 import { AdjustmentNoteDialog } from '@/components/shell/adjustment-note-dialog';
 import { AgeingBuckets } from '@/components/shell/ageing-buckets';
+import { RecordPartyPaymentDialog } from '@/components/payments/record-party-payment-dialog';
+import { AdvancesPanel } from '@/components/payments/advances-panel';
 import { Plus, ChevronRight, Send, FileDown, Mail } from 'lucide-react';
 import { InvoiceStatus as SharedInvoiceStatus } from '@ai-accounting/shared';
 import { api, downloadFile } from '@/lib/api';
@@ -522,6 +524,7 @@ export default function SalesPage() {
   const [openCustomer, setOpenCustomer] = useState<Customer | null>(null);
 
   const queryClient = useQueryClient();
+  const [recordingPayment, setRecordingPayment] = useState(false);
 
   /**
    * Posting is what moves the ledger — creating an invoice only records it.
@@ -577,6 +580,10 @@ export default function SalesPage() {
   });
 
   const invoices = invoicesQuery.data ?? [];
+  // Open invoices, for recording a receipt across several and applying advances.
+  const openDocuments = invoices
+    .filter((d) => d.status === 'posted' && d.outstandingPaise > 0)
+    .map((d) => ({ id: d._id, partyId: d.customerId ?? null, number: d.invoiceNumber, date: d.invoiceDate, owedPaise: d.outstandingPaise }));
   const customers = customersQuery.data ?? [];
 
   const totalReceivable = customers.reduce((s, c) => s + c.receivablePaise, 0);
@@ -601,6 +608,9 @@ export default function SalesPage() {
             label="Upload invoice"
             onUploaded={(msg) => showToast(msg)}
           />
+          <Button variant="secondary" onClick={() => setRecordingPayment(true)}>
+            Record receipt
+          </Button>
           <Button
             onClick={() => setShowInvoiceModal(true)}
             className="flex items-center gap-2"
@@ -906,6 +916,7 @@ export default function SalesPage() {
         <div className="space-y-4">
           <p className="text-caption text-ink-500">AR ageing — what customers still owe, by days past the due date.</p>
           <AgeingBuckets kind="receivable" />
+          <AdvancesPanel kind="receipt" documents={openDocuments} onDone={(m) => showToast(m)} />
 
           <div className="rounded-lg border border-line-200 overflow-hidden">
             <table className="w-full text-body">
@@ -1005,6 +1016,15 @@ export default function SalesPage() {
         customerEmail={customers.find((c) => c._id === emailingInvoice?.customerId)?.email ?? null}
         onClose={() => setEmailingInvoice(null)}
         onSent={(m) => showToast(m)}
+      />
+
+      <RecordPartyPaymentDialog
+        open={recordingPayment}
+        kind="receipt"
+        parties={customers}
+        documents={openDocuments}
+        onClose={() => setRecordingPayment(false)}
+        onDone={(m) => showToast(m)}
       />
 
       <PartyDetailDialog

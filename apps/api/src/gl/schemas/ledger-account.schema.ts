@@ -35,6 +35,10 @@ export enum SystemAccountKey {
   /** GST we owe on purchases under reverse charge. */
   RCM_GST_PAYABLE = 'RCM_GST_PAYABLE',
   RETAINED_EARNINGS = 'RETAINED_EARNINGS',
+  /** Money received from customers before the invoice it pays (a liability). */
+  CUSTOMER_ADVANCES = 'CUSTOMER_ADVANCES',
+  /** Money paid to vendors before the bill it pays (an asset). */
+  VENDOR_ADVANCES = 'VENDOR_ADVANCES',
 }
 
 @Schema({ timestamps: true, collection: 'ledger_accounts' })
