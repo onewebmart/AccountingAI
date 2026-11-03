@@ -139,6 +139,12 @@ export function DocumentDetailDialog({
                 <ExternalLink size={12} /> View the original upload
               </button>
             )}
+            <a
+              href={`/audit?entityType=${kind === 'invoice' ? 'SalesInvoice' : 'PurchaseBill'}&entityId=${record._id}`}
+              className="block text-caption font-medium text-ink-600 hover:text-ink-900 hover:underline"
+            >
+              History of this {kind}
+            </a>
           </div>
         )}
       </DialogContent>
@@ -327,7 +333,13 @@ export function PartyDetailDialog({
         )}
         {party && !editing && (
           <div className="space-y-4">
-            <div className="flex justify-end">
+            <div className="flex justify-end gap-4">
+              <a
+                href={`/audit?entityType=${kind === 'customer' ? 'Customer' : 'Vendor'}&entityId=${party.id}`}
+                className="text-caption font-medium text-ink-600 hover:text-ink-900 hover:underline"
+              >
+                History
+              </a>
               <button
                 type="button"
                 className="inline-flex items-center gap-1 text-caption font-medium text-ink-600 hover:text-ink-900 hover:underline"

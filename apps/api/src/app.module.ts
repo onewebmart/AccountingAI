@@ -30,6 +30,7 @@ import { ClosingModule } from './closing/closing.module';
 import { AutomationModule } from './automation/automation.module';
 import { MigrationModule } from './migration/migration.module';
 import { BankFeedsModule } from './bank-feeds/bank-feeds.module';
+import { AuditTrailModule } from './audit/audit-trail.module';
 
 @Module({
   imports: [
@@ -73,6 +74,7 @@ import { BankFeedsModule } from './bank-feeds/bank-feeds.module';
     AutomationModule,
     MigrationModule,
     BankFeedsModule,
+    AuditTrailModule,
     CrmModule,
     WorkspaceModule,
   ],
