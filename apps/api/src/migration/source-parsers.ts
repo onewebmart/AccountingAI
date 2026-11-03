@@ -66,7 +66,8 @@ export interface ImportedParty {
   balancePaise: number;
 }
 
-export type ImportSource = 'tally' | 'zoho' | 'quickbooks' | 'spreadsheet';
+/** 'manual': balances typed into the opening-balances form, not read from a file. */
+export type ImportSource = 'tally' | 'zoho' | 'quickbooks' | 'spreadsheet' | 'manual';
 
 export interface ImportPreview {
   source: ImportSource;

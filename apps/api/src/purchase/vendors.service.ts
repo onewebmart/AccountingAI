@@ -21,7 +21,6 @@ export interface CreateVendorInput {
   phone?: string | null;
   email?: string | null;
   address?: string | null;
-  openingBalancePaise?: number;
   notes?: string | null;
   pan?: string | null;
   tdsSection?: string | null;
@@ -57,7 +56,6 @@ export class VendorsService {
       phone: input.phone ?? null,
       email: input.email ?? null,
       address: input.address ?? null,
-      openingBalancePaise: input.openingBalancePaise ?? 0,
       notes: input.notes ?? null,
       ...this.taxSettings({ pan: input.pan ?? panFromGstin(gstin), tdsSection: input.tdsSection, tdsRateBps: input.tdsRateBps }),
     });

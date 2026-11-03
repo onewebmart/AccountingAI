@@ -18,8 +18,6 @@ export class Customer {
    * set, or an inter-state sale to them cannot be reported against a state.
    */
   @Prop({ type: String, default: null }) stateCode: string | null;
-  /** Opening balance in paise (positive = amount owed by customer). */
-  @Prop({ type: Number, default: 0 }) openingBalancePaise: number;
   @Prop({ type: String, default: null }) notes: string | null;
 }
 

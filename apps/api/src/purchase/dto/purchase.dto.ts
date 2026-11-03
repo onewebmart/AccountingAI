@@ -49,10 +49,6 @@ export class CreateVendorDto {
   address?: string;
 
   @IsOptional()
-  @IsInt({ message: 'openingBalancePaise must be an integer number of paise' })
-  openingBalancePaise?: number;
-
-  @IsOptional()
   @IsString()
   notes?: string;
 

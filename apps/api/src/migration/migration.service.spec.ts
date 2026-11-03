@@ -15,6 +15,7 @@ import mongoose, { Model, Types } from 'mongoose';
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigModule } from '@nestjs/config';
 import { MongooseModule, getModelToken } from '@nestjs/mongoose';
+import { AccountType } from '@ai-accounting/shared';
 import configuration from '../config/configuration';
 import { testMongoUri } from '../test-utils/mongo';
 import { MigrationService } from './migration.service';
@@ -154,5 +155,81 @@ describe('importing from Tally', () => {
     await expect(migration.commit(orgId, ACTOR, preview._id, { openingDate: '2026-04-01' })).rejects.toThrow(/Say what this account is first: Furniture/);
     const done = await migration.commit(orgId, ACTOR, preview._id, { openingDate: '2026-04-01', groups: { Furniture: 'fixed_assets' } });
     expect(done.status).toBe('committed');
+  });
+});
+
+describe('entering opening balances by hand', () => {
+  async function chartOf(orgId: string) {
+    const svc = moduleRef.get(AccountsService);
+    await svc.seedDefaults(orgId);
+    const capital = await svc.create({ orgId, actorId: ACTOR, name: "Proprietor's Capital", type: AccountType.CAPITAL });
+    const list = await svc.list(orgId);
+    const code = (c: string) => list.find((a) => a.code === c)!._id;
+    return { code, capitalId: String(capital._id) };
+  }
+
+  it('posts what was typed, receivables per customer, through the same commit', async () => {
+    const orgId = new Types.ObjectId().toString();
+    const { code, capitalId } = await chartOf(orgId);
+    const rao = await moduleRef.get(CustomersService).create({ orgId, actorId: ACTOR, name: 'Rao Traders' });
+    const sigma = await moduleRef.get(VendorsService).create({ orgId, actorId: ACTOR, name: 'Sigma Supplies' });
+
+    const preview = await migration.manual(orgId, ACTOR, {
+      accounts: [
+        { accountId: code('1100'), debitPaise: 25000000, creditPaise: 0 },
+        { accountId: code('1520'), debitPaise: 6000000, creditPaise: 0 },
+        { accountId: capitalId, debitPaise: 0, creditPaise: 36900000 },
+        { accountId: code('1110'), debitPaise: 0, creditPaise: 0 },
+      ],
+      parties: [
+        { kind: 'customer', partyId: String(rao._id), balancePaise: 11800000 },
+        { kind: 'vendor', partyId: String(sigma._id), balancePaise: 5900000 },
+      ],
+    });
+    expect(preview).toMatchObject({ source: 'manual', status: 'previewed', unplaced: [], warnings: [], opening: { debitPaise: 42800000, differencePaise: 0 } });
+    expect(await journals.countDocuments({ orgId })).toBe(0);
+
+    const done = await migration.commit(orgId, ACTOR, preview._id, { openingDate: '2026-04-01' });
+    expect(done.result).toMatchObject({ accountsCreated: 0, customersCreated: 0, vendorsCreated: 0, partiesMatched: 2, documentsCreated: 2 });
+    const opening = await journals.findOne({ orgId }).lean().exec();
+    expect(opening?.narration).toBe('Opening balances entered by hand');
+    expect(opening!.lines.map((l) => [l.description, l.debitPaise, l.creditPaise]).sort()).toEqual(
+      [
+        ['Accounts Payable', 0, 5900000],
+        ['Accounts Receivable', 11800000, 0],
+        ['Bank Accounts', 25000000, 0],
+        ['Furniture & Fixtures', 6000000, 0],
+        ["Proprietor's Capital", 0, 36900000],
+      ].sort(),
+    );
+    expect(await invoices.findOne({ orgId }).lean().exec()).toMatchObject({ invoiceNumber: 'OPENING/2026-27/001', isOpeningBalance: true });
+
+    // A second entry adds to the first, says so, and numbers on from it.
+    const meera = await moduleRef.get(CustomersService).create({ orgId, actorId: ACTOR, name: 'Meera Stores' });
+    const again = await migration.manual(orgId, ACTOR, {
+      accounts: [{ accountId: capitalId, debitPaise: 0, creditPaise: 500000 }],
+      parties: [{ kind: 'customer', partyId: String(meera._id), balancePaise: 500000 }],
+    });
+    expect(again.warnings[0]).toMatch(/already brought in as at 2026-04-01/);
+    await migration.commit(orgId, ACTOR, again._id, { openingDate: '2026-04-01' });
+    expect((await invoices.find({ orgId }).sort({ invoiceNumber: 1 }).lean().exec()).map((i) => i.invoiceNumber)).toEqual([
+      'OPENING/2026-27/001',
+      'OPENING/2026-27/003',
+    ]);
+  });
+
+  it('refuses control accounts, groups, both sides, and other orgs’ parties', async () => {
+    const orgId = new Types.ObjectId().toString();
+    const { code } = await chartOf(orgId);
+    await expect(migration.manual(orgId, ACTOR, { accounts: [{ accountId: code('1200'), debitPaise: 100, creditPaise: 0 }] })).rejects.toThrow(
+      /receivables per customer/,
+    );
+    await expect(migration.manual(orgId, ACTOR, { accounts: [{ accountId: code('1000'), debitPaise: 100, creditPaise: 0 }] })).rejects.toThrow(/is a group/);
+    await expect(migration.manual(orgId, ACTOR, { accounts: [{ accountId: code('1100'), debitPaise: 100, creditPaise: 100 }] })).rejects.toThrow(/not both/);
+    const elsewhere = await moduleRef.get(CustomersService).create({ orgId: new Types.ObjectId().toString(), actorId: ACTOR, name: 'Not yours' });
+    await expect(migration.manual(orgId, ACTOR, { parties: [{ kind: 'customer', partyId: String(elsewhere._id), balancePaise: 100 }] })).rejects.toThrow(
+      /not one of yours/,
+    );
+    await expect(migration.manual(orgId, ACTOR, { accounts: [], parties: [] })).rejects.toThrow(/at least one/);
   });
 });

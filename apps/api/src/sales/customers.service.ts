@@ -22,7 +22,6 @@ export interface CreateCustomerInput {
   address?: string | null;
   /** GST state code; ignored when the GSTIN gives it. */
   stateCode?: string | null;
-  openingBalancePaise?: number;
   notes?: string | null;
 }
 
@@ -50,7 +49,6 @@ export class CustomersService {
       address: input.address ?? null,
       // The GSTIN names the state it was issued in, so it wins over a picked one.
       stateCode: gstin ? gstin.slice(0, 2) : input.stateCode ?? null,
-      openingBalancePaise: input.openingBalancePaise ?? 0,
       notes: input.notes ?? null,
     });
     await this.auditService.record({

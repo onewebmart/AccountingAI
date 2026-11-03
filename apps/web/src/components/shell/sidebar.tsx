@@ -86,7 +86,7 @@ const NAV_GROUPS: NavGroup[] = [
       { href: '/accounts', label: 'Chart of accounts', icon: <BookOpen size={18} /> },
       { href: '/gst', label: 'GST', icon: <ReceiptIndianRupee size={18} /> },
       { href: '/tds', label: 'TDS', icon: <IndianRupee size={18} /> },
-      { href: '/migration', label: 'Import books', icon: <Upload size={18} /> },
+      { href: '/migration', label: 'Opening balances', icon: <Upload size={18} /> },
     ],
   },
   {

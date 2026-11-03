@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { api, ApiError } from '@/lib/api';
 import { currentFinancialYear } from '@/lib/financial-year';
 import { formatRupees } from '@/lib/utils';
+import { ManualOpeningForm } from '@/components/migration/manual-opening-form';
 
 // ── Shapes from /migration (paise; debit positive) ──────────────────────────
 
@@ -31,7 +32,7 @@ interface ImportedParty {
 
 interface ImportView {
   _id: string;
-  source: 'tally' | 'zoho' | 'quickbooks' | 'spreadsheet';
+  source: 'tally' | 'zoho' | 'quickbooks' | 'spreadsheet' | 'manual';
   fileNames: string[];
   status: 'previewed' | 'committing' | 'committed';
   accounts: ImportedAccount[];
@@ -51,7 +52,7 @@ interface ImportView {
   lastError: string | null;
 }
 
-const SOURCE: Record<ImportView['source'], string> = { tally: 'Tally', zoho: 'Zoho Books', quickbooks: 'QuickBooks', spreadsheet: 'Spreadsheet' };
+const SOURCE: Record<ImportView['source'], string> = { tally: 'Tally', zoho: 'Zoho Books', quickbooks: 'QuickBooks', spreadsheet: 'Spreadsheet', manual: 'Entered by hand' };
 
 const GROUPS: Array<{ value: AccountGroup; label: string }> = [
   { value: 'current_assets', label: 'Current asset' },
@@ -103,6 +104,7 @@ export default function MigrationPage() {
   const [openingDate, setOpeningDate] = useState(`${currentFinancialYear().slice(0, 4)}-04-01`);
   const [toSuspense, setToSuspense] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [mode, setMode] = useState<'import' | 'manual'>('import');
 
   const history = useQuery<Array<{ _id: string; source: ImportView['source']; fileNames: string[]; status: string; openingDate: string | null; createdAt: string }>>({
     queryKey: ['migration'],
@@ -143,13 +145,51 @@ export default function MigrationPage() {
   return (
     <div className="max-w-[1100px] space-y-6">
       <div>
-        <h1 className="text-h1 font-display text-ink-900">Import your books</h1>
+        <h1 className="text-h1 font-display text-ink-900">Opening balances</h1>
         <p className="text-body text-ink-500 mt-1">
-          Bring the chart of accounts, customers, vendors and opening balances over from Tally, Zoho Books or QuickBooks.
+          Bring the chart of accounts, customers, vendors and opening balances over from Tally, Zoho Books or QuickBooks, or type the balances in.
         </p>
       </div>
 
+      <div className="inline-flex rounded-md border border-line-200 bg-surface-card p-1">
+        {(
+          [
+            ['import', 'Import from another system'],
+            ['manual', 'Enter by hand'],
+          ] as const
+        ).map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            onClick={() => {
+              setMode(value);
+              setView(null);
+              setError(null);
+            }}
+            className={`rounded px-3 py-1.5 text-body font-medium ${mode === value ? 'bg-honey-50 text-saffron-700' : 'text-ink-600 hover:text-ink-900'}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {mode === 'manual' && !view && (
+        <section className="space-y-3 rounded-lg border border-line-200 bg-surface-card p-5">
+          <h2 className="text-body font-semibold text-ink-900">1. Enter the balances</h2>
+          <ManualOpeningForm
+            onPreview={(v) => {
+              setView(v as ImportView);
+              setGroups({});
+              setToSuspense(false);
+              void queryClient.invalidateQueries({ queryKey: ['migration'] });
+            }}
+            onError={setError}
+          />
+        </section>
+      )}
+
       {/* Step 1: files */}
+      {mode === 'import' && (
       <section className="space-y-3 rounded-lg border border-line-200 bg-surface-card p-5">
         <h2 className="text-body font-semibold text-ink-900">1. Upload the exports</h2>
         <ul className="list-disc space-y-0.5 pl-5 text-caption text-ink-500">
@@ -177,6 +217,7 @@ export default function MigrationPage() {
           </Button>
         </div>
       </section>
+      )}
 
       {error && (
         <div className="flex items-start gap-2 rounded-md border border-error-fg/30 bg-error-bg px-4 py-3 text-body text-error-fg">
@@ -189,7 +230,7 @@ export default function MigrationPage() {
           {/* Step 2: what came in */}
           <section className="space-y-4 rounded-lg border border-line-200 bg-surface-card p-5">
             <div className="flex flex-wrap items-baseline justify-between gap-3">
-              <h2 className="text-body font-semibold text-ink-900">2. Check what was read — from {SOURCE[view.source]}</h2>
+              <h2 className="text-body font-semibold text-ink-900">2. Check {view.source === 'manual' ? 'the balances' : <>what was read — from {SOURCE[view.source]}</>}</h2>
               <p className="text-caption text-ink-500">
                 {view.accounts.length} accounts · {view.parties.filter((p) => p.kind === 'customer').length} customers ·{' '}
                 {view.parties.filter((p) => p.kind === 'vendor').length} vendors

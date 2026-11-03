@@ -66,9 +66,37 @@ const GROUP_TYPE: Record<AccountGroup, AccountType> = {
   indirect_expenses: AccountType.EXPENSE,
 };
 
-const SOURCE_LABEL = { tally: 'Tally', zoho: 'Zoho Books', quickbooks: 'QuickBooks', spreadsheet: 'a spreadsheet' } as const;
+const SOURCE_LABEL = { tally: 'Tally', zoho: 'Zoho Books', quickbooks: 'QuickBooks', spreadsheet: 'a spreadsheet', manual: 'the opening balances form' } as const;
+/** How the opening journal and documents describe where the balances came from. */
+const fromSource = (source: keyof typeof SOURCE_LABEL) =>
+  source === 'manual' ? 'entered by hand' : `imported from ${SOURCE_LABEL[source]}`;
+
+/** Our ledgers' system keys, back to the import roles that post to them. */
+const KEY_ROLE = new Map<string, AccountRole>(Object.entries(ROLE_KEY).map(([role, key]) => [key, role as AccountRole]));
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+
+export interface ManualOpeningInput {
+  accounts?: Array<{ accountId: string; debitPaise: number; creditPaise: number }>;
+  /** Positive: the customer owes us, or we owe the vendor. Negative: an advance. */
+  parties?: Array<{ kind: 'customer' | 'vendor'; partyId: string; balancePaise: number }>;
+}
+
+/** Where an account of our chart sits, in the import's terms. */
+function groupOf(type: AccountType, parentCode: string | undefined): AccountGroup {
+  switch (type) {
+    case AccountType.ASSETS:
+      return parentCode?.startsWith('15') ? 'fixed_assets' : 'current_assets';
+    case AccountType.LIABILITIES:
+      return 'liabilities';
+    case AccountType.CAPITAL:
+      return 'capital';
+    case AccountType.INCOME:
+      return 'income';
+    default:
+      return parentCode?.startsWith('5') ? 'direct_expenses' : 'indirect_expenses';
+  }
+}
 
 export interface CommitInput {
   openingDate: string;
@@ -141,6 +169,79 @@ export class MigrationService {
       parties: merged.parties,
       warnings: merged.warnings,
       createdBy: actorId,
+    });
+    return this.view(batch);
+  }
+
+  /**
+   * Opening balances typed in over the org's own chart, customers and
+   * vendors. They become an import batch like any other, so they are
+   * previewed, must balance, and commit through the same path: one opening
+   * journal, and a document per party balance.
+   *
+   * Receivables and payables are entered per customer and vendor, not on the
+   * control accounts: the total is their sum, so the two cannot disagree.
+   */
+  async manual(orgId: string, actorId: string, input: ManualOpeningInput) {
+    await this.accounts.seedDefaults(orgId);
+    const chart = await this.accountModel.find({ orgId }).lean().exec();
+    const byId = new Map(chart.map((a) => [a._id.toString(), a]));
+    const seen = new Set<string>();
+    const accounts = [];
+    for (const line of input.accounts ?? []) {
+      const { debitPaise: dr, creditPaise: cr } = line;
+      if (![dr, cr].every((v) => Number.isInteger(v) && v >= 0)) throw new BadRequestException('Amounts must be whole paise, not negative.');
+      if (dr > 0 && cr > 0) throw new BadRequestException('An account opens with a debit or a credit balance, not both.');
+      if (dr === 0 && cr === 0) continue;
+      const account = byId.get(line.accountId);
+      if (!account) throw new BadRequestException('One of the accounts is not in your chart.');
+      if (seen.has(line.accountId)) throw new BadRequestException(`${account.name} is entered twice.`);
+      seen.add(line.accountId);
+      if (account.isGroup) throw new BadRequestException(`${account.name} is a group. Enter balances on the accounts under it.`);
+      if (account.isActive === false) throw new BadRequestException(`${account.name} is deactivated.`);
+      const role = account.systemKey ? KEY_ROLE.get(account.systemKey) ?? null : null;
+      if (role === 'receivable' || role === 'payable') {
+        throw new BadRequestException(`Enter ${role === 'receivable' ? 'receivables per customer' : 'payables per vendor'}; ${account.name} opens at their total.`);
+      }
+      const parent = account.parentId ? byId.get(account.parentId.toString()) : undefined;
+      accounts.push({
+        name: account.name,
+        code: account.code,
+        classification: { type: account.type, group: groupOf(account.type, parent?.code), role },
+        sourceType: null,
+        balancePaise: dr - cr,
+      });
+    }
+
+    const parties = [];
+    const seenParties = new Set<string>();
+    for (const line of input.parties ?? []) {
+      if (!Number.isInteger(line.balancePaise)) throw new BadRequestException('Amounts must be whole paise.');
+      if (line.balancePaise === 0) continue;
+      if (!Types.ObjectId.isValid(line.partyId) || seenParties.has(`${line.kind}:${line.partyId}`)) {
+        throw new BadRequestException('Each customer and vendor can be entered once.');
+      }
+      seenParties.add(`${line.kind}:${line.partyId}`);
+      const party =
+        line.kind === 'customer'
+          ? await this.customerModel.findOne({ _id: line.partyId, orgId }).lean().exec()
+          : await this.vendorModel.findOne({ _id: line.partyId, orgId }).lean().exec();
+      if (!party) throw new BadRequestException(`That ${line.kind} is not one of yours.`);
+      parties.push({ name: party.name, kind: line.kind, gstin: party.gstin ?? null, email: party.email ?? null, phone: party.phone ?? null, balancePaise: line.balancePaise });
+    }
+    if (accounts.length === 0 && parties.length === 0) throw new BadRequestException('Enter at least one opening balance.');
+
+    const warnings: string[] = [];
+    const earlier = await this.batchModel.findOne({ orgId, status: 'committed' }).sort({ updatedAt: -1 }).lean().exec();
+    if (earlier) {
+      warnings.push(
+        `Opening balances were already brought in as at ${earlier.openingDate}. These are added to them as a second opening entry, so enter only what that one missed.`,
+      );
+    }
+    const batch = await this.batchModel.create({ orgId, source: 'manual', fileNames: [], accounts, parties, warnings, createdBy: actorId });
+    await this.audit.record({
+      orgId, entityType: 'ImportBatch', entityId: batch._id.toString(), action: 'CREATE', performedBy: actorId,
+      after: { source: 'manual', accounts: accounts.length, parties: parties.length },
     });
     return this.view(batch);
   }
@@ -272,12 +373,22 @@ export class MigrationService {
     const { journalId, documentsCreated } = await this.posting.inTransaction(async (session) => {
       const journal = await this.postOpening(orgId, actorId, batch, plan, accountIds, input, session);
       const fy = financialYearOf(input.openingDate);
+      const prefix = `OPENING/${fy}/`;
+      const taken = await Promise.all([
+        this.invoiceModel.find({ orgId, invoiceNumber: { $regex: `^${prefix.replace(/\//g, '\\/')}` } }, { invoiceNumber: 1 }).session(session).lean().exec(),
+        this.billModel.find({ orgId, billNumber: { $regex: `^${prefix.replace(/\//g, '\\/')}` } }, { billNumber: 1 }).session(session).lean().exec(),
+      ]);
+      const last = Math.max(
+        0,
+        ...taken[0].map((d) => Number(String(d.invoiceNumber).slice(prefix.length)) || 0),
+        ...taken[1].map((d) => Number(String(d.billNumber).slice(prefix.length)) || 0),
+      );
       let created = 0;
       for (const [n, p] of batch.parties.filter((x) => x.balancePaise > 0).entries()) {
         const partyId = partyIds.get(`${p.kind}:${p.name}`)!;
-        const number = `OPENING/${fy}/${String(n + 1).padStart(3, '0')}`;
+        const number = `${prefix}${String(last + n + 1).padStart(3, '0')}`;
         const amountsPaise = { taxableValue: p.balancePaise, cgst: 0, sgst: 0, igst: 0, cess: 0, total: p.balancePaise };
-        const common = { orgId, dueDate: input.openingDate, amountsPaise, financialYear: fy, journalId: journal?._id ?? null, postedBy: actorId, isOpeningBalance: true, notes: `Opening balance from ${SOURCE_LABEL[batch.source]}` };
+        const common = { orgId, dueDate: input.openingDate, amountsPaise, financialYear: fy, journalId: journal?._id ?? null, postedBy: actorId, isOpeningBalance: true, notes: `Opening balance ${fromSource(batch.source)}` };
         if (p.kind === 'customer') {
           await this.invoiceModel.create([{ ...common, customerId: partyId, invoiceNumber: number, invoiceDate: input.openingDate, status: InvoiceStatus.POSTED }], { session });
         } else {
@@ -327,7 +438,7 @@ export class MigrationService {
         voucherType: VoucherType.JOURNAL,
         financialYear: financialYearOf(input.openingDate),
         date: input.openingDate,
-        narration: `Opening balances imported from ${SOURCE_LABEL[batch.source]}`,
+        narration: `Opening balances ${fromSource(batch.source)}`,
         postedBy: actorId,
         lines,
       },
