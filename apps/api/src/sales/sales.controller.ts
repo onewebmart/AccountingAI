@@ -7,6 +7,7 @@ import {
   Body,
   Query,
   Request,
+  Res,
   UseGuards,
 } from '@nestjs/common';
 import { Permission, InvoiceStatus } from '@ai-accounting/shared';
@@ -15,8 +16,10 @@ import { PermissionGuard } from '../auth/guards/permission.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CustomersService } from './customers.service';
 import { SalesInvoicesService } from './sales-invoices.service';
-import { CreateCustomerDto, CreateSalesInvoiceDto, PayInvoiceDto, CreateCreditNoteDto, UpdateCustomerDto } from './dto/sales.dto';
+import { CreateCustomerDto, CreateSalesInvoiceDto, PayInvoiceDto, CreateCreditNoteDto, UpdateCustomerDto, EmailInvoiceDto } from './dto/sales.dto';
 import { CreditNotesService } from './credit-notes.service';
+import { InvoiceDeliveryService } from './invoice-delivery.service';
+import { Response } from 'express';
 
 interface AuthRequest {
   user: { orgId: string; sub: string };
@@ -29,6 +32,7 @@ export class SalesController {
     private readonly customersService: CustomersService,
     private readonly invoicesService: SalesInvoicesService,
     private readonly creditNotesService: CreditNotesService,
+    private readonly delivery: InvoiceDeliveryService,
   ) {}
 
   // ── Customers ────────────────────────────────────────────────────────────
@@ -87,6 +91,23 @@ export class SalesController {
   @RequirePermission(Permission.MANAGE_SALES)
   getInvoice(@Request() req: AuthRequest, @Param('id') id: string) {
     return this.invoicesService.findById(id, req.user.orgId);
+  }
+
+  /** The invoice as a PDF, as the customer would get it. */
+  @Get('invoices/:id/pdf')
+  @RequirePermission(Permission.MANAGE_SALES)
+  async invoicePdf(@Request() req: AuthRequest, @Param('id') id: string, @Res() res: Response) {
+    const { filename, content } = await this.delivery.pdf(req.user.orgId, id);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+    res.send(content);
+  }
+
+  /** Email the PDF to the customer. */
+  @Post('invoices/:id/email')
+  @RequirePermission(Permission.MANAGE_SALES)
+  emailInvoice(@Request() req: AuthRequest, @Param('id') id: string, @Body() body: EmailInvoiceDto) {
+    return this.delivery.email(req.user.orgId, req.user.sub, id, body);
   }
 
   @Post('invoices/:id/send')

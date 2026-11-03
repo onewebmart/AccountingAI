@@ -36,6 +36,10 @@ interface OrgSettings {
   displayName?: string | null;
   gstin?: string | null;
   pan?: string | null;
+  address?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  invoiceNotes?: string | null;
   stateCode?: string;
   financialYearStartMonth?: number;
   timezone?: string;
@@ -105,6 +109,10 @@ function GeneralTab() {
     displayName: '',
     timezone: '',
     financialYearStartMonth: '',
+    address: '',
+    phone: '',
+    email: '',
+    invoiceNotes: '',
   });
   const [initialised, setInitialised] = useState(false);
 
@@ -113,6 +121,10 @@ function GeneralTab() {
       displayName: remoteSettings.displayName ?? '',
       timezone: remoteSettings.timezone ?? 'Asia/Kolkata',
       financialYearStartMonth: String(remoteSettings.financialYearStartMonth ?? 4),
+      address: remoteSettings.address ?? '',
+      phone: remoteSettings.phone ?? '',
+      email: remoteSettings.email ?? '',
+      invoiceNotes: remoteSettings.invoiceNotes ?? '',
     });
     setInitialised(true);
   }
@@ -132,6 +144,10 @@ function GeneralTab() {
         displayName: form.displayName || settings.displayName || undefined,
         timezone: form.timezone || settings.timezone,
         financialYearStartMonth: Number(form.financialYearStartMonth || settings.financialYearStartMonth || 4),
+        address: form.address.trim(),
+        phone: form.phone.trim(),
+        email: form.email.trim(),
+        invoiceNotes: form.invoiceNotes.trim(),
       });
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
@@ -160,6 +176,49 @@ function GeneralTab() {
             type="text"
             value={displayForm.displayName}
             onChange={(e) => setForm({ ...form, displayName: e.target.value })}
+            className="w-full rounded-md border border-line-200 bg-surface-card px-3 py-2 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-brand-500"
+          />
+        </div>
+
+        <div className="col-span-2">
+          <label className="block text-caption font-medium text-ink-700 mb-1">Address</label>
+          <textarea
+            rows={2}
+            value={form.address}
+            onChange={(e) => setForm({ ...form, address: e.target.value })}
+            placeholder="Printed on every invoice — a tax invoice must carry it"
+            className="w-full rounded-md border border-line-200 bg-surface-card px-3 py-2 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-brand-500"
+          />
+        </div>
+
+        <div>
+          <label className="block text-caption font-medium text-ink-700 mb-1">Phone</label>
+          <input
+            type="tel"
+            value={form.phone}
+            onChange={(e) => setForm({ ...form, phone: e.target.value })}
+            className="w-full rounded-md border border-line-200 bg-surface-card px-3 py-2 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-brand-500"
+          />
+        </div>
+
+        <div>
+          <label className="block text-caption font-medium text-ink-700 mb-1">Email</label>
+          <input
+            type="email"
+            value={form.email}
+            onChange={(e) => setForm({ ...form, email: e.target.value })}
+            placeholder="Customers' replies to invoices come here"
+            className="w-full rounded-md border border-line-200 bg-surface-card px-3 py-2 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-brand-500"
+          />
+        </div>
+
+        <div className="col-span-2">
+          <label className="block text-caption font-medium text-ink-700 mb-1">Printed on every invoice</label>
+          <textarea
+            rows={2}
+            value={form.invoiceNotes}
+            onChange={(e) => setForm({ ...form, invoiceNotes: e.target.value })}
+            placeholder="e.g. Pay to HDFC Bank A/c 50100000001234, IFSC HDFC0000001 · UPI kumar@hdfcbank"
             className="w-full rounded-md border border-line-200 bg-surface-card px-3 py-2 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-brand-500"
           />
         </div>

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { api, ApiError } from '@/lib/api';
+import { parseRupees } from '@/lib/money';
 import { formatRupees } from '@/lib/utils';
 
 interface Account {
@@ -20,20 +21,6 @@ interface Party {
   _id: string;
   name: string;
   gstin: string | null;
-}
-
-/**
- * "1,25,000.50" → 12500050. Rupees typed into a form become integer paise
- * here, once, by string arithmetic rather than floating point. Null when it
- * is not an amount.
- */
-export function rupeesToPaise(text: string): number | null {
-  const s = text.replace(/[,\s₹]/g, '');
-  if (s === '') return 0;
-  const m = s.match(/^(-?)(\d+)(?:\.(\d{1,2}))?$/);
-  if (!m) return null;
-  const paise = Number(m[2]) * 100 + Number((m[3] ?? '').padEnd(2, '0'));
-  return m[1] ? -paise : paise;
 }
 
 const SECTIONS: Array<{ type: Account['type']; label: string }> = [
@@ -62,7 +49,7 @@ export function ManualOpeningForm({ onPreview, onError }: { onPreview: (view: un
   const [text, setText] = useState<Record<string, string>>({});
   const [showPl, setShowPl] = useState(false);
 
-  const amount = (key: string) => rupeesToPaise(text[key] ?? '');
+  const amount = (key: string) => parseRupees(text[key] ?? '');
   const ledgers = (accounts.data ?? []).filter((a) => !a.isGroup && a.isActive !== false && !CONTROL.has(a.systemKey ?? ''));
   const keys = Object.keys(text);
   const bad = keys.filter((k) => amount(k) === null || (/^(dr|cr):/.test(k) && (amount(k) ?? 0) < 0));

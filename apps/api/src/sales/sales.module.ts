@@ -7,6 +7,9 @@ import { CreditNotesService } from './credit-notes.service';
 import { CustomersService } from './customers.service';
 import { SalesInvoicesService } from './sales-invoices.service';
 import { SalesController } from './sales.controller';
+import { MailModule } from '../mail/mail.module';
+import { InvoiceDeliveryService } from './invoice-delivery.service';
+import { OrgSettings, OrgSettingsSchema } from '../org-settings/schemas/org-settings.schema';
 import { GlModule } from '../gl/gl.module';
 
 @Module({
@@ -15,11 +18,14 @@ import { GlModule } from '../gl/gl.module';
       { name: Customer.name, schema: CustomerSchema },
       { name: SalesInvoice.name, schema: SalesInvoiceSchema },
       { name: CreditNote.name, schema: CreditNoteSchema },
+      // Read for the seller's details printed on the invoice PDF.
+      { name: OrgSettings.name, schema: OrgSettingsSchema },
     ]),
     GlModule, // for PostingService
+    MailModule, // emails the invoice PDF
   ],
   controllers: [SalesController],
-  providers: [CustomersService, SalesInvoicesService, CreditNotesService],
+  providers: [CustomersService, SalesInvoicesService, CreditNotesService, InvoiceDeliveryService],
   exports: [CustomersService, SalesInvoicesService, CreditNotesService],
 })
 export class SalesModule {}

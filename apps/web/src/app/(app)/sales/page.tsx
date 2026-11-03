@@ -9,9 +9,10 @@ import { DocumentDetailDialog, PartyDetailDialog } from '@/components/shell/reco
 import { RecordPaymentDialog } from '@/components/shell/record-payment-dialog';
 import { AdjustmentNoteDialog } from '@/components/shell/adjustment-note-dialog';
 import { AgeingBuckets } from '@/components/shell/ageing-buckets';
-import { Plus, ChevronRight, Send } from 'lucide-react';
+import { Plus, ChevronRight, Send, FileDown, Mail } from 'lucide-react';
 import { InvoiceStatus as SharedInvoiceStatus } from '@ai-accounting/shared';
-import { api } from '@/lib/api';
+import { api, downloadFile } from '@/lib/api';
+import { EmailInvoiceDialog } from '@/components/sales/email-invoice-dialog';
 import { GST_RATES, GST_STATES, GstRate, splitGst, rupeesToPaise, formatPaise } from '@/lib/gst';
 import { TableError } from '@/components/ui/query-error';
 
@@ -46,6 +47,8 @@ interface Customer {
   gstin: string | null;
   /** GST state code: the place of supply for their invoices. */
   stateCode?: string | null;
+  /** Where "Email invoice" sends the PDF unless another address is typed. */
+  email?: string | null;
   receivablePaise: number;
 }
 
@@ -512,6 +515,7 @@ export default function SalesPage() {
   const [activeTab, setActiveTab] = useState<Tab>('Invoices');
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'info' } | null>(null);
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
+  const [emailingInvoice, setEmailingInvoice] = useState<Invoice | null>(null);
   const [openInvoice, setOpenInvoice] = useState<Invoice | null>(null);
   const [payingInvoice, setPayingInvoice] = useState<Invoice | null>(null);
   const [notingInvoice, setNotingInvoice] = useState<Invoice | null>(null);
@@ -550,7 +554,7 @@ export default function SalesPage() {
   const sendMutation = useMutation({
     mutationFn: (id: string) => api.post(`/sales/invoices/${id}/send`),
     onSuccess: () => {
-      showToast('Invoice sent');
+      showToast('Marked as sent');
       void queryClient.invalidateQueries({ queryKey: ['sales'] });
     },
     onError: (e) => showToast((e as Error).message, 'info'),
@@ -745,7 +749,7 @@ export default function SalesPage() {
                             <>
                               <button
                                 type="button"
-                                title="Send invoice"
+                                title="Mark as sent (you sent it yourself)"
                                 onClick={() => sendMutation.mutate(inv._id)}
                                 disabled={sendMutation.isPending}
                                 className="text-ink-400 hover:text-saffron-600 transition-colors disabled:opacity-40"
@@ -779,6 +783,30 @@ export default function SalesPage() {
                               className="rounded border border-line-200 px-2 py-0.5 text-caption font-medium text-ink-600 transition-colors hover:bg-surface-sink"
                             >
                               Credit note
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            title="Download PDF"
+                            aria-label={`Download invoice ${inv.invoiceNumber ?? ''} as PDF`}
+                            onClick={() =>
+                              void downloadFile(`/sales/invoices/${inv._id}/pdf`, `Invoice-${(inv.invoiceNumber ?? 'draft').replace(/[^A-Za-z0-9-]+/g, '-')}.pdf`).catch(
+                                (e: Error) => showToast(e.message || "Couldn't download the PDF", 'info'),
+                              )
+                            }
+                            className="text-ink-400 hover:text-ink-700 transition-colors"
+                          >
+                            <FileDown size={14} />
+                          </button>
+                          {inv.invoiceNumber && (
+                            <button
+                              type="button"
+                              title="Email invoice"
+                              aria-label={`Email invoice ${inv.invoiceNumber}`}
+                              onClick={() => setEmailingInvoice(inv)}
+                              className="text-ink-400 hover:text-saffron-600 transition-colors"
+                            >
+                              <Mail size={14} />
                             </button>
                           )}
                           <button
@@ -972,6 +1000,13 @@ export default function SalesPage() {
         partyName={openInvoice?.customerName ?? ''}
         onClose={() => setOpenInvoice(null)}
       />
+      <EmailInvoiceDialog
+        invoice={emailingInvoice}
+        customerEmail={customers.find((c) => c._id === emailingInvoice?.customerId)?.email ?? null}
+        onClose={() => setEmailingInvoice(null)}
+        onSent={(m) => showToast(m)}
+      />
+
       <PartyDetailDialog
         kind="customer"
         party={

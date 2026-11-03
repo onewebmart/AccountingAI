@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeftRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { rupeesToPaise } from '@/components/migration/manual-opening-form';
+import { parseRupees } from '@/lib/money';
 import { api, ApiError } from '@/lib/api';
 import { formatRupees } from '@/lib/utils';
 
@@ -68,7 +68,7 @@ export function TransfersCard({ onToast }: { onToast: (text: string, error?: boo
 
   const list = suggestions.data ?? [];
   const busy = record.isPending || pair.isPending;
-  const amountPaise = rupeesToPaise(form.amount);
+  const amountPaise = parseRupees(form.amount);
   const select = 'rounded-md border border-line-200 bg-white px-3 py-1.5 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-saffron-600/40';
 
   return (

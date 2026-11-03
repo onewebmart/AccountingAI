@@ -14,6 +14,13 @@ export class OrgSettings {
   @Prop({ type: String, default: null }) displayName: string | null;
   @Prop({ type: String, default: null }) gstin: string | null;
   @Prop({ type: String, default: null }) pan: string | null;
+  /** Printed on invoices: a tax invoice must carry the supplier's address (Rule 46). */
+  @Prop({ type: String, default: null }) address: string | null;
+  @Prop({ type: String, default: null }) phone: string | null;
+  /** Shown on invoices, and where customers' replies to invoice emails go. */
+  @Prop({ type: String, default: null }) email: string | null;
+  /** Printed under the totals on every invoice: bank or UPI details, terms. */
+  @Prop({ type: String, default: null }) invoiceNotes: string | null;
 
   /** Two-digit GST state code (e.g. "27" for Maharashtra). */
   @Prop({ type: String, default: '27' }) stateCode: string;

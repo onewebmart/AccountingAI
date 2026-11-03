@@ -142,7 +142,8 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+/** The response, signed in and refreshed once if the token expired; errors as ApiError. */
+async function authorisedFetch(path: string, init: RequestInit = {}): Promise<Response> {
   const token = getAccessToken();
   const headers: Record<string, string> = {
     ...(init.headers as Record<string, string>),
@@ -186,7 +187,11 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     const message = Array.isArray(body.message) ? body.message.join(', ') : body.message;
     throw new ApiError(res.status, message ?? `HTTP ${res.status}`);
   }
+  return res;
+}
 
+async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const res = await authorisedFetch(path, init);
   if (res.status === 204) return undefined as T;
 
   // A handler returning null serialises to a 200 with an empty body, not to
@@ -204,4 +209,16 @@ export const api = {
   patch: <T>(path: string, body?: unknown) =>
     request<T>(path, { method: 'PATCH', body: JSON.stringify(body) }),
   delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
+  /** A file from the API, such as an invoice PDF. */
+  blob: async (path: string) => (await authorisedFetch(path)).blob(),
 };
+
+/** Save a file the API makes, under a name of our choosing. */
+export async function downloadFile(path: string, filename: string): Promise<void> {
+  const url = URL.createObjectURL(await api.blob(path));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}

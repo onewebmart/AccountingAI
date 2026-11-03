@@ -108,6 +108,25 @@ export class CreateCustomerDto {
   notes?: string;
 }
 
+/** POST /sales/invoices/:id/email */
+export class EmailInvoiceDto {
+  /** Defaults to the customer's email. */
+  @IsOptional()
+  @IsString()
+  @Length(3, 200)
+  to?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  cc?: string[];
+
+  @IsOptional()
+  @IsString()
+  @Length(0, 2000)
+  message?: string;
+}
+
 /** PATCH /sales/customers/:id — only the fields sent change. */
 export class UpdateCustomerDto {
   @IsOptional()

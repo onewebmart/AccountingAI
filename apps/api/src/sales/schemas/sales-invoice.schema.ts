@@ -104,6 +104,10 @@ export class SalesInvoice {
    */
   @Prop({ type: Boolean, default: false }) isOpeningBalance: boolean;
 
+  /** The last time the PDF was emailed, and to whom. */
+  @Prop({ type: String, default: null }) emailedTo: string | null;
+  @Prop({ type: Date, default: null }) emailedAt: Date | null;
+
   /**
    * The party as it stood when this was issued, stamped before the party's
    * name, GSTIN or state is edited. Null: read the party as it is now.

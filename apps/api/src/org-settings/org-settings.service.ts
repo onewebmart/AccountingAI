@@ -21,6 +21,10 @@ export class UpdateSettingsDto {
   @IsOptional() @IsString() @Length(1, 200) displayName?: string;
   @IsOptional() @IsString() gstin?: string;
   @IsOptional() @IsString() pan?: string;
+  @IsOptional() @IsString() @Length(0, 500) address?: string;
+  @IsOptional() @IsString() @Length(0, 40) phone?: string;
+  @IsOptional() @IsString() @Length(0, 200) email?: string;
+  @IsOptional() @IsString() @Length(0, 1000) invoiceNotes?: string;
   @IsOptional() @Matches(/^\d{2}$/, { message: 'stateCode must be the two-digit GST state code, e.g. 27' }) stateCode?: string;
   @IsOptional() @IsString() timezone?: string;
   @IsOptional() @IsString() @Length(3, 3) currencyCode?: string;
@@ -37,7 +41,7 @@ export class UpdateSettingsDto {
 
 /** Exactly the fields above — anything else in a request body is ignored. */
 const UPDATABLE_FIELDS = [
-  'displayName', 'gstin', 'pan', 'stateCode', 'timezone', 'currencyCode',
+  'displayName', 'gstin', 'pan', 'address', 'phone', 'email', 'invoiceNotes', 'stateCode', 'timezone', 'currencyCode',
   'financialYearStartMonth', 'gstFilingFrequency', 'tallyCompanyName', 'razorpayKeyId',
   'awsBucketName', 'brandingLogoUrl', 'brandingAccentColor', 'customDomain', 'clientPortalEnabled',
 ] as const;
