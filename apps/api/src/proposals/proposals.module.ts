@@ -16,6 +16,7 @@ import { SubledgerSyncService } from './subledger-sync.service';
 import { GlModule } from '../gl/gl.module';
 import { BankStatementLine, BankStatementLineSchema } from '../banking/schemas/bank-statement-line.schema';
 import { ExpenseCategorizerService } from './categorisation/expense-categorizer.service';
+import { BillChecksService } from './checks/bill-checks.service';
 import { BankCategorisationService, CATEGORISE_QUEUE } from './categorisation/bank-categorisation.service';
 import { CategorisationProcessor } from './categorisation/categorisation.processor';
 import { CategorisationController } from './categorisation/categorisation.controller';
@@ -46,6 +47,7 @@ import { CATEGORY_MODEL, GeminiCategoryModel } from './categorisation/category-m
     LearningService,
     SubledgerSyncService,
     ExpenseCategorizerService,
+    BillChecksService,
     BankCategorisationService,
     CategorisationProcessor,
     // Gemini when a key is configured; without one, rules and past choices still apply.

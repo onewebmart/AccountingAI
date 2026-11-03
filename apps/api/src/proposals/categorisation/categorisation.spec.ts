@@ -23,6 +23,7 @@ import { REDIS_CLIENT } from '../../redis/redis.module';
 import { ProposalsService } from '../proposals.service';
 import { LearningService } from '../learning.service';
 import { SubledgerSyncService } from '../subledger-sync.service';
+import { BillChecksService } from '../checks/bill-checks.service';
 import { ExpenseCategorizerService } from './expense-categorizer.service';
 import { BankCategorisationService, CATEGORISE_QUEUE } from './bank-categorisation.service';
 import { CATEGORY_MODEL, CategoryChoiceInput } from './category-model';
@@ -83,6 +84,7 @@ beforeAll(async () => {
       LearningService,
       SubledgerSyncService,
       ExpenseCategorizerService,
+      BillChecksService,
       BankCategorisationService,
       PostingService,
       AccountsService,

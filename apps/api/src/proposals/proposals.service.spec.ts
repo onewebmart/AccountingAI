@@ -39,6 +39,7 @@ import { SalesInvoice, SalesInvoiceSchema } from '../sales/schemas/sales-invoice
 import { Document as UploadedDocument, DocumentSchema } from '../documents/schemas/document.schema';
 import { AccountType, ProposedEntryStatus, VoucherType } from '@ai-accounting/shared';
 import { REDIS_CLIENT } from '../redis/redis.module';
+import { BillChecksService } from './checks/bill-checks.service';
 import { ExpenseCategorizerService } from './categorisation/expense-categorizer.service';
 import { CATEGORY_MODEL } from './categorisation/category-model';
 import { BankStatementLine, BankStatementLineSchema } from '../banking/schemas/bank-statement-line.schema';
@@ -113,6 +114,7 @@ beforeAll(async () => {
       SubledgerSyncService,
       AuditService,
       ExpenseCategorizerService,
+      BillChecksService,
       // No model in these tests: categorisation falls back to rules, past choices and Purchases.
       { provide: CATEGORY_MODEL, useValue: { available: false, choose: jest.fn() } },
       { provide: REDIS_CLIENT, useValue: redisMock },
@@ -303,15 +305,23 @@ describe('reject', () => {
 describe('approveHighConfidence', () => {
   it('only approves proposals at or above the confidence threshold', async () => {
     // Create two high-confidence and one low-confidence proposal
+    // Three different vendors' bills, so none is a duplicate of another.
+    const vendor = (name: string, number: string) => ({
+      vendor: { name, gstin: null, confidence: 0.95 },
+      invoiceNumber: { value: number, confidence: 0.95 },
+    });
     const highConf1 = await seedExtracted(extractedModel, {
+      ...vendor('Bulk Vendor One', 'B1-001'),
       confidenceOverall: 0.95,
       invoiceDate: { value: '2025-08-01', confidence: 0.95 },
     });
     const highConf2 = await seedExtracted(extractedModel, {
+      ...vendor('Bulk Vendor Two', 'B2-001'),
       confidenceOverall: 0.91,
       invoiceDate: { value: '2025-08-02', confidence: 0.91 },
     });
     const lowConf = await seedExtracted(extractedModel, {
+      ...vendor('Bulk Vendor Three', 'B3-001'),
       confidenceOverall: 0.65,
       invoiceDate: { value: '2025-08-03', confidence: 0.65 },
     });
@@ -327,6 +337,23 @@ describe('approveHighConfidence', () => {
     // Low-confidence proposal must still be proposed
     const stillProposed = await proposalModel.findById(lowProposal._id).exec();
     expect(stillProposed!.status).toBe(ProposedEntryStatus.PROPOSED);
+  });
+
+  it('leaves a flagged proposal for a person, however confident', async () => {
+    const same = {
+      vendor: { name: 'Twice Billed Traders', gstin: null, confidence: 0.98 },
+      invoiceNumber: { value: 'TB/77', confidence: 0.98 },
+      invoiceDate: { value: '2025-08-10', confidence: 0.98 },
+      confidenceOverall: 0.97,
+    };
+    const first = await svc.createFromExtracted((await seedExtracted(extractedModel, same))._id.toString(), ORG_ID);
+    const second = await svc.createFromExtracted((await seedExtracted(extractedModel, same))._id.toString(), ORG_ID);
+    expect(first.checks).toEqual([]);
+    expect(second.checks).toEqual([expect.objectContaining({ code: 'duplicate_number', severity: 'high' })]);
+
+    await svc.approveHighConfidence(ORG_ID, ACTOR_ID, 0.9);
+    expect((await proposalModel.findById(first._id).exec())!.status).toBe(ProposedEntryStatus.APPROVED);
+    expect((await proposalModel.findById(second._id).exec())!.status).toBe(ProposedEntryStatus.PROPOSED);
   });
 });
 

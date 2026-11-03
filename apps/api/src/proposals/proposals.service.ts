@@ -17,6 +17,7 @@ import { SystemAccountKey } from '../gl/schemas/ledger-account.schema';
 import { LearningService } from './learning.service';
 import { SubledgerSyncService } from './subledger-sync.service';
 import { ExpenseCategorizerService } from './categorisation/expense-categorizer.service';
+import { BillChecksService } from './checks/bill-checks.service';
 import { withOrg } from '../database/tenant.plugin';
 import { dueDateFromTerms } from '../extraction/invoice-checks';
 import { Vendor, VendorDocument } from '../purchase/schemas/vendor.schema';
@@ -104,6 +105,7 @@ export class ProposalsService {
     private subledgerSync: SubledgerSyncService,
     private auditService: AuditService,
     private categorizer: ExpenseCategorizerService,
+    private billChecks: BillChecksService,
   ) {}
 
   /**
@@ -253,6 +255,23 @@ export class ProposalsService {
 
     const fy = getFY(extracted.invoiceDate?.value);
 
+    // Before a person sees it: is this a bill we already have, from whom it
+    // says it is, and with GST that can be claimed?
+    const a = extracted.amountsPaise;
+    const checks =
+      isPurchase || extracted.documentType === 'receipt'
+        ? await this.billChecks.check({
+            orgId,
+            vendorName: extracted.vendor?.name ?? null,
+            vendorGstin: extracted.vendor?.gstin ?? null,
+            invoiceNumber: extracted.invoiceNumber?.value ?? null,
+            invoiceDate: extracted.invoiceDate?.value ?? null,
+            totalPaise: a?.total ?? 0,
+            gstPaise: (a?.cgst ?? 0) + (a?.sgst ?? 0) + (a?.igst ?? 0) + (a?.cess ?? 0),
+            lines: (extracted.lineItems ?? []).map((l) => ({ description: l.description, hsnSac: l.hsnSac })),
+          })
+        : [];
+
     const proposal = await this.proposalModel.create({
       orgId,
       documentId: extracted.documentId,
@@ -278,6 +297,7 @@ export class ProposalsService {
         amounts: extracted.amountsPaise?.confidence ?? extracted.confidenceOverall,
       },
       rawWarnings: extracted.rawWarnings ?? [],
+      checks,
       suggestedLines,
       category,
       financialYear: fy,
@@ -587,7 +607,8 @@ export class ProposalsService {
   ): Promise<{ approved: number }> {
     const highConf = await withOrg(orgId, () =>
       this.proposalModel
-        .find({ status: ProposedEntryStatus.PROPOSED, confidenceOverall: { $gte: threshold } })
+        // A flagged proposal (possible duplicate, blocked GST…) always gets a person's look.
+        .find({ status: ProposedEntryStatus.PROPOSED, confidenceOverall: { $gte: threshold }, 'checks.0': { $exists: false } })
         .exec(),
     );
 

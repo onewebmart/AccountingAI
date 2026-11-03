@@ -56,6 +56,7 @@ interface ApiProposal {
   documentUrl?: string;
   status?: string;
   category?: ProposedEntryData['category'];
+  checks?: ProposedEntryData['checks'];
 }
 
 function mapApiProposal(p: ApiProposal): ProposedEntryData {
@@ -83,6 +84,7 @@ function mapApiProposal(p: ApiProposal): ProposedEntryData {
     amountsPaise: amounts,
     documentUrl: p.documentUrl,
     category: p.category ?? null,
+    checks: p.checks ?? [],
     suggestedLines: (p.suggestedLines ?? []).map((l) => ({
       accountId: String(l.accountId),
       accountName: l.accountName,
@@ -208,14 +210,19 @@ export default function ReviewQueuePage() {
   };
 
   const handleApproveHighConfidence = async () => {
-    const highConf = allEntries.filter((e) => e.confidenceOverall >= 0.9);
+    // A flagged entry (likely duplicate, GST likely blocked…) is never approved
+    // in bulk, however confident the extraction was: a person looks at it.
+    const confident = allEntries.filter((e) => e.confidenceOverall >= 0.9);
+    const highConf = confident.filter((e) => !(e.checks ?? []).length);
+    const flagged = confident.length - highConf.length;
     if (!highConf.length) {
-      showToast('No high-confidence entries to approve');
+      showToast(flagged ? `${flagged} confident ${flagged === 1 ? 'entry needs' : 'entries need'} a look first, so none were approved` : 'No high-confidence entries to approve');
       return;
     }
     for (const e of highConf) {
       await handleApprove(e.id).catch(() => null);
     }
+    if (flagged) showToast(`Left ${flagged} flagged ${flagged === 1 ? 'entry' : 'entries'} for you to check`);
   };
 
   const current = allEntries[currentIndex];

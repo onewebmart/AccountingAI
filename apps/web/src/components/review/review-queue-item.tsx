@@ -4,6 +4,7 @@ import { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { ConfidenceField } from './confidence-field';
 import { WarningsBanner } from './warnings-banner';
+import { ChecksBanner } from './checks-banner';
 import { JournalLinesEditor, JournalLineDraft, PostingAccount, linesStatus } from './journal-lines-editor';
 import { cn } from '@/lib/utils';
 import { CheckCircle, X, Pencil, FileText } from 'lucide-react';
@@ -38,6 +39,8 @@ export interface ProposedEntryData {
   documentUrl?: string;
   /** The journal the AI proposes to post. */
   suggestedLines: JournalLineDraft[];
+  /** What the bill checks found: a likely duplicate, a GSTIN not on file, GST likely blocked. */
+  checks?: Array<{ code: string; severity: 'high' | 'medium'; message: string }>;
   /** Why the main account was chosen, when the categoriser chose it. */
   category?: {
     source: 'learned' | 'rule' | 'ai' | 'default';
@@ -246,7 +249,8 @@ export function ReviewQueueItem({ entry, accounts, onApprove, onReject }: Review
           />
         </div>
 
-        {/* Warnings */}
+        {/* Checks against the books, then extraction's own warnings */}
+        <ChecksBanner checks={entry.checks ?? []} />
         <WarningsBanner warnings={entry.rawWarnings} />
 
         {/* Actions */}

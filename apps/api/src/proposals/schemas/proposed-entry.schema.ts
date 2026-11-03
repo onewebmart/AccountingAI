@@ -87,6 +87,14 @@ export class ProposedEntry {
   @Prop({ type: [String], default: [] }) rawWarnings: string[];
 
   /**
+   * What the bill checks found: a possible duplicate, a GSTIN that is not
+   * the vendor's on file, GST that is likely blocked. A proposal with any
+   * is left out of the bulk approve: a person looks at it.
+   */
+  @Prop({ type: [Object], default: [] })
+  checks: Array<{ code: string; severity: 'high' | 'medium'; message: string }>;
+
+  /**
    * Why the main account was chosen: a past choice, an HSN/SAC or keyword
    * rule, the model, or nothing fitting. Shown to the reviewer beside it.
    */
