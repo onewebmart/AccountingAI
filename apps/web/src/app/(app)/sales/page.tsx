@@ -786,7 +786,8 @@ export default function SalesPage() {
                               Mark paid
                             </button>
                           )}
-                          {inv.status === 'posted' && (
+                          {/* On a paid invoice, what the note takes back becomes the customer's credit. */}
+                          {(inv.status === 'posted' || inv.status === 'paid') && (
                             <button
                               type="button"
                               onClick={() => setNotingInvoice(inv)}

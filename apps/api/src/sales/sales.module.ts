@@ -10,6 +10,7 @@ import { SalesController } from './sales.controller';
 import { MailModule } from '../mail/mail.module';
 import { InvoiceDeliveryService } from './invoice-delivery.service';
 import { OrgSettings, OrgSettingsSchema } from '../org-settings/schemas/org-settings.schema';
+import { PartyPaymentsModule } from '../payments/party-payments.module';
 import { GlModule } from '../gl/gl.module';
 
 @Module({
@@ -22,6 +23,7 @@ import { GlModule } from '../gl/gl.module';
       { name: OrgSettings.name, schema: OrgSettingsSchema },
     ]),
     GlModule, // for PostingService
+    PartyPaymentsModule, // a note larger than what is owed becomes the party's credit
     MailModule, // emails the invoice PDF
   ],
   controllers: [SalesController],

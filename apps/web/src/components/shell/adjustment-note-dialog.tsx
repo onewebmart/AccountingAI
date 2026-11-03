@@ -63,7 +63,8 @@ function NoteForm({
   const taxablePaise = /^\d+(\.\d{1,2})?$/.test(taxable) ? Math.round(parseFloat(taxable) * 100) : 0;
   const tax = HEADS.map((h) => (a.taxableValue > 0 ? Math.round((taxablePaise * a[h]) / a.taxableValue) : 0));
   const totalPaise = taxablePaise + tax.reduce((s, t) => s + t, 0);
-  const valid = taxablePaise > 0 && totalPaise <= document.outstandingPaise && reason.trim().length >= 3 && noteDate >= document.date;
+  // Beyond what is still owed, the rest becomes the party's credit; the server checks earlier notes.
+  const valid = taxablePaise > 0 && totalPaise <= a.total && reason.trim().length >= 3 && noteDate >= document.date;
   const word = kind === 'credit' ? 'Credit note' : 'Debit note';
 
   const raise = useMutation({
@@ -113,8 +114,15 @@ function NoteForm({
               <span>{word} total</span>
               <span className="font-mono">{formatRupees(totalPaise)}</span>
             </div>
-            {totalPaise > document.outstandingPaise && (
-              <p className="mt-1 text-error-fg">More than the {formatRupees(document.outstandingPaise)} still owed.</p>
+            {totalPaise > a.total ? (
+              <p className="mt-1 text-error-fg">More than the {formatRupees(a.total)} the {kind === 'credit' ? 'invoice' : 'bill'} was for.</p>
+            ) : (
+              totalPaise > document.outstandingPaise && (
+                <p className="mt-1 text-pending-fg">
+                  {formatRupees(totalPaise - document.outstandingPaise)} more than is owed: that part becomes the{' '}
+                  {kind === 'credit' ? "customer's credit, to apply to their next invoice or refund" : "vendor's credit, owed back to you"}.
+                </p>
+              )
             )}
           </div>
         )}

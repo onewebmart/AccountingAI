@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Optional, BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { ClientSession, Model, Types } from 'mongoose';
 import { InvoiceStatus, VoucherType } from '@ai-accounting/shared';
@@ -10,6 +10,7 @@ import { SystemAccountKey } from '../gl/schemas/ledger-account.schema';
 import { AccountsService } from '../gl/accounts.service';
 import { PostingService, financialYearOf } from '../gl/posting.service';
 import { AuditService } from '../gl/audit.service';
+import { PartyPaymentsService } from '../payments/party-payments.service';
 import { addSplits, noteAmounts, rupees } from '../gl/note-amounts';
 import { outstandingPaise } from '../gl/schemas/settlement.schema';
 import { formatVoucherNumber } from '../journals/journals.service';
@@ -55,6 +56,9 @@ export class CreditNotesService {
     private accountsService: AccountsService,
     private postingService: PostingService,
     private auditService: AuditService,
+    // Optional so specs that build this by hand need not: without it, a note
+    // larger than what is owed is refused, as before.
+    @Optional() private payments?: PartyPaymentsService,
   ) {}
 
   /**
@@ -71,12 +75,7 @@ export class CreditNotesService {
       const doc = await withOrg(orgId, () => this.docModel.findById(invoiceId).session(session).exec());
       if (!doc) throw new NotFoundException('SalesInvoice not found');
       const docLabel = `Invoice ${doc.invoiceNumber ?? doc._id}`;
-      if (doc.status === InvoiceStatus.PAID) {
-        throw new BadRequestException(
-          `${docLabel} is settled in full — a credit note now would mean a refund, which is not supported yet`,
-        );
-      }
-      if (doc.status !== InvoiceStatus.POSTED) {
+      if (doc.status !== InvoiceStatus.POSTED && doc.status !== InvoiceStatus.PAID) {
         throw new BadRequestException(`Only a posted invoice can take a credit note (this one is ${doc.status})`);
       }
       if (input.noteDate < doc.invoiceDate) {
@@ -88,16 +87,18 @@ export class CreditNotesService {
       );
       const amounts = noteAmounts(doc.amountsPaise, addSplits(earlier.map((n) => n.amountsPaise)), input.taxableValuePaise);
       const owed = outstandingPaise(doc);
-      if (amounts.total > owed) {
-        throw new BadRequestException(
-          `A credit note of ${rupees(amounts.total)} is more than the ${rupees(owed)} still owed on ${docLabel}` +
-            ' — taking back what has already been paid would mean a refund, which is not supported yet',
-        );
+      // What the note takes off the invoice; anything beyond what is still owed
+      // was already paid, and becomes the customer's credit (an advance).
+      const offInvoice = Math.min(amounts.total, owed);
+      const excess = amounts.total - offInvoice;
+      if (excess > 0 && !this.payments) {
+        throw new BadRequestException(`A credit note of ${rupees(amounts.total)} is more than the ${rupees(owed)} still owed on ${docLabel}`);
       }
 
       const accounts = await this.accountsService.resolveSystemAccounts(orgId, [
         SystemAccountKey.SALES_REVENUE,
         SystemAccountKey.ACCOUNTS_RECEIVABLE,
+        SystemAccountKey.CUSTOMER_ADVANCES,
         SystemAccountKey.ROUND_OFF,
         ...TAX_KEYS.map(([, key]) => key),
       ]);
@@ -119,7 +120,11 @@ export class CreditNotesService {
           lines.push({ accountId: tax._id.toString(), description: tax.name, debitPaise: amounts[head], creditPaise: 0 });
         }
       }
-      lines.push({ accountId: control._id.toString(), description: control.name, debitPaise: 0, creditPaise: amounts.total });
+      if (offInvoice > 0) lines.push({ accountId: control._id.toString(), description: control.name, debitPaise: 0, creditPaise: offInvoice });
+      if (excess > 0) {
+        const advances = accounts.get(SystemAccountKey.CUSTOMER_ADVANCES)!;
+        lines.push({ accountId: advances._id.toString(), description: advances.name, debitPaise: 0, creditPaise: excess });
+      }
 
       const financialYear = financialYearOf(input.noteDate);
       const journal = await this.postingService.post(
@@ -155,22 +160,35 @@ export class CreditNotesService {
         { session },
       );
 
-      // Nothing left owed closes the invoice.
-      const closes = amounts.total === owed;
-      const updated = await withOrg(orgId, () =>
-        this.docModel
-          .findOneAndUpdate(
-            { _id: doc._id, status: InvoiceStatus.POSTED, adjustedPaise: doc.adjustedPaise ?? 0 },
-            {
-              $inc: { adjustedPaise: amounts.total },
-              $push: { adjustments: { noteId, journalId: journal._id, amountPaise: amounts.total, noteDate: input.noteDate } },
-              $set: closes ? { status: InvoiceStatus.PAID } : {},
-            },
-            { new: true, session },
-          )
-          .exec(),
-      );
+      // Nothing left owed closes the invoice. A paid invoice is left as it is:
+      // the whole note is the customer's credit.
+      const closes = offInvoice === owed;
+      const updated =
+        offInvoice > 0
+          ? await withOrg(orgId, () =>
+              this.docModel
+                .findOneAndUpdate(
+                  { _id: doc._id, status: InvoiceStatus.POSTED, adjustedPaise: doc.adjustedPaise ?? 0 },
+                  {
+                    $inc: { adjustedPaise: offInvoice },
+                    $push: { adjustments: { noteId, journalId: journal._id, amountPaise: offInvoice, noteDate: input.noteDate } },
+                    $set: closes ? { status: InvoiceStatus.PAID } : {},
+                  },
+                  { new: true, session },
+                )
+                .exec(),
+            )
+          : doc;
       if (!updated) throw new BadRequestException('This invoice changed while the note was being raised — try again');
+      if (excess > 0) {
+        const customer = await this.partyModel.findOne({ _id: doc.customerId, orgId }, { name: 1 }).session(session).lean().exec();
+        await this.payments!.creditFromNote(
+          orgId,
+          actorId,
+          { kind: 'receipt', partyId: doc.customerId as unknown as Types.ObjectId, partyName: customer?.name ?? 'Customer', date: input.noteDate, journalId: journal._id, noteNumber: note.noteNumber, excessPaise: excess },
+          session,
+        );
+      }
 
       await this.auditService.record(
         {

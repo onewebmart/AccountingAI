@@ -196,6 +196,9 @@ export class JournalReversalService {
     const own = await this.paymentModel.findOne({ orgId, journalId, status: 'posted' }).session(session).exec();
     if (own) {
       const later = own.allocations.filter((a) => String(a.journalId) !== String(journalId));
+      if ((own.refunds ?? []).length) {
+        throw new BadRequestException(`Part of this credit was refunded since. Reverse the refund${own.refunds.length === 1 ? '' : 's'} first.`);
+      }
       if (later.length) {
         throw new BadRequestException(
           `Part of this ${own.kind}'s advance was applied later (to ${later.map((a) => a.documentNumber ?? 'a document').join(', ')}). Reverse ${later.length === 1 ? 'that journal' : 'those journals'} first.`,
@@ -204,6 +207,21 @@ export class JournalReversalService {
       await this.paymentModel.updateOne({ _id: own._id, orgId }, { $set: { status: 'reversed' } }, { session }).exec();
       await this.audit.record(
         { orgId, entityType: 'PartyPayment', entityId: String(own._id), action: 'REVERSE', performedBy: actorId, before: { status: 'posted' }, after: { status: 'reversed', reversedJournalId: String(journalId) } },
+        session,
+      );
+      return;
+    }
+    const refunded = await this.paymentModel.findOne({ orgId, 'refunds.journalId': journalId }).session(session).exec();
+    if (refunded) {
+      const refund = refunded.refunds.find((r) => String(r.journalId) === String(journalId))!;
+      await this.paymentModel
+        .updateOne({ _id: refunded._id, orgId }, { $pull: { refunds: { journalId } }, $inc: { unappliedPaise: refund.amountPaise } }, { session })
+        .exec();
+      await this.audit.record(
+        {
+          orgId, entityType: 'PartyPayment', entityId: String(refunded._id), action: 'UNREFUND', performedBy: actorId,
+          before: { unappliedPaise: refunded.unappliedPaise }, after: { unappliedPaise: refunded.unappliedPaise + refund.amountPaise, reversedJournalId: String(journalId) },
+        },
         session,
       );
       return;

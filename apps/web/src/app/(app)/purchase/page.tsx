@@ -695,7 +695,8 @@ export default function PurchasePage() {
                               Mark paid
                             </button>
                           )}
-                          {bill.status === 'posted' && (
+                          {/* On a paid bill, what the note takes back is owed to us: the vendor's credit. */}
+                          {(bill.status === 'posted' || bill.status === 'paid') && (
                             <button
                               type="button"
                               onClick={() => setNotingBill(bill)}

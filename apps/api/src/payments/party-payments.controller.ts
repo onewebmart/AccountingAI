@@ -67,6 +67,19 @@ class ApplyAdvanceDto {
   date: string;
 }
 
+class RefundDto {
+  @IsInt({ message: 'amountPaise must be whole paise' })
+  @Min(1)
+  amountPaise: number;
+
+  @IsISO8601({}, { message: 'date must be a date like 2026-10-14' })
+  date: string;
+
+  @IsOptional()
+  @IsIn(['bank', 'cash'])
+  via?: 'bank' | 'cash';
+}
+
 class SuggestDto {
   @IsIn(['receipt', 'payment'])
   kind: PaymentKind;
@@ -120,6 +133,13 @@ export class PartyPaymentsController {
   record(@Request() req: AuthRequest, @Body() body: RecordPaymentDto) {
     assertMayHandle(req.user.role, body.kind);
     return this.payments.record(req.user.orgId, req.user.sub, body);
+  }
+
+  /** Give an advance or credit back as money. */
+  @Post(':id/refund')
+  @RequirePermission(Permission.POST_JOURNAL)
+  refund(@Request() req: AuthRequest, @Param('id') id: string, @Body() body: RefundDto) {
+    return this.payments.refund(req.user.orgId, req.user.sub, id, body);
   }
 
   @Post(':id/apply')

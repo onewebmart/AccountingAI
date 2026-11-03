@@ -180,10 +180,13 @@ describe('credit notes', () => {
       creditNotes.create(id, orgId, ACTOR_ID, { noteDate: '2026-10-01', reason: 'Backdated', taxableValuePaise: 100 }),
     ).rejects.toThrow(/cannot be dated before/);
 
+    // Without the payments service there is nowhere to hold the customer's
+    // credit, so a note on a paid invoice is still refused here. With it, the
+    // excess becomes credit: see payments/party-payments.service.spec.ts.
     await invoices.markPaid(id, orgId, ACTOR_ID, '2026-10-11');
     await expect(
       creditNotes.create(id, orgId, ACTOR_ID, { noteDate: '2026-10-20', reason: 'After payment', taxableValuePaise: 100 }),
-    ).rejects.toThrow(/settled in full — a credit note now would mean a refund/);
+    ).rejects.toThrow(/is more than the ₹0\.00 still owed/);
   });
 
   it('reversing the note takes the credit back; the note is kept, marked reversed', async () => {

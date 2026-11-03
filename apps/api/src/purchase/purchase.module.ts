@@ -7,6 +7,7 @@ import { DebitNotesService } from './debit-notes.service';
 import { VendorsService } from './vendors.service';
 import { PurchaseBillsService } from './purchase-bills.service';
 import { PurchaseController } from './purchase.controller';
+import { PartyPaymentsModule } from '../payments/party-payments.module';
 import { GlModule } from '../gl/gl.module';
 
 @Module({
@@ -17,6 +18,7 @@ import { GlModule } from '../gl/gl.module';
       { name: DebitNote.name, schema: DebitNoteSchema },
     ]),
     GlModule, // for PostingService
+    PartyPaymentsModule, // a note larger than what is owed becomes the party's credit
   ],
   controllers: [PurchaseController],
   providers: [VendorsService, PurchaseBillsService, DebitNotesService],

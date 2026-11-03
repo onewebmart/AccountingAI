@@ -44,6 +44,14 @@ export class PartyPayment {
   /** TDS the customer deducted, across the invoices (receipts only). */
   @Prop({ type: Number, default: 0, min: 0, validate: integerPaise }) tdsPaise: number;
   @Prop({ type: String, enum: ['bank', 'cash'], default: 'bank' }) via: 'bank' | 'cash';
+  /**
+   * money: a receipt or payment. credit_note / debit_note: a note that took
+   * back more than was still owed; the excess is the party's credit, held
+   * like an advance.
+   */
+  @Prop({ type: String, enum: ['money', 'credit_note', 'debit_note'], default: 'money' }) source: 'money' | 'credit_note' | 'debit_note';
+  /** Credit given back as money: to the customer, or from the vendor. */
+  @Prop({ type: [Object], default: [] }) refunds: Array<{ journalId: Types.ObjectId; amountPaise: number; date: string; via: 'bank' | 'cash' }>;
   @Prop({ type: String, default: null }) reference: string | null;
   /** The receipt or payment voucher. */
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Journal', required: true }) journalId: Types.ObjectId;

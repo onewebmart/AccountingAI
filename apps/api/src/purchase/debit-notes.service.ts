@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Optional, BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { ClientSession, Model, Types } from 'mongoose';
 import { BillStatus, VoucherType } from '@ai-accounting/shared';
@@ -10,6 +10,7 @@ import { SystemAccountKey } from '../gl/schemas/ledger-account.schema';
 import { AccountsService } from '../gl/accounts.service';
 import { PostingService, financialYearOf } from '../gl/posting.service';
 import { AuditService } from '../gl/audit.service';
+import { PartyPaymentsService } from '../payments/party-payments.service';
 import { addSplits, noteAmounts, rupees } from '../gl/note-amounts';
 import { tdsOn } from '../gl/tds';
 import { outstandingPaise } from '../gl/schemas/settlement.schema';
@@ -56,6 +57,9 @@ export class DebitNotesService {
     private accountsService: AccountsService,
     private postingService: PostingService,
     private auditService: AuditService,
+    // Optional so specs that build this by hand need not: without it, a note
+    // larger than what is owed is refused, as before.
+    @Optional() private payments?: PartyPaymentsService,
   ) {}
 
   /**
@@ -72,12 +76,7 @@ export class DebitNotesService {
       const doc = await withOrg(orgId, () => this.docModel.findById(billId).session(session).exec());
       if (!doc) throw new NotFoundException('PurchaseBill not found');
       const docLabel = `Bill ${doc.billNumber ?? doc._id}`;
-      if (doc.status === BillStatus.PAID) {
-        throw new BadRequestException(
-          `${docLabel} is settled in full — a debit note now would mean a refund, which is not supported yet`,
-        );
-      }
-      if (doc.status !== BillStatus.POSTED) {
+      if (doc.status !== BillStatus.POSTED && doc.status !== BillStatus.PAID) {
         throw new BadRequestException(`Only a posted bill can take a debit note (this one is ${doc.status})`);
       }
       if (input.noteDate < doc.billDate) {
@@ -101,10 +100,14 @@ export class DebitNotesService {
           `The TDS on ${docLabel} has already been deposited — a debit note now would need the TDS corrected in the return. Raise it after the next deposit is adjusted, or take it up with your CA.`,
         );
       }
-      if (reduction > owed) {
+      // What the note takes off the bill; anything beyond what is still owed was
+      // already paid, and the vendor owes it back: their credit (an advance).
+      const offBill = Math.min(reduction, owed);
+      const excess = reduction - offBill;
+      if (excess > 0 && (!this.payments || noteTds > 0)) {
         throw new BadRequestException(
           `A debit note of ${rupees(reduction)} is more than the ${rupees(owed)} still owed on ${docLabel}` +
-            ' — taking back what has already been paid would mean a refund, which is not supported yet',
+            (noteTds > 0 ? ': TDS was withheld on this bill, so raise the note before the bill is paid, or take it up with your CA' : ''),
         );
       }
 
@@ -114,6 +117,7 @@ export class DebitNotesService {
         SystemAccountKey.ROUND_OFF,
         SystemAccountKey.TDS_PAYABLE,
         SystemAccountKey.RCM_GST_PAYABLE,
+        SystemAccountKey.VENDOR_ADVANCES,
         ...TAX_KEYS.map(([, key]) => key),
       ]);
       const control = accounts.get(SystemAccountKey.ACCOUNTS_PAYABLE)!;
@@ -134,7 +138,11 @@ export class DebitNotesService {
           lines.push({ accountId: tax._id.toString(), description: tax.name, debitPaise: 0, creditPaise: amounts[head] });
         }
       }
-      lines.push({ accountId: control._id.toString(), description: control.name, debitPaise: reduction, creditPaise: 0 });
+      if (offBill > 0) lines.push({ accountId: control._id.toString(), description: control.name, debitPaise: offBill, creditPaise: 0 });
+      if (excess > 0) {
+        const advances = accounts.get(SystemAccountKey.VENDOR_ADVANCES)!;
+        lines.push({ accountId: advances._id.toString(), description: advances.name, debitPaise: excess, creditPaise: 0 });
+      }
       if (noteTds > 0) {
         const tdsAccount = accounts.get(SystemAccountKey.TDS_PAYABLE)!;
         lines.push({ accountId: tdsAccount._id.toString(), description: tdsAccount.name, debitPaise: noteTds, creditPaise: 0 });
@@ -181,30 +189,45 @@ export class DebitNotesService {
         { session },
       );
 
-      // Nothing left owed closes the bill.
-      const closes = reduction === owed;
-      const updated = await withOrg(orgId, () =>
-        this.docModel
-          .findOneAndUpdate(
-            { _id: doc._id, status: BillStatus.POSTED, adjustedPaise: doc.adjustedPaise ?? 0 },
-            {
-              $inc: { adjustedPaise: payablePart, ...(noteTds > 0 ? { 'tds.amountPaise': -noteTds } : {}) },
-              $push: {
-                adjustments: {
-                  noteId,
-                  journalId: journal._id,
-                  amountPaise: payablePart,
-                  tdsPaise: noteTds,
-                  noteDate: input.noteDate,
-                },
-              },
-              $set: closes ? { status: BillStatus.PAID } : {},
-            },
-            { new: true, session },
-          )
-          .exec(),
-      );
+      // Nothing left owed closes the bill. A paid bill is left as it is: the
+      // whole note is the vendor's credit. (With TDS, a note never exceeds
+      // what is owed; refused above.)
+      const closes = offBill === owed;
+      const takenOff = excess > 0 ? offBill : payablePart;
+      const updated =
+        takenOff > 0 || noteTds > 0
+          ? await withOrg(orgId, () =>
+              this.docModel
+                .findOneAndUpdate(
+                  { _id: doc._id, status: BillStatus.POSTED, adjustedPaise: doc.adjustedPaise ?? 0 },
+                  {
+                    $inc: { adjustedPaise: takenOff, ...(noteTds > 0 ? { 'tds.amountPaise': -noteTds } : {}) },
+                    $push: {
+                      adjustments: {
+                        noteId,
+                        journalId: journal._id,
+                        amountPaise: takenOff,
+                        tdsPaise: noteTds,
+                        noteDate: input.noteDate,
+                      },
+                    },
+                    $set: closes ? { status: BillStatus.PAID } : {},
+                  },
+                  { new: true, session },
+                )
+                .exec(),
+            )
+          : doc;
       if (!updated) throw new BadRequestException('This bill changed while the note was being raised — try again');
+      if (excess > 0) {
+        const vendor = await this.partyModel.findOne({ _id: doc.vendorId, orgId }, { name: 1 }).session(session).lean().exec();
+        await this.payments!.creditFromNote(
+          orgId,
+          actorId,
+          { kind: 'payment', partyId: doc.vendorId as unknown as Types.ObjectId, partyName: vendor?.name ?? 'Vendor', date: input.noteDate, journalId: journal._id, noteNumber: note.noteNumber, excessPaise: excess },
+          session,
+        );
+      }
 
       await this.auditService.record(
         {

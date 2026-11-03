@@ -271,6 +271,106 @@ export class PartyPaymentsService {
     });
   }
 
+  /**
+   * Give an advance or credit back as money: to the customer (Advances from
+   * Customers Dr, Bank Cr), or from the vendor (Bank Dr, Advances to
+   * Vendors Cr).
+   */
+  async refund(orgId: string, actorId: string, paymentId: string, input: { amountPaise: number; date: string; via?: 'bank' | 'cash' }) {
+    if (!Types.ObjectId.isValid(paymentId)) throw new NotFoundException('Payment not found');
+    if (!DATE.test(input.date ?? '')) throw new BadRequestException('date must be a date like 2026-10-14');
+    if (!Number.isInteger(input.amountPaise) || input.amountPaise <= 0) throw new BadRequestException('The amount must be whole paise, above zero.');
+    return this.posting.inTransaction(async (session) => {
+      const payment = await this.paymentModel.findOne({ _id: paymentId, orgId }).session(session).exec();
+      if (!payment) throw new NotFoundException('Payment not found');
+      if (payment.status !== 'posted') throw new BadRequestException('This has been reversed.');
+      if (input.amountPaise > payment.unappliedPaise) throw new BadRequestException(`Only ${rupees(payment.unappliedPaise)} is left to refund.`);
+      if (input.date < payment.date) throw new BadRequestException('A refund cannot be dated before the credit it returns.');
+      const side = SIDE[payment.kind];
+      const moneyKey = input.via === 'cash' ? SystemAccountKey.CASH : SystemAccountKey.BANK;
+      const sys = await this.accounts.resolveSystemAccounts(orgId, [moneyKey, side.advances]);
+      const money = sys.get(moneyKey)!;
+      const advances = sys.get(side.advances)!;
+      const toCustomer = payment.kind === 'receipt';
+      const journal = await this.posting.post(
+        {
+          orgId,
+          voucherType: toCustomer ? VoucherType.PAYMENT : VoucherType.RECEIPT,
+          financialYear: financialYearOf(input.date),
+          date: input.date,
+          narration: toCustomer ? `Refund to ${payment.partyName}` : `Refund from ${payment.partyName}`,
+          postedBy: actorId,
+          lines: toCustomer
+            ? [
+                { accountId: advances._id.toString(), description: advances.name, debitPaise: input.amountPaise, creditPaise: 0 },
+                { accountId: money._id.toString(), description: money.name, debitPaise: 0, creditPaise: input.amountPaise },
+              ]
+            : [
+                { accountId: money._id.toString(), description: money.name, debitPaise: input.amountPaise, creditPaise: 0 },
+                { accountId: advances._id.toString(), description: advances.name, debitPaise: 0, creditPaise: input.amountPaise },
+              ],
+        },
+        session,
+      );
+      const claimed = await this.paymentModel
+        .findOneAndUpdate(
+          { _id: payment._id, orgId, status: 'posted', unappliedPaise: payment.unappliedPaise },
+          { $inc: { unappliedPaise: -input.amountPaise }, $push: { refunds: { journalId: journal._id, amountPaise: input.amountPaise, date: input.date, via: input.via ?? 'bank' } } },
+          { new: true, session },
+        )
+        .exec();
+      if (!claimed) throw new BadRequestException('This credit changed while the refund was being recorded. Try again.');
+      await this.audit.record(
+        {
+          orgId, entityType: 'PartyPayment', entityId: paymentId, action: 'REFUND', performedBy: actorId,
+          before: { unappliedPaise: payment.unappliedPaise }, after: { unappliedPaise: claimed.unappliedPaise, journalId: journal._id.toString() },
+        },
+        session,
+      );
+      return claimed;
+    });
+  }
+
+  /**
+   * A credit or debit note that took back more than was still owed: the
+   * excess becomes the party's credit, applied or refunded like an advance.
+   * Called by the note services, inside their transaction.
+   */
+  async creditFromNote(
+    orgId: string,
+    actorId: string,
+    note: { kind: PaymentKind; partyId: Types.ObjectId; partyName: string; date: string; journalId: Types.ObjectId; noteNumber: string; excessPaise: number },
+    session: ClientSession,
+  ): Promise<void> {
+    const [credit] = await this.paymentModel.create(
+      [
+        {
+          orgId,
+          kind: note.kind,
+          partyId: note.partyId,
+          partyName: note.partyName,
+          date: note.date,
+          amountPaise: 0,
+          tdsPaise: 0,
+          source: note.kind === 'receipt' ? 'credit_note' : 'debit_note',
+          reference: note.noteNumber,
+          journalId: note.journalId,
+          allocations: [],
+          unappliedPaise: note.excessPaise,
+          createdBy: actorId,
+        },
+      ],
+      { session },
+    );
+    await this.audit.record(
+      {
+        orgId, entityType: 'PartyPayment', entityId: credit._id.toString(), action: 'CREATE', performedBy: actorId,
+        after: { source: credit.source, party: note.partyName, unappliedPaise: note.excessPaise, noteNumber: note.noteNumber },
+      },
+      session,
+    );
+  }
+
   async list(orgId: string, kind?: PaymentKind, partyId?: string) {
     const filter: Record<string, unknown> = { orgId };
     if (kind) filter.kind = kind;

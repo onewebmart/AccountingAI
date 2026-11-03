@@ -7,6 +7,9 @@
  *    application reverses back into the advance; then the receipt reopens every invoice
  *  ✓ A payment to a vendor across two bills, with an advance
  *  ✓ Refused: more than owed, another customer's invoice, more allocated than received
+ *  ✓ A credit note on a paid invoice is the customer's credit; refunded, and reversed in order
+ *  ✓ A note on a part-paid invoice takes off what is owed, the rest as credit
+ *  ✓ A debit note on a paid bill is the vendor's credit, refunded to us
  */
 import 'reflect-metadata';
 import mongoose, { Model, Types } from 'mongoose';
@@ -24,6 +27,8 @@ import { AuditService } from '../gl/audit.service';
 import { JournalReversalService } from '../journals/journal-reversal.service';
 import { SalesInvoicesService } from '../sales/sales-invoices.service';
 import { PurchaseBillsService } from '../purchase/purchase-bills.service';
+import { CreditNotesService } from '../sales/credit-notes.service';
+import { DebitNotesService } from '../purchase/debit-notes.service';
 import { Journal, JournalSchema } from '../gl/schemas/journal.schema';
 import { Counter, CounterSchema } from '../gl/schemas/counter.schema';
 import { AuditLog, AuditLogSchema } from '../gl/schemas/audit-log.schema';
@@ -70,7 +75,7 @@ beforeAll(async () => {
         { name: BankStatementLine.name, schema: BankStatementLineSchema },
       ]),
     ],
-    providers: [PartyPaymentsService, PostingService, AccountsService, AuditService, JournalReversalService, SalesInvoicesService, PurchaseBillsService],
+    providers: [PartyPaymentsService, PostingService, AccountsService, AuditService, JournalReversalService, SalesInvoicesService, PurchaseBillsService, CreditNotesService, DebitNotesService],
   }).compile();
   payments = moduleRef.get(PartyPaymentsService);
   reversal = moduleRef.get(JournalReversalService);
@@ -199,5 +204,75 @@ describe('payments to vendors', () => {
     await expect(payments.record(orgId, ACTOR, { kind: 'payment', partyId: String(sigma._id), date: '2026-10-01', amountPaise: 100, allocations: [{ documentId: x, amountPaise: 0, tdsPaise: 100 }] })).rejects.toThrow(
       /withheld when the bill is posted/,
     );
+  });
+});
+
+describe('refunds and note credits', () => {
+  const creditsOf = async (orgId: string, kind: 'receipt' | 'payment') =>
+    (await payments.list(orgId, kind)).filter((p) => p.source !== 'money' && p.status === 'posted');
+
+  it('turns a credit note on a paid invoice into the customer’s credit, refunds it, and reverses in order', async () => {
+    const { orgId, rao, raoId, invoice } = await seed();
+    const a = await invoice(raoId, 'INV-1', '2026-09-01', 100000);
+    await payments.record(orgId, ACTOR, { kind: 'receipt', partyId: rao, date: '2026-09-10', amountPaise: 100000, allocations: [{ documentId: a, amountPaise: 100000 }] });
+
+    const note = await moduleRef.get(CreditNotesService).create(a, orgId, ACTOR, { noteDate: '2026-10-01', reason: 'Goods returned', taxableValuePaise: 20000 });
+    expect(await linesOf(note.journalId)).toEqual([
+      ['Sales Revenue', 20000, 0],
+      ['Advances from Customers', 0, 20000],
+    ]);
+    expect(await invoices.findById(a).lean().exec()).toMatchObject({ status: InvoiceStatus.PAID, amountPaidPaise: 100000 });
+    const [credit] = await creditsOf(orgId, 'receipt');
+    expect(credit).toMatchObject({ source: 'credit_note', unappliedPaise: 20000, partyName: 'Rao Traders' });
+
+    const refunded = await payments.refund(orgId, ACTOR, String(credit._id), { amountPaise: 15000, date: '2026-10-05' });
+    expect(refunded.unappliedPaise).toBe(5000);
+    const refundJournal = refunded.refunds[0].journalId;
+    expect(await linesOf(refundJournal)).toEqual([
+      ['Advances from Customers', 15000, 0],
+      ['Bank Accounts', 0, 15000],
+    ]);
+    await expect(payments.refund(orgId, ACTOR, String(credit._id), { amountPaise: 6000, date: '2026-10-06' })).rejects.toThrow(/Only ₹50.00/);
+
+    await expect(reversal.reverse(String(note.journalId), orgId, ACTOR)).rejects.toThrow(/refunded since/);
+    await reversal.reverse(String(refundJournal), orgId, ACTOR);
+    expect((await creditsOf(orgId, 'receipt'))[0].unappliedPaise).toBe(20000);
+    await reversal.reverse(String(note.journalId), orgId, ACTOR);
+    expect(await creditsOf(orgId, 'receipt')).toEqual([]);
+  });
+
+  it('takes off what a part-paid invoice still owes, the rest as credit', async () => {
+    const { orgId, rao, raoId, invoice } = await seed();
+    const a = await invoice(raoId, 'INV-1', '2026-09-01', 100000);
+    await payments.record(orgId, ACTOR, { kind: 'receipt', partyId: rao, date: '2026-09-10', amountPaise: 70000, allocations: [{ documentId: a, amountPaise: 70000 }] });
+    const note = await moduleRef.get(CreditNotesService).create(a, orgId, ACTOR, { noteDate: '2026-10-01', reason: 'Rate revised', taxableValuePaise: 50000 });
+    expect(await linesOf(note.journalId)).toEqual([
+      ['Sales Revenue', 50000, 0],
+      ['Accounts Receivable', 0, 30000],
+      ['Advances from Customers', 0, 20000],
+    ]);
+    expect(await invoices.findById(a).lean().exec()).toMatchObject({ status: InvoiceStatus.PAID });
+    expect((await creditsOf(orgId, 'receipt'))[0].unappliedPaise).toBe(20000);
+  });
+
+  it('turns a debit note on a paid bill into the vendor’s credit, refunded to us', async () => {
+    const orgId = new Types.ObjectId().toString();
+    const vendors = moduleRef.get<Model<{ _id: Types.ObjectId }>>(getModelToken(Vendor.name));
+    const [sigma] = await vendors.create([{ orgId, name: 'Sigma Supplies' }]);
+    const b = await billsSvc.create({ orgId, vendorId: String(sigma._id), billNumber: 'PB-9', billDate: '2026-09-01', dueDate: '2026-09-30', amountsPaise: amounts(60000) });
+    await billsSvc.post(String(b._id), orgId, ACTOR);
+    await payments.record(orgId, ACTOR, { kind: 'payment', partyId: String(sigma._id), date: '2026-09-15', amountPaise: 60000, allocations: [{ documentId: String(b._id), amountPaise: 60000 }] });
+
+    const note = await moduleRef.get(DebitNotesService).create(String(b._id), orgId, ACTOR, { noteDate: '2026-10-01', reason: 'Short supply', taxableValuePaise: 10000 });
+    expect(await linesOf(note.journalId)).toEqual([
+      ['Purchases', 0, 10000],
+      ['Advances to Vendors', 10000, 0],
+    ]);
+    const [credit] = await creditsOf(orgId, 'payment');
+    const back = await payments.refund(orgId, ACTOR, String(credit._id), { amountPaise: 10000, date: '2026-10-10' });
+    expect(await linesOf(back.refunds[0].journalId)).toEqual([
+      ['Bank Accounts', 10000, 0],
+      ['Advances to Vendors', 0, 10000],
+    ]);
   });
 });
