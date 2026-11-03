@@ -30,6 +30,9 @@ interface Bill {
   /** Paid so far, and still owed — part payments leave both non-zero. */
   amountPaidPaise: number;
   outstandingPaise: number;
+  /** Micro and small enterprises: the last day to pay under 43B(h), and whether it passed unpaid. */
+  msmePayBy?: string | null;
+  msmeLate?: boolean;
   amountsPaise: { taxableValue: number; cgst: number; sgst: number; igst: number; cess: number; total: number };
   /** Set when this row was read off an upload; null when typed in by hand. */
   sourceDocumentId?: string | null;
@@ -639,6 +642,15 @@ export default function PurchasePage() {
                             </span>
                           ) : (
                             <span className="text-ink-400 text-caption">—</span>
+                          )}
+                          {bill.msmePayBy && bill.outstandingPaise > 0 && bill.status !== 'draft' && (
+                            <span
+                              className={`mt-0.5 block text-caption ${bill.msmeLate ? 'font-medium text-error-fg' : 'text-pending-fg'}`}
+                              title="An MSME vendor (micro or small): under section 43B(h), paying after this day makes the expense deductible only in the year it is paid. Counted from the bill date."
+                            >
+                              MSME · {bill.msmeLate ? 'was due' : 'pay by'}{' '}
+                              {new Date(bill.msmePayBy).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                            </span>
                           )}
                         </td>
                         <td className="px-4 py-3 text-right font-mono font-medium text-ink-900">

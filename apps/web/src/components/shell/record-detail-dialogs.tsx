@@ -295,6 +295,174 @@ function PartyEditForm({ kind, id, onDone }: { kind: 'customer' | 'vendor'; id: 
   );
 }
 
+interface VendorBanking {
+  bankAccount: { accountName: string | null; accountNumber: string; ifsc: string; bankName: string | null } | null;
+  msme: { udyamNumber: string; category: 'micro' | 'small' | 'medium'; activity: 'manufacturing' | 'services' | 'trading'; writtenAgreement: boolean } | null;
+}
+
+/**
+ * Where a vendor is paid, and their MSME registration. A changed bank account
+ * is worth a phone call to the vendor before the next payment: it is the
+ * usual first step of invoice fraud.
+ */
+function VendorBankingSection({ id, onSaved }: { id: string; onSaved: (message: string) => void }) {
+  const queryClient = useQueryClient();
+  const { data } = useQuery({ queryKey: ['purchase', 'vendor', id], queryFn: () => api.get<ApiParty & VendorBanking>(`/purchase/vendors/${id}`) });
+  const [editing, setEditing] = useState(false);
+  const [bank, setBank] = useState({ accountName: '', accountNumber: '', ifsc: '', bankName: '' });
+  const [msme, setMsme] = useState({ registered: false, udyamNumber: '', category: 'micro', activity: 'manufacturing', writtenAgreement: false });
+
+  const save = useMutation({
+    mutationFn: (body: Record<string, unknown>) => api.patch(`/purchase/vendors/${id}`, body),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['purchase'] });
+      setEditing(false);
+      onSaved('Vendor saved');
+    },
+  });
+
+  if (!data) return null;
+  const start = () => {
+    setBank({
+      accountName: data.bankAccount?.accountName ?? '',
+      accountNumber: data.bankAccount?.accountNumber ?? '',
+      ifsc: data.bankAccount?.ifsc ?? '',
+      bankName: data.bankAccount?.bankName ?? '',
+    });
+    setMsme({
+      registered: !!data.msme,
+      udyamNumber: data.msme?.udyamNumber ?? '',
+      category: data.msme?.category ?? 'micro',
+      activity: data.msme?.activity ?? 'manufacturing',
+      writtenAgreement: data.msme?.writtenAgreement ?? false,
+    });
+    save.reset();
+    setEditing(true);
+  };
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    save.mutate({
+      bankAccount: bank.accountNumber.trim()
+        ? { accountName: bank.accountName.trim() || null, accountNumber: bank.accountNumber.trim(), ifsc: bank.ifsc.trim(), bankName: bank.bankName.trim() || null }
+        : null,
+      msme: msme.registered ? { udyamNumber: msme.udyamNumber.trim(), category: msme.category, activity: msme.activity, writtenAgreement: msme.writtenAgreement } : null,
+    });
+  };
+  const field = 'w-full rounded-md border border-line-200 bg-white px-3 py-1.5 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-saffron-600/40';
+  const label = 'text-caption font-medium text-ink-700 block mb-1';
+  const protectedMsme = data.msme && data.msme.category !== 'medium' && data.msme.activity !== 'trading';
+
+  if (!editing) {
+    return (
+      <div>
+        <div className="mb-1 flex items-center justify-between">
+          <p className="text-caption font-semibold uppercase tracking-wide text-ink-500">Payment details</p>
+          <button type="button" className="text-caption font-medium text-ink-600 hover:text-ink-900 hover:underline" onClick={start}>
+            Edit
+          </button>
+        </div>
+        <Row label="Bank account">
+          {data.bankAccount ? (
+            <span className="font-mono">
+              ••••{data.bankAccount.accountNumber.slice(-4)} · {data.bankAccount.ifsc}
+              {data.bankAccount.bankName ? ` · ${data.bankAccount.bankName}` : ''}
+            </span>
+          ) : (
+            <span className="text-ink-400">Not on file</span>
+          )}
+        </Row>
+        <Row label="MSME">
+          {data.msme ? (
+            <span>
+              <span className="font-mono">{data.msme.udyamNumber}</span> · {data.msme.category}, {data.msme.activity}
+              {protectedMsme && (
+                <span className="block text-caption text-pending-fg">
+                  Pay within {data.msme.writtenAgreement ? 'the agreed days, at most 45' : '15 days'} (43B(h))
+                </span>
+              )}
+            </span>
+          ) : (
+            <span className="text-ink-400">Not registered, or not known</span>
+          )}
+        </Row>
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={submit} className="space-y-3 rounded-md border border-line-200 bg-surface-sink p-3">
+      <p className="text-caption font-semibold uppercase tracking-wide text-ink-500">Bank account</p>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="col-span-2">
+          <label className={label}>Account name</label>
+          <input className={field} value={bank.accountName} onChange={(e) => setBank({ ...bank, accountName: e.target.value })} />
+        </div>
+        <div>
+          <label className={label}>Account number</label>
+          <input className={`${field} font-mono`} inputMode="numeric" value={bank.accountNumber} onChange={(e) => setBank({ ...bank, accountNumber: e.target.value })} />
+        </div>
+        <div>
+          <label className={label}>IFSC</label>
+          <input className={`${field} font-mono uppercase`} value={bank.ifsc} onChange={(e) => setBank({ ...bank, ifsc: e.target.value })} placeholder="HDFC0001234" />
+        </div>
+        <div className="col-span-2">
+          <label className={label}>Bank</label>
+          <input className={field} value={bank.bankName} onChange={(e) => setBank({ ...bank, bankName: e.target.value })} />
+        </div>
+      </div>
+      {data.bankAccount && bank.accountNumber.replace(/[\s-]/g, '') !== data.bankAccount.accountNumber && (
+        <p className="text-caption text-pending-fg">
+          Changing where a vendor is paid? Confirm it with them on a number you already have, not one from the email asking for the change.
+        </p>
+      )}
+
+      <label className="flex items-center gap-2 pt-1 text-body text-ink-900">
+        <input type="checkbox" checked={msme.registered} onChange={(e) => setMsme({ ...msme, registered: e.target.checked })} />
+        Registered as an MSME (Udyam)
+      </label>
+      {msme.registered && (
+        <div className="grid grid-cols-2 gap-3">
+          <div className="col-span-2">
+            <label className={label}>Udyam number</label>
+            <input className={`${field} font-mono uppercase`} value={msme.udyamNumber} onChange={(e) => setMsme({ ...msme, udyamNumber: e.target.value })} placeholder="UDYAM-MH-26-0012345" />
+          </div>
+          <div>
+            <label className={label}>Category</label>
+            <select className={field} value={msme.category} onChange={(e) => setMsme({ ...msme, category: e.target.value })}>
+              <option value="micro">Micro</option>
+              <option value="small">Small</option>
+              <option value="medium">Medium</option>
+            </select>
+          </div>
+          <div>
+            <label className={label}>Activity</label>
+            <select className={field} value={msme.activity} onChange={(e) => setMsme({ ...msme, activity: e.target.value })}>
+              <option value="manufacturing">Manufacturing</option>
+              <option value="services">Services</option>
+              <option value="trading">Trading</option>
+            </select>
+          </div>
+          <label className="col-span-2 flex items-center gap-2 text-body text-ink-900">
+            <input type="checkbox" checked={msme.writtenAgreement} onChange={(e) => setMsme({ ...msme, writtenAgreement: e.target.checked })} />
+            We have a written agreement on payment terms
+          </label>
+        </div>
+      )}
+      {save.isError && (
+        <p className="text-caption text-error-fg">{save.error instanceof ApiError && save.error.message ? save.error.message : "Couldn't save the vendor."}</p>
+      )}
+      <div className="flex justify-end gap-3">
+        <Button type="button" variant="secondary" onClick={() => setEditing(false)}>
+          Cancel
+        </Button>
+        <Button type="submit" disabled={save.isPending}>
+          {save.isPending ? 'Saving…' : 'Save vendor'}
+        </Button>
+      </div>
+    </form>
+  );
+}
+
 export function PartyDetailDialog({
   kind,
   party,
@@ -348,6 +516,7 @@ export function PartyDetailDialog({
                 <Pencil size={12} /> Edit details
               </button>
             </div>
+            {kind === 'vendor' && <VendorBankingSection id={party.id} onSaved={(m) => onSaved?.(m)} />}
             <div>
               <Row label="GSTIN"><span className="font-mono">{party.gstin ?? '—'}</span></Row>
               <Row label={kind === 'customer' ? 'They owe you' : 'You owe them'}>

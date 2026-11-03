@@ -6,7 +6,8 @@ import { cleanPartyDetails, PartyDetailsInput } from '../gl/party-details';
 import { TDS_SECTION_CODES, TdsSection, defaultTdsRateBps, panFromGstin } from '../gl/tds';
 import { Model, Types } from 'mongoose';
 import { BillStatus } from '@ai-accounting/shared';
-import { Vendor, VendorDocument } from './schemas/vendor.schema';
+import { Vendor, VendorBankAccount, VendorDocument } from './schemas/vendor.schema';
+import { MsmeActivity, MsmeCategory, UDYAM_PATTERN, VendorMsme } from './msme';
 import { PurchaseBill, PurchaseBillDocument } from './schemas/purchase-bill.schema';
 import { withOrg } from '../database/tenant.plugin';
 import { buildAgeingSummary, AgeingSummary } from './ageing.util';
@@ -25,6 +26,28 @@ export interface CreateVendorInput {
   pan?: string | null;
   tdsSection?: string | null;
   tdsRateBps?: number | null;
+}
+
+export interface UpdateVendorBankingInput {
+  /** null removes it. */
+  bankAccount?: { accountName?: string | null; accountNumber: string; ifsc: string; bankName?: string | null } | null;
+  msme?: { udyamNumber: string; category: MsmeCategory; activity: MsmeActivity; writtenAgreement?: boolean } | null;
+}
+
+function cleanBankAccount(input: NonNullable<UpdateVendorBankingInput['bankAccount']>): VendorBankAccount {
+  const accountNumber = input.accountNumber.replace(/[\s-]/g, '');
+  if (!/^\d{6,18}$/.test(accountNumber)) throw new BadRequestException('A bank account number is 6 to 18 digits.');
+  const ifsc = input.ifsc.trim().toUpperCase();
+  if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifsc)) throw new BadRequestException(`IFSC ${ifsc} is not in the format ABCD0123456.`);
+  return { accountName: input.accountName?.trim() || null, accountNumber, ifsc, bankName: input.bankName?.trim() || null };
+}
+
+function cleanMsme(input: NonNullable<UpdateVendorBankingInput['msme']>): VendorMsme {
+  const udyamNumber = input.udyamNumber.trim().toUpperCase();
+  if (!UDYAM_PATTERN.test(udyamNumber)) throw new BadRequestException(`${udyamNumber} is not a Udyam number like UDYAM-MH-26-0012345.`);
+  if (!['micro', 'small', 'medium'].includes(input.category)) throw new BadRequestException('The MSME category is micro, small or medium.');
+  if (!['manufacturing', 'services', 'trading'].includes(input.activity)) throw new BadRequestException('The activity is manufacturing, services or trading.');
+  return { udyamNumber, category: input.category, activity: input.activity, writtenAgreement: !!input.writtenAgreement };
 }
 
 export interface UpdateVendorTaxInput {
@@ -127,14 +150,47 @@ export class VendorsService {
     return updated!;
   }
 
-  /** Contact details and tax settings together, as the vendor form sends them. */
-  async edit(id: string, orgId: string, actorId: string, input: PartyDetailsInput & UpdateVendorTaxInput): Promise<VendorDocument> {
-    const { pan, tdsSection, tdsRateBps, ...details } = input;
+  /** Contact details, tax settings, and bank and MSME details together, as the vendor form sends them. */
+  async edit(
+    id: string,
+    orgId: string,
+    actorId: string,
+    input: PartyDetailsInput & UpdateVendorTaxInput & UpdateVendorBankingInput,
+  ): Promise<VendorDocument> {
+    const { pan, tdsSection, tdsRateBps, bankAccount, msme, ...details } = input;
     let vendor = await this.update(id, orgId, actorId, details);
     if (pan !== undefined || tdsSection !== undefined || tdsRateBps !== undefined) {
       vendor = await this.updateTax(id, orgId, actorId, { pan, tdsSection, tdsRateBps });
     }
+    if (bankAccount !== undefined || msme !== undefined) {
+      vendor = await this.updateBanking(id, orgId, actorId, { bankAccount, msme });
+    }
     return vendor;
+  }
+
+  /**
+   * Where the vendor is paid, and their MSME registration. A change of bank
+   * account is the commonest step in invoice fraud, so each is audited with
+   * the account it replaced.
+   */
+  async updateBanking(id: string, orgId: string, actorId: string, input: UpdateVendorBankingInput): Promise<VendorDocument> {
+    const vendor = await this.findById(id, orgId);
+    const set: Record<string, unknown> = {};
+    if (input.bankAccount !== undefined) set.bankAccount = input.bankAccount === null ? null : cleanBankAccount(input.bankAccount);
+    if (input.msme !== undefined) set.msme = input.msme === null ? null : cleanMsme(input.msme);
+    const changed = Object.keys(set).filter((k) => JSON.stringify(set[k]) !== JSON.stringify((vendor as unknown as Record<string, unknown>)[k] ?? null));
+    if (changed.length === 0) return vendor;
+    const updated = await withOrg(orgId, () => this.vendorModel.findOneAndUpdate({ _id: vendor._id }, { $set: set }, { new: true }).exec());
+    await this.auditService.record({
+      orgId,
+      entityType: 'Vendor',
+      entityId: id,
+      action: changed.includes('bankAccount') ? 'UPDATE_BANK_ACCOUNT' : 'UPDATE_MSME',
+      performedBy: actorId,
+      before: Object.fromEntries(changed.map((k) => [k, (vendor as unknown as Record<string, unknown>)[k] ?? null])),
+      after: Object.fromEntries(changed.map((k) => [k, set[k]])),
+    });
+    return updated!;
   }
 
   /** Set a vendor's PAN and the TDS section and rate applied to their bills from now on. */

@@ -1,4 +1,6 @@
 import { partyAsIssued } from '../gl/party-as-issued';
+import { msmePayBy } from './msme';
+import { todayIst } from '../automation/schedule';
 import {
   Injectable,
   Logger,
@@ -42,6 +44,10 @@ export interface BillListItem {
   /** Paid so far, and what is still owed — integer paise. */
   amountPaidPaise: number;
   outstandingPaise: number;
+  /** Micro and small enterprises: the last day to pay under 43B(h); null otherwise. */
+  msmePayBy: string | null;
+  /** That day has passed with money still owed. */
+  msmeLate: boolean;
   /** TDS withheld from the vendor, and whether GST is ours under reverse charge. */
   tdsPaise: number;
   tdsSection: string | null;
@@ -188,13 +194,16 @@ export class PurchaseBillsService {
     const vendorIds = [...new Set(bills.map((b) => b.vendorId?.toString()).filter(Boolean))];
     const vendors = vendorIds.length
       ? await withOrg(orgId, () =>
-          this.vendorModel.find({ _id: { $in: vendorIds } }).select('name gstin').exec(),
+          this.vendorModel.find({ _id: { $in: vendorIds } }).select('name gstin msme').exec(),
         )
       : [];
     const vendorById = new Map(vendors.map((v) => [v._id.toString(), v]));
+    const today = todayIst();
 
     return bills.map((b) => {
       const vendor = partyAsIssued(b, vendorById.get(b.vendorId?.toString() ?? ''), 'Unknown vendor');
+      const owed = outstandingPaise(b);
+      const payBy = msmePayBy(b.billDate, b.dueDate ?? null, vendorById.get(b.vendorId?.toString() ?? '')?.msme);
       return {
         _id: b._id.toString(),
         vendorId: b.vendorId?.toString() ?? null,
@@ -207,7 +216,10 @@ export class PurchaseBillsService {
         amountsPaise: b.amountsPaise,
         totalPaise: b.amountsPaise?.total ?? 0,
         amountPaidPaise: b.amountPaidPaise ?? 0,
-        outstandingPaise: outstandingPaise(b),
+        outstandingPaise: owed,
+        // Micro and small enterprises: the last day to pay under 43B(h), and whether it has passed unpaid.
+        msmePayBy: payBy,
+        msmeLate: !!payBy && owed > 0 && b.status !== BillStatus.DRAFT && today > payBy,
         tdsPaise: b.tds?.amountPaise ?? 0,
         tdsSection: b.tds?.section ?? null,
         isReverseCharge: b.isReverseCharge ?? false,

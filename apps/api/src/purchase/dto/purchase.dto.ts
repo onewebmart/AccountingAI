@@ -69,8 +69,55 @@ export class CreateVendorDto {
 }
 
 /** PATCH /purchase/vendors/:id — PAN and the TDS applied to the vendor's bills. */
+export class VendorBankAccountDto {
+  @IsOptional()
+  @IsString()
+  @Length(0, 120)
+  accountName?: string | null;
+
+  @IsString()
+  @Length(6, 24)
+  accountNumber: string;
+
+  @IsString()
+  @Length(11, 11, { message: 'An IFSC is 11 characters, like HDFC0001234' })
+  ifsc: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(0, 120)
+  bankName?: string | null;
+}
+
+export class VendorMsmeDto {
+  @IsString()
+  @Length(19, 19, { message: 'A Udyam number looks like UDYAM-MH-26-0012345' })
+  udyamNumber: string;
+
+  @IsIn(['micro', 'small', 'medium'])
+  category: 'micro' | 'small' | 'medium';
+
+  @IsIn(['manufacturing', 'services', 'trading'])
+  activity: 'manufacturing' | 'services' | 'trading';
+
+  @IsOptional()
+  @IsBoolean()
+  writtenAgreement?: boolean;
+}
+
 /** PATCH /purchase/vendors/:id — contact details and tax settings; only the fields sent change. */
 export class UpdateVendorDto {
+  /** null removes it. */
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => VendorBankAccountDto)
+  bankAccount?: VendorBankAccountDto | null;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => VendorMsmeDto)
+  msme?: VendorMsmeDto | null;
+
   @IsOptional()
   @IsString()
   @Length(1, 200)
