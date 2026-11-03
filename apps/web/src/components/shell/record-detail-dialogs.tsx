@@ -1,9 +1,12 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
-import { ExternalLink } from 'lucide-react';
+import { useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { ExternalLink, Pencil } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { api } from '@/lib/api';
+import { api, ApiError } from '@/lib/api';
+import { GST_STATES } from '@/lib/gst';
 import { formatRupees } from '@/lib/utils';
 
 /** GET /sales/invoices/:id or /purchase/bills/:id — the stored record. */
@@ -152,26 +155,187 @@ export interface PartyDocument {
 }
 
 /** A customer or vendor: identity, balance, and their invoices or bills. */
+/** GET /sales/customers/:id or /purchase/vendors/:id. */
+interface ApiParty {
+  _id: string;
+  name: string;
+  gstin: string | null;
+  stateCode?: string | null;
+  phone: string | null;
+  email: string | null;
+  address: string | null;
+  notes: string | null;
+}
+
+const PARTY_FIELDS = ['name', 'gstin', 'stateCode', 'phone', 'email', 'address', 'notes'] as const;
+type PartyForm = Record<(typeof PARTY_FIELDS)[number], string>;
+
+/**
+ * A customer's or vendor's details, editable. Only changed fields are sent.
+ * Invoices and bills already issued keep the GSTIN they were issued with;
+ * the server takes care of that.
+ */
+function PartyEditForm({ kind, id, onDone }: { kind: 'customer' | 'vendor'; id: string; onDone: (saved: boolean) => void }) {
+  const queryClient = useQueryClient();
+  const path = kind === 'customer' ? `/sales/customers/${id}` : `/purchase/vendors/${id}`;
+  const { data, isError } = useQuery({ queryKey: [kind === 'customer' ? 'sales' : 'purchase', kind, id], queryFn: () => api.get<ApiParty>(path) });
+  const [form, setForm] = useState<PartyForm | null>(null);
+  const original: PartyForm | null = data
+    ? Object.fromEntries(PARTY_FIELDS.map((k) => [k, (data[k as keyof ApiParty] as string | null | undefined) ?? ''])) as PartyForm
+    : null;
+  const current = form ?? original;
+
+  const save = useMutation({
+    mutationFn: (body: Record<string, string | null>) => api.patch<ApiParty>(path, body),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: [kind === 'customer' ? 'sales' : 'purchase'] });
+      void queryClient.invalidateQueries({ queryKey: ['gst'] });
+      onDone(true);
+    },
+  });
+
+  if (isError) return <p className="text-caption text-error-fg">Couldn&apos;t load the {kind}&apos;s details.</p>;
+  if (!current || !original) return <p className="text-caption text-ink-400">Loading…</p>;
+
+  const set = (k: keyof PartyForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
+    setForm({ ...current, [k]: e.target.value });
+  const gstin = current.gstin.trim().toUpperCase();
+  const stateFromGstin = /^\d{2}/.test(gstin) ? gstin.slice(0, 2) : null;
+  const gstinChanged = gstin !== original.gstin.trim().toUpperCase();
+  const field =
+    'w-full rounded-md border border-line-200 bg-white px-3 py-2 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-saffron-600/40';
+  const label = 'text-caption font-medium text-ink-700 block mb-1';
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const body: Record<string, string | null> = {};
+    for (const k of PARTY_FIELDS) {
+      if (k === 'stateCode' && (kind === 'vendor' || stateFromGstin)) continue;
+      const value = k === 'gstin' ? gstin : current[k].trim();
+      if (value !== original[k].trim()) body[k] = value || null;
+    }
+    if (Object.keys(body).length === 0) return onDone(false);
+    save.mutate(body);
+  };
+
+  return (
+    <form onSubmit={submit} className="space-y-3">
+      <div>
+        <label className={label}>{kind === 'customer' ? 'Customer' : 'Vendor'} name</label>
+        <input className={field} value={current.name} onChange={set('name')} required />
+      </div>
+      <div>
+        <label className={label}>
+          GSTIN <span className="text-ink-400">(blank if unregistered)</span>
+        </label>
+        <input className={`${field} font-mono`} value={current.gstin} onChange={set('gstin')} />
+        {gstinChanged && (
+          <p className="mt-1 text-caption text-ink-500">
+            {kind === 'customer' ? 'Invoices' : 'Bills'} already issued keep the GSTIN they were issued with. New ones use this.
+          </p>
+        )}
+      </div>
+      {kind === 'customer' && (
+        <div>
+          <label className={label}>State</label>
+          {stateFromGstin ? (
+            <p className="text-body text-ink-700">
+              {GST_STATES.find((s) => s.code === stateFromGstin)?.name ?? stateFromGstin} — from the GSTIN
+            </p>
+          ) : (
+            <select className={field} value={current.stateCode} onChange={set('stateCode')}>
+              <option value="">Choose a state</option>
+              {GST_STATES.map((s) => (
+                <option key={s.code} value={s.code}>
+                  {s.code} · {s.name}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+      )}
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className={label}>Email</label>
+          <input type="email" className={field} value={current.email} onChange={set('email')} />
+        </div>
+        <div>
+          <label className={label}>Phone</label>
+          <input type="tel" className={field} value={current.phone} onChange={set('phone')} />
+        </div>
+      </div>
+      <div>
+        <label className={label}>Address</label>
+        <textarea className={field} rows={2} value={current.address} onChange={set('address')} />
+      </div>
+      <div>
+        <label className={label}>Notes</label>
+        <textarea className={field} rows={2} value={current.notes} onChange={set('notes')} />
+      </div>
+      {save.isError && (
+        <p className="text-caption text-error-fg">
+          {save.error instanceof ApiError && save.error.message ? save.error.message : `Couldn't save the ${kind}. Try again.`}
+        </p>
+      )}
+      <div className="flex justify-end gap-3 pt-1">
+        <Button type="button" variant="secondary" onClick={() => onDone(false)}>
+          Cancel
+        </Button>
+        <Button type="submit" disabled={save.isPending}>
+          {save.isPending ? 'Saving…' : kind === 'customer' ? 'Save customer' : 'Save vendor'}
+        </Button>
+      </div>
+    </form>
+  );
+}
+
 export function PartyDetailDialog({
   kind,
   party,
   documents,
   onClose,
+  onSaved,
 }: {
   kind: 'customer' | 'vendor';
   party: { id: string; name: string; gstin: string | null; balancePaise: number } | null;
   documents: PartyDocument[];
   onClose: () => void;
+  /** Called after an edit is saved, with the toast to show. */
+  onSaved?: (message: string) => void;
 }) {
+  const [editing, setEditing] = useState(false);
+  const close = () => {
+    setEditing(false);
+    onClose();
+  };
   return (
-    <Dialog open={!!party} onOpenChange={(open) => !open && onClose()}>
+    <Dialog open={!!party} onOpenChange={(open) => !open && close()}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>{party?.name}</DialogTitle>
           <DialogDescription>{kind === 'customer' ? 'Customer' : 'Vendor'}</DialogDescription>
         </DialogHeader>
-        {party && (
+        {party && editing && (
+          <PartyEditForm
+            kind={kind}
+            id={party.id}
+            onDone={(saved) => {
+              setEditing(false);
+              if (saved) onSaved?.(kind === 'customer' ? 'Customer saved' : 'Vendor saved');
+            }}
+          />
+        )}
+        {party && !editing && (
           <div className="space-y-4">
+            <div className="flex justify-end">
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 text-caption font-medium text-ink-600 hover:text-ink-900 hover:underline"
+                onClick={() => setEditing(true)}
+              >
+                <Pencil size={12} /> Edit details
+              </button>
+            </div>
             <div>
               <Row label="GSTIN"><span className="font-mono">{party.gstin ?? '—'}</span></Row>
               <Row label={kind === 'customer' ? 'They owe you' : 'You owe them'}>

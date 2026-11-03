@@ -986,6 +986,7 @@ export default function SalesPage() {
           .filter((i) => i.customerId === openCustomer?._id)
           .map((i) => ({ id: i._id, number: i.invoiceNumber, date: i.invoiceDate, status: i.status, totalPaise: i.totalPaise }))}
         onClose={() => setOpenCustomer(null)}
+        onSaved={(message) => showToast(message)}
       />
 
       {toast && (

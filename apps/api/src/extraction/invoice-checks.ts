@@ -11,7 +11,7 @@ const GSTIN_CHARS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 const GSTIN_PATTERN = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
 
 /** The GSTIN's 15th character is a mod-36 checksum over the first fourteen. */
-function gstinCheckChar(first14: string): string {
+export function gstinCheckChar(first14: string): string {
   let sum = 0;
   for (let i = 0; i < 14; i++) {
     const product = GSTIN_CHARS.indexOf(first14[i]) * (i % 2 === 0 ? 1 : 2);

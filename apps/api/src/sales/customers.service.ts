@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { InjectModel } from '@nestjs/mongoose';
 import { AuditService } from '../gl/audit.service';
 import { gstinProblem } from '../extraction/invoice-checks';
+import { cleanPartyDetails, PartyDetailsInput } from '../gl/party-details';
 import { Model, Types } from 'mongoose';
 import { InvoiceStatus } from '@ai-accounting/shared';
 import { Customer, CustomerDocument } from './schemas/customer.schema';
@@ -81,6 +82,46 @@ export class CustomersService {
       owed.set(key, (owed.get(key) ?? 0) + outstandingPaise(inv));
     }
     return customers.map((c) => ({ ...c, receivablePaise: owed.get(String(c._id)) ?? 0 }));
+  }
+
+  /**
+   * Change a customer's details. Invoices already issued keep the name, GSTIN
+   * and state they were issued with: they are stamped first, so a corrected
+   * GSTIN does not rewrite GST returns for months already filed.
+   */
+  async update(id: string, orgId: string, actorId: string, input: PartyDetailsInput): Promise<CustomerDocument> {
+    const customer = await this.findById(id, orgId);
+    const set = cleanPartyDetails(input, { gstin: customer.gstin, stateCode: customer.stateCode });
+    const changed = Object.keys(set).filter((k) => set[k] !== (customer as unknown as Record<string, unknown>)[k]);
+    if (changed.length === 0) return customer;
+
+    let stamped = 0;
+    if (changed.some((k) => k === 'name' || k === 'gstin' || k === 'stateCode')) {
+      const result = await withOrg(orgId, () =>
+        this.invoiceModel
+          .updateMany(
+            { customerId: customer._id, status: { $ne: InvoiceStatus.DRAFT }, partyAtIssue: null },
+            { $set: { partyAtIssue: { name: customer.name, gstin: customer.gstin, stateCode: customer.stateCode } } },
+          )
+          .exec(),
+      );
+      stamped = result.modifiedCount;
+    }
+    const updated = await withOrg(orgId, () =>
+      this.customerModel.findOneAndUpdate({ _id: customer._id }, { $set: set }, { new: true }).exec(),
+    );
+    const before = Object.fromEntries(changed.map((k) => [k, (customer as unknown as Record<string, unknown>)[k] ?? null]));
+    await this.auditService.record({
+      orgId,
+      entityType: 'Customer',
+      entityId: id,
+      action: 'UPDATE',
+      performedBy: actorId,
+      before,
+      after: Object.fromEntries(changed.map((k) => [k, set[k]])),
+      meta: stamped ? { invoicesKeptAsIssued: stamped } : undefined,
+    });
+    return updated!;
   }
 
   async findById(id: string, orgId: string): Promise<CustomerDocument> {

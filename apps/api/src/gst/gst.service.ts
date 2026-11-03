@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { partyAsIssued } from '../gl/party-as-issued';
 import { InjectModel } from '@nestjs/mongoose';
 import { AccountsService } from '../gl/accounts.service';
 import { SystemAccountKey } from '../gl/schemas/ledger-account.schema';
@@ -206,8 +207,8 @@ export class GstService {
     for (const bill of bills) {
       if (dateToPeriod(bill.billDate) !== period) continue;
 
-      const vendor = vendorMap.get(bill.vendorId.toString());
-      const interState = isInterState(vendor?.gstin ?? null, buyerStateCode);
+      const vendor = partyAsIssued(bill, vendorMap.get(bill.vendorId.toString()), 'Unknown');
+      const interState = isInterState(vendor.gstin, buyerStateCode);
       const split = normalizeGstSplit(
         bill.amountsPaise.cgst,
         bill.amountsPaise.sgst,
@@ -225,8 +226,8 @@ export class GstService {
       entries.push({
         billId: bill._id.toString(),
         vendorId: bill.vendorId.toString(),
-        vendorName: vendor?.name ?? 'Unknown',
-        supplierGstin: vendor?.gstin ?? null,
+        vendorName: vendor.name,
+        supplierGstin: vendor.gstin,
         invoiceNumber: bill.billNumber,
         invoiceDate: bill.billDate,
         period,
@@ -268,8 +269,8 @@ export class GstService {
     for (const inv of invoices) {
       if (dateToPeriod(inv.invoiceDate) !== period) continue;
 
-      const customer = customerMap.get(inv.customerId.toString());
-      const interState = isInterState(customer?.gstin ?? null, buyerStateCode);
+      const customer = partyAsIssued(inv, customerMap.get(inv.customerId.toString()), 'Unknown');
+      const interState = isInterState(customer.gstin, buyerStateCode);
       const split = normalizeGstSplit(
         inv.amountsPaise.cgst,
         inv.amountsPaise.sgst,
@@ -281,8 +282,8 @@ export class GstService {
       entries.push({
         invoiceId: inv._id.toString(),
         customerId: inv.customerId.toString(),
-        customerName: customer?.name ?? 'Unknown',
-        customerGstin: customer?.gstin ?? null,
+        customerName: customer.name,
+        customerGstin: customer.gstin,
         invoiceNumber: inv.invoiceNumber,
         invoiceDate: inv.invoiceDate,
         period,

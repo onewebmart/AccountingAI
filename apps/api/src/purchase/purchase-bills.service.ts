@@ -1,3 +1,4 @@
+import { partyAsIssued } from '../gl/party-as-issued';
 import {
   Injectable,
   Logger,
@@ -193,12 +194,12 @@ export class PurchaseBillsService {
     const vendorById = new Map(vendors.map((v) => [v._id.toString(), v]));
 
     return bills.map((b) => {
-      const vendor = vendorById.get(b.vendorId?.toString() ?? '');
+      const vendor = partyAsIssued(b, vendorById.get(b.vendorId?.toString() ?? ''), 'Unknown vendor');
       return {
         _id: b._id.toString(),
         vendorId: b.vendorId?.toString() ?? null,
-        vendorName: vendor?.name ?? 'Unknown vendor',
-        vendorGstin: vendor?.gstin ?? null,
+        vendorName: vendor.name,
+        vendorGstin: vendor.gstin,
         billNumber: b.billNumber ?? null,
         billDate: b.billDate,
         dueDate: b.dueDate ?? null,

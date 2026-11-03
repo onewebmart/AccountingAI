@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { InjectModel } from '@nestjs/mongoose';
 import { AuditService } from '../gl/audit.service';
 import { gstinProblem } from '../extraction/invoice-checks';
+import { cleanPartyDetails, PartyDetailsInput } from '../gl/party-details';
 import { TDS_SECTION_CODES, TdsSection, defaultTdsRateBps, panFromGstin } from '../gl/tds';
 import { Model, Types } from 'mongoose';
 import { BillStatus } from '@ai-accounting/shared';
@@ -87,6 +88,55 @@ export class VendorsService {
       owed.set(key, (owed.get(key) ?? 0) + outstandingPaise(bill));
     }
     return vendors.map((v) => ({ ...v, outstandingPaise: owed.get(String(v._id)) ?? 0 }));
+  }
+
+  /**
+   * Change a vendor's details. Bills already issued keep the name and GSTIN
+   * they were issued with: they are stamped first, so a corrected GSTIN does
+   * not rewrite GST returns or the purchase register for past months.
+   */
+  async update(id: string, orgId: string, actorId: string, input: PartyDetailsInput): Promise<VendorDocument> {
+    const vendor = await this.findById(id, orgId);
+    const set = cleanPartyDetails(input, { gstin: vendor.gstin });
+    const changed = Object.keys(set).filter((k) => set[k] !== (vendor as unknown as Record<string, unknown>)[k]);
+    if (changed.length === 0) return vendor;
+
+    let stamped = 0;
+    if (changed.some((k) => k === 'name' || k === 'gstin')) {
+      const result = await withOrg(orgId, () =>
+        this.billModel
+          .updateMany(
+            { vendorId: vendor._id, status: { $ne: BillStatus.DRAFT }, partyAtIssue: null },
+            { $set: { partyAtIssue: { name: vendor.name, gstin: vendor.gstin, stateCode: vendor.gstin?.slice(0, 2) ?? null } } },
+          )
+          .exec(),
+      );
+      stamped = result.modifiedCount;
+    }
+    const updated = await withOrg(orgId, () =>
+      this.vendorModel.findOneAndUpdate({ _id: vendor._id }, { $set: set }, { new: true }).exec(),
+    );
+    await this.auditService.record({
+      orgId,
+      entityType: 'Vendor',
+      entityId: id,
+      action: 'UPDATE',
+      performedBy: actorId,
+      before: Object.fromEntries(changed.map((k) => [k, (vendor as unknown as Record<string, unknown>)[k] ?? null])),
+      after: Object.fromEntries(changed.map((k) => [k, set[k]])),
+      meta: stamped ? { billsKeptAsIssued: stamped } : undefined,
+    });
+    return updated!;
+  }
+
+  /** Contact details and tax settings together, as the vendor form sends them. */
+  async edit(id: string, orgId: string, actorId: string, input: PartyDetailsInput & UpdateVendorTaxInput): Promise<VendorDocument> {
+    const { pan, tdsSection, tdsRateBps, ...details } = input;
+    let vendor = await this.update(id, orgId, actorId, details);
+    if (pan !== undefined || tdsSection !== undefined || tdsRateBps !== undefined) {
+      vendor = await this.updateTax(id, orgId, actorId, { pan, tdsSection, tdsRateBps });
+    }
+    return vendor;
   }
 
   /** Set a vendor's PAN and the TDS section and rate applied to their bills from now on. */

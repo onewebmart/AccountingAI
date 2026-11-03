@@ -112,6 +112,40 @@ export class CreateCustomerDto {
   notes?: string;
 }
 
+/** PATCH /sales/customers/:id — only the fields sent change. */
+export class UpdateCustomerDto {
+  @IsOptional()
+  @IsString()
+  @Length(1, 200)
+  name?: string;
+
+  /** null or '' clears it. */
+  @IsOptional()
+  @IsString()
+  gstin?: string | null;
+
+  @IsOptional()
+  @IsString()
+  phone?: string | null;
+
+  @IsOptional()
+  @IsString()
+  email?: string | null;
+
+  @IsOptional()
+  @IsString()
+  address?: string | null;
+
+  @IsOptional()
+  @IsString()
+  notes?: string | null;
+
+  /** GST state code, for a customer without a GSTIN; a GSTIN sets it. */
+  @IsOptional()
+  @Matches(/^\d{2}$/, { message: 'stateCode must be a two-digit GST state code, like 27' })
+  stateCode?: string | null;
+}
+
 export class CreateSalesInvoiceDto {
   @IsString({ message: 'customerId is required — pick an existing customer' })
   customerId: string;

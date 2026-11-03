@@ -1,6 +1,7 @@
 import {
   Controller,
   Get,
+  Patch,
   Post,
   Param,
   Body,
@@ -14,7 +15,7 @@ import { PermissionGuard } from '../auth/guards/permission.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CustomersService } from './customers.service';
 import { SalesInvoicesService } from './sales-invoices.service';
-import { CreateCustomerDto, CreateSalesInvoiceDto, PayInvoiceDto, CreateCreditNoteDto } from './dto/sales.dto';
+import { CreateCustomerDto, CreateSalesInvoiceDto, PayInvoiceDto, CreateCreditNoteDto, UpdateCustomerDto } from './dto/sales.dto';
 import { CreditNotesService } from './credit-notes.service';
 
 interface AuthRequest {
@@ -48,6 +49,12 @@ export class SalesController {
   @RequirePermission(Permission.MANAGE_SALES)
   getCustomer(@Request() req: AuthRequest, @Param('id') id: string) {
     return this.customersService.findById(id, req.user.orgId);
+  }
+
+  @Patch('customers/:id')
+  @RequirePermission(Permission.MANAGE_SALES)
+  updateCustomer(@Request() req: AuthRequest, @Param('id') id: string, @Body() body: UpdateCustomerDto) {
+    return this.customersService.update(id, req.user.orgId, req.user.sub, body);
   }
 
   @Get('customers/:id/receivable')

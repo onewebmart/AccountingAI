@@ -1,3 +1,4 @@
+import { partyAsIssued } from '../gl/party-as-issued';
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
@@ -72,14 +73,14 @@ export class GstReturnsService {
       .exec();
     const customerById = new Map(customers.map((c) => [c._id.toString(), c]));
     const sale = (inv: (typeof invoices)[number]): SaleIn => {
-      const customer = customerById.get(inv.customerId.toString());
+      const customer = partyAsIssued(inv, customerById.get(inv.customerId.toString()), 'Unknown customer');
       return {
         id: inv._id.toString(),
         number: inv.invoiceNumber,
         date: inv.invoiceDate,
-        customerName: customer?.name ?? 'Unknown customer',
-        customerGstin: customer?.gstin ?? null,
-        customerState: customer?.stateCode ?? null,
+        customerName: customer.name,
+        customerGstin: customer.gstin,
+        customerState: customer.stateCode,
         amounts: inv.amountsPaise,
         lines: inv.lineItems ?? [],
       };
@@ -121,12 +122,12 @@ export class GstReturnsService {
       .exec();
     const vendorById = new Map(vendors.map((v) => [v._id.toString(), v]));
     const purchase = (bill: (typeof bills)[number]): PurchaseIn => {
-      const vendor = vendorById.get(bill.vendorId.toString());
+      const vendor = partyAsIssued(bill, vendorById.get(bill.vendorId.toString()), 'Unknown vendor');
       return {
         id: bill._id.toString(),
         number: bill.billNumber,
-        vendorName: vendor?.name ?? 'Unknown vendor',
-        vendorGstin: vendor?.gstin ?? null,
+        vendorName: vendor.name,
+        vendorGstin: vendor.gstin,
         isReverseCharge: bill.isReverseCharge ?? false,
         amounts: bill.amountsPaise,
       };

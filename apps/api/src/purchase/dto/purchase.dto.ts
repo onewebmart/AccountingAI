@@ -73,7 +73,34 @@ export class CreateVendorDto {
 }
 
 /** PATCH /purchase/vendors/:id — PAN and the TDS applied to the vendor's bills. */
-export class UpdateVendorTaxDto {
+/** PATCH /purchase/vendors/:id — contact details and tax settings; only the fields sent change. */
+export class UpdateVendorDto {
+  @IsOptional()
+  @IsString()
+  @Length(1, 200)
+  name?: string;
+
+  /** null or '' clears it. */
+  @IsOptional()
+  @IsString()
+  gstin?: string | null;
+
+  @IsOptional()
+  @IsString()
+  phone?: string | null;
+
+  @IsOptional()
+  @IsString()
+  email?: string | null;
+
+  @IsOptional()
+  @IsString()
+  address?: string | null;
+
+  @IsOptional()
+  @IsString()
+  notes?: string | null;
+
   @IsOptional()
   @IsString()
   pan?: string | null;

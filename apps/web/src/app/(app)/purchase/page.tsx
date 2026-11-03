@@ -876,6 +876,7 @@ export default function PurchasePage() {
           .filter((b) => b.vendorId === openVendor?._id)
           .map((b) => ({ id: b._id, number: b.billNumber, date: b.billDate, status: b.status, totalPaise: b.totalPaise }))}
         onClose={() => setOpenVendor(null)}
+        onSaved={(message) => showToast(message)}
       />
 
       {toast && (

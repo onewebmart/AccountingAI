@@ -1,4 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
+import { PartyAsIssued } from '../../gl/party-as-issued';
 import { HydratedDocument, Types, Schema as MongooseSchema } from 'mongoose';
 import { BillStatus } from '@ai-accounting/shared';
 import { tenantIsolationPlugin } from '../../database/tenant.plugin';
@@ -130,6 +131,12 @@ export class PurchaseBill {
    * opening journal carries it) and is not a supply, so GST returns skip it.
    */
   @Prop({ type: Boolean, default: false }) isOpeningBalance: boolean;
+
+  /**
+   * The party as it stood when this was issued, stamped before the party's
+   * name, GSTIN or state is edited. Null: read the party as it is now.
+   */
+  @Prop({ type: Object, default: null }) partyAtIssue: PartyAsIssued | null;
 
 }
 

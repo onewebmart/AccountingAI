@@ -1,3 +1,4 @@
+import { partyAsIssued } from '../gl/party-as-issued';
 import {
   Injectable,
   Logger,
@@ -149,12 +150,12 @@ export class SalesInvoicesService {
     const customerById = new Map(customers.map((c) => [c._id.toString(), c]));
 
     return invoices.map((i) => {
-      const customer = customerById.get(i.customerId?.toString() ?? '');
+      const customer = partyAsIssued(i, customerById.get(i.customerId?.toString() ?? ''), 'Unknown customer');
       return {
         _id: i._id.toString(),
         customerId: i.customerId?.toString() ?? null,
-        customerName: customer?.name ?? 'Unknown customer',
-        customerGstin: customer?.gstin ?? null,
+        customerName: customer.name,
+        customerGstin: customer.gstin,
         invoiceNumber: i.invoiceNumber ?? null,
         invoiceDate: i.invoiceDate,
         dueDate: i.dueDate ?? null,
