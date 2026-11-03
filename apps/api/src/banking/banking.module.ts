@@ -7,6 +7,9 @@ import { Journal, JournalSchema } from '../gl/schemas/journal.schema';
 import { SalesInvoice, SalesInvoiceSchema } from '../sales/schemas/sales-invoice.schema';
 import { PurchaseBill, PurchaseBillSchema } from '../purchase/schemas/purchase-bill.schema';
 import { ProposedEntry, ProposedEntrySchema } from '../proposals/schemas/proposed-entry.schema';
+import { TransfersService } from './transfers.service';
+import { TransfersController } from './transfers.controller';
+import { LedgerAccount, LedgerAccountSchema } from '../gl/schemas/ledger-account.schema';
 import { GlModule } from '../gl/gl.module';
 import { SalesModule } from '../sales/sales.module';
 import { PurchaseModule } from '../purchase/purchase.module';
@@ -25,13 +28,15 @@ import { BankingController } from './banking.controller';
       { name: PurchaseBill.name, schema: PurchaseBillSchema },
       // Read to show which lines are waiting in the review queue.
       { name: ProposedEntry.name, schema: ProposedEntrySchema },
+      // Read for the bank and cash ledgers a transfer may move money between.
+      { name: LedgerAccount.name, schema: LedgerAccountSchema },
     ]),
     GlModule, // PostingService (transactions) and AuditService
     SalesModule, // settles a matched invoice
     PurchaseModule, // settles a matched bill
   ],
-  controllers: [BankingController],
-  providers: [ReconciliationService],
+  controllers: [BankingController, TransfersController],
+  providers: [ReconciliationService, TransfersService],
   exports: [ReconciliationService],
 })
 export class BankingModule {}

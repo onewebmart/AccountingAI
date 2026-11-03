@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { BankFeedsCard } from '@/components/banking/bank-feeds-card';
+import { TransfersCard } from '@/components/banking/transfers-card';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Upload, CheckCircle, AlertCircle, Minus, Sparkles, Copy, Undo2, EyeOff } from 'lucide-react';
@@ -48,6 +49,8 @@ interface ReportLine {
   excluded: boolean;
   /** Sent to be categorised: a proposal for it waits in the review queue. */
   inReview: boolean;
+  /** The other half, when this line is a transfer between our own accounts. */
+  transferLineId: string | null;
 }
 
 interface DiffReport {
@@ -273,6 +276,16 @@ export default function BankingPage() {
   });
   const lineAction = (lineId: string, action: string, body?: unknown) => lineMutation.mutate({ lineId, action, body });
 
+  // Undo a pairing of two of our own accounts' lines: both go back to unmatched.
+  const transferMutation = useMutation({
+    mutationFn: (lineId: string) => api.post('/banking/transfers/unpair', { lineId }),
+    onSuccess: () => {
+      refresh();
+      showToast('Lines unpaired');
+    },
+    onError: (err) => showToast(failureMessage(err, "Couldn't unpair those lines"), true),
+  });
+
   // Lines with no invoice or bill behind them: the AI suggests an account for
   // each and the proposal waits in the review queue. Nothing posts until approved.
   const categoriseMutation = useMutation({
@@ -420,6 +433,7 @@ export default function BankingPage() {
       </div>
 
       <BankFeedsCard onToast={showToast} />
+      {latestStatement && <TransfersCard onToast={showToast} />}
 
       {accounts.length > 1 && (
         <div className="flex items-center gap-3">
@@ -543,6 +557,18 @@ export default function BankingPage() {
                         </div>
                       </div>
 
+                      {settled && line.transferLineId && (
+                        <div className="mt-2 flex flex-wrap items-center gap-3 border-t border-line-100 pt-2">
+                          <button
+                            type="button"
+                            className={`${linkButton} inline-flex items-center gap-1`}
+                            disabled={busy || transferMutation.isPending}
+                            onClick={() => transferMutation.mutate(line.id)}
+                          >
+                            <Undo2 size={12} /> Not a transfer
+                          </button>
+                        </div>
+                      )}
                       {!settled && (
                         <div className="mt-2 flex flex-wrap items-center gap-3 border-t border-line-100 pt-2">
                           {line.excluded ? (

@@ -18,6 +18,8 @@ import { SalesInvoice, SalesInvoiceDocument } from '../sales/schemas/sales-invoi
 import { PurchaseBill, PurchaseBillDocument } from '../purchase/schemas/purchase-bill.schema';
 import { ProposedEntry, ProposedEntryDocument } from '../proposals/schemas/proposed-entry.schema';
 import { PostingService } from '../gl/posting.service';
+import { AccountsService } from '../gl/accounts.service';
+import { SystemAccountKey } from '../gl/schemas/ledger-account.schema';
 import { AuditService } from '../gl/audit.service';
 import { SalesInvoicesService } from '../sales/sales-invoices.service';
 import { PurchaseBillsService } from '../purchase/purchase-bills.service';
@@ -104,6 +106,8 @@ export interface DiffReport {
     excluded: boolean;
     /** Sent to be categorised: a proposal for it waits in the review queue. */
     inReview: boolean;
+    /** The other half, when this line is a transfer between our own accounts. */
+    transferLineId: string | null;
   }>;
 }
 
@@ -171,6 +175,7 @@ export class ReconciliationService {
     private auditService: AuditService,
     private salesInvoices: SalesInvoicesService,
     private purchaseBills: PurchaseBillsService,
+    private accounts: AccountsService,
   ) {}
 
   // ── Bank account ─────────────────────────────────────────────────────────
@@ -375,7 +380,7 @@ export class ReconciliationService {
     const vouchers = await withOrg(orgId, () =>
       this.journalModel
         .find({
-          voucherType: { $in: [VoucherType.RECEIPT, VoucherType.PAYMENT] },
+          voucherType: { $in: [VoucherType.RECEIPT, VoucherType.PAYMENT, VoucherType.CONTRA] },
           status: JournalStatus.POSTED,
           reversalOf: { $exists: false },
           date: { $gte: from, $lte: to },
@@ -395,6 +400,15 @@ export class ReconciliationService {
     );
     const openBills = await withOrg(orgId, () => this.billModel.find({ status: BillStatus.POSTED }).exec());
 
+    // A contra (cash withdrawn or paid in) records a bank line too, when it
+    // moved money through the Bank ledger the line's way.
+    const bankLedger = (await this.accounts.resolveSystemAccount(orgId, SystemAccountKey.BANK))._id.toString();
+    const contraDirection = (v: JournalDocument): 'in' | 'out' | null => {
+      const leg = v.lines.find((l) => String(l.accountId) === bankLedger);
+      if (!leg) return null;
+      return leg.debitPaise > 0 ? 'in' : 'out';
+    };
+
     let matched = 0;
     for (const line of lines) {
       const moneyIn = line.creditPaise > 0;
@@ -407,7 +421,8 @@ export class ReconciliationService {
           (v) =>
             !takenIds.has(String(v._id)) &&
             !reversed.has(String(v._id)) &&
-            v.voucherType === (moneyIn ? VoucherType.RECEIPT : VoucherType.PAYMENT) &&
+            (v.voucherType === (moneyIn ? VoucherType.RECEIPT : VoucherType.PAYMENT) ||
+              (v.voucherType === VoucherType.CONTRA && contraDirection(v) === (moneyIn ? 'in' : 'out'))) &&
             journalTotal(v) === amount &&
             Math.abs(new Date(v.date).getTime() - lineTime) <= MATCH_DATE_WINDOW_MS,
         )
@@ -727,6 +742,7 @@ export class ReconciliationService {
         possibleDuplicate: !!l.possibleDuplicate,
         excluded: !!l.excluded,
         inReview: inReview.has(l._id.toString()),
+        transferLineId: l.transferLineId?.toString() ?? null,
       })),
     };
   }
@@ -840,8 +856,24 @@ export class ReconciliationService {
     for (const i of invoices) byId.set(String(i._id), `Invoice ${i.invoiceNumber ?? i._id}`);
     for (const b of bills) byId.set(String(b._id), `Bill ${b.billNumber ?? b._id}`);
 
+    const pairs = lines.filter((l) => l.transferLineId);
+    const others = pairs.length
+      ? await withOrg(orgId, () => this.lineModel.find({ _id: { $in: pairs.map((l) => l.transferLineId!) } }).lean().exec())
+      : [];
+    const banks = others.length
+      ? await withOrg(orgId, () => this.accountModel.find({ _id: { $in: others.map((o) => o.bankAccountId) } }).lean().exec())
+      : [];
+    const bankName = new Map(banks.map((b) => [String(b._id), b.bankName ?? b.name]));
+    const otherById = new Map(others.map((o) => [String(o._id), o]));
+
     const labels = new Map<string, string>();
     for (const l of lines) {
+      if (l.transferLineId) {
+        const other = otherById.get(String(l.transferLineId));
+        const where = other ? bankName.get(String(other.bankAccountId)) ?? 'another account' : 'another account';
+        labels.set(l._id.toString(), `Transfer ${l.debitPaise > 0 ? 'to' : 'from'} ${where}`);
+        continue;
+      }
       // Prefer the voucher once one exists — after confirm, that is what records the line.
       const id = l.matchedJournalId ?? l.matchedInvoiceId ?? l.matchedBillId;
       const label = id ? byId.get(String(id)) : undefined;

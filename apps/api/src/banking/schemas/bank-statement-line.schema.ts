@@ -69,6 +69,14 @@ export class BankStatementLine {
    * Unique per account, so a feed pulled twice imports each transaction once.
    */
   @Prop({ type: String, default: null }) externalId: string | null;
+
+  /**
+   * The other half of a transfer between two of our own bank accounts.
+   * Both are on the one Bank ledger, so the pair is in the books with no
+   * voucher; unpairing sends both back to unmatched.
+   */
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'BankStatementLine', default: null })
+  transferLineId: Types.ObjectId | null;
 }
 
 export const BankStatementLineSchema = SchemaFactory.createForClass(BankStatementLine);
