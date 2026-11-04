@@ -35,6 +35,7 @@ import {
   MessageSquare,
   Palette,
   Lock,
+  Warehouse,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -84,6 +85,7 @@ const NAV_GROUPS: NavGroup[] = [
       { href: '/purchase', label: 'Purchase', icon: <ShoppingCart size={18} /> },
       { href: '/expenses', label: 'Expense claims', icon: <Receipt size={18} /> },
       { href: '/items', label: 'Items', icon: <Package size={18} /> },
+      { href: '/stock', label: 'Stock', icon: <Warehouse size={18} /> },
       { href: '/banking', label: 'Banking', icon: <Building2 size={18} /> },
       { href: '/recurring', label: 'Recurring', icon: <Repeat size={18} /> },
     ],

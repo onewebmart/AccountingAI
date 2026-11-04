@@ -61,6 +61,9 @@ function ItemDialog({ item, onClose, onSaved }: { item: ItemOption | null; onClo
     incomeAccountId: item?.incomeAccountId ?? '',
     expenseAccountId: item?.expenseAccountId ?? '',
     description: item?.description ?? '',
+    trackStock: item?.trackStock !== false,
+    reorderLevel: item?.reorderLevel == null ? '' : String(item.reorderLevel),
+    reorderQty: item?.reorderQty == null ? '' : String(item.reorderQty),
   });
   const [hsnSource, setHsnSource] = useState<{ by: Suggestion['source']; reason: string; confidence: number } | null>(null);
   const [suggestion, setSuggestion] = useState<SuggestionView | null>(null);
@@ -98,6 +101,10 @@ function ItemDialog({ item, onClose, onSaved }: { item: ItemOption | null; onClo
       const sale = form.sale.trim() ? parseRupees(form.sale) : null;
       const purchase = form.purchase.trim() ? parseRupees(form.purchase) : null;
       if ((form.sale.trim() && sale === null) || (form.purchase.trim() && purchase === null)) throw new Error('Enter prices in rupees, like 1,250.50.');
+      const qty = (v: string) => (v.trim() === '' ? null : Number(v));
+      const level = qty(form.reorderLevel);
+      const reorderQty = qty(form.reorderQty);
+      if ((level !== null && !(level >= 0)) || (reorderQty !== null && !(reorderQty > 0))) throw new Error('Reorder level and quantity are numbers, the quantity more than nothing.');
       const body = {
         name: form.name.trim(),
         code: form.code.trim() || null,
@@ -110,6 +117,9 @@ function ItemDialog({ item, onClose, onSaved }: { item: ItemOption | null; onClo
         incomeAccountId: form.incomeAccountId || null,
         expenseAccountId: form.expenseAccountId || null,
         description: form.description.trim() || null,
+        trackStock: form.kind === 'goods' && form.trackStock,
+        reorderLevel: form.kind === 'goods' && form.trackStock ? level : null,
+        reorderQty: form.kind === 'goods' && form.trackStock ? reorderQty : null,
         // Kept only while the code is the one suggested.
         hsnSource: hsnSource && hsnSource.by && form.hsnSac.trim() ? hsnSource : null,
       };
@@ -240,6 +250,28 @@ function ItemDialog({ item, onClose, onSaved }: { item: ItemOption | null; onClo
               </select>
             </div>
           </div>
+
+          {form.kind === 'goods' && (
+            <div className="rounded-md border border-line-200 p-3">
+              <label className="flex items-center gap-2 text-body text-ink-900">
+                <input type="checkbox" checked={form.trackStock} onChange={(e) => setForm((f) => ({ ...f, trackStock: e.target.checked }))} />
+                Count in stock
+              </label>
+              <p className="mt-0.5 text-caption text-ink-500">Bills bring it in, invoices take it out. Turn off for consumables nobody counts.</p>
+              {form.trackStock && (
+                <div className="mt-3 grid grid-cols-2 gap-3">
+                  <div>
+                    <label className={label}>Reorder at</label>
+                    <input className={`${field} font-mono`} inputMode="decimal" value={form.reorderLevel} onChange={(e) => setForm((f) => ({ ...f, reorderLevel: e.target.value }))} placeholder="From sales" />
+                  </div>
+                  <div>
+                    <label className={label}>Order this many</label>
+                    <input className={`${field} font-mono`} inputMode="decimal" value={form.reorderQty} onChange={(e) => setForm((f) => ({ ...f, reorderQty: e.target.value }))} placeholder="Six weeks' sales" />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           <div>
             <label className={label}>Description</label>

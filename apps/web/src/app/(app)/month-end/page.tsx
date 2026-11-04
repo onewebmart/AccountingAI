@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { api, ApiError } from '@/lib/api';
 import { formatPaise } from '@/lib/gst';
 import { parseRupees } from '@/lib/money';
+import { ClosingStockCard } from '@/components/stock/closing-stock-card';
 
 type Tab = 'assistant' | 'assets' | 'schedules' | 'recurring';
 
@@ -191,6 +192,7 @@ function AssistantTab({ period, onToast }: { period: string; onToast: (m: string
           )}
         </>
       )}
+      <ClosingStockCard period={period} onToast={onToast} hideWhenEmpty />
       <Link href="/review" className="inline-flex items-center gap-1 text-caption font-medium text-ink-600 hover:underline">Open the review queue <ChevronRight size={13} /></Link>
       {capitalising && <AssetDialog prefill={capitalising} onClose={() => setCapitalising(null)} onDone={() => { setCapitalising(null); refresh(); onToast('Sent to the review queue'); }} />}
     </div>

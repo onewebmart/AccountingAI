@@ -61,6 +61,8 @@ const ADJUSTMENT_LABEL: Record<string, string> = {
   capitalise: 'Capitalise an asset',
   disposal: 'Asset disposal',
   reclass: 'Reclassification',
+  closing_stock: 'Closing stock',
+  opening_stock: 'Opening stock',
 };
 
 const CATEGORY_SOURCE: Record<NonNullable<ProposedEntryData['category']>['source'], { label: string; className: string }> = {

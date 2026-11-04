@@ -17,6 +17,9 @@ export interface ItemOption {
   incomeAccountId: string | null;
   expenseAccountId: string | null;
   description: string | null;
+  trackStock?: boolean;
+  reorderLevel?: number | null;
+  reorderQty?: number | null;
   isActive: boolean;
 }
 
