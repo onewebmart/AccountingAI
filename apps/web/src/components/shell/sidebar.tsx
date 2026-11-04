@@ -9,6 +9,7 @@ import {
   FileText,
   ShoppingCart,
   Package,
+  UserCheck,
   ClipboardList,
   CalendarCheck,
   TrendingUp,
@@ -71,6 +72,7 @@ const NAV_GROUPS: NavGroup[] = [
       { href: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} /> },
       { href: '/inbox', label: 'Inbox', icon: <Inbox size={18} /> },
       { href: '/review', label: 'Review', icon: <CheckSquare size={18} /> },
+      { href: '/approvals', label: 'Approvals', icon: <UserCheck size={18} /> },
     ],
   },
   {

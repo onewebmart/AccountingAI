@@ -3,6 +3,7 @@ import { msmePayBy } from './msme';
 import { todayIst } from '../automation/schedule';
 import {
   Injectable,
+  Optional,
   Logger,
   NotFoundException,
   BadRequestException,
@@ -130,6 +131,8 @@ function billTds(
 }
 
 import { splitByAccount } from '../items/line-accounts';
+import { ApprovalsService } from '../approvals/approvals.service';
+const rupeesOf = (p: number) => `₹${(p / 100).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
 @Injectable()
 export class PurchaseBillsService {
   private readonly logger = new Logger(PurchaseBillsService.name);
@@ -141,7 +144,18 @@ export class PurchaseBillsService {
     private postingService: PostingService,
     private accountsService: AccountsService,
     private auditService: AuditService,
+    // Optional so specs that build this by hand need no approvals.
+    @Optional() private approvals?: ApprovalsService,
   ) {}
+
+  /** How an approved bill or bill payment posts: in the last approver's name. */
+  onModuleInit() {
+    this.approvals?.register('bill', async (orgId, actorId, request) => String((await this.post(request.docId!, orgId, actorId))._id));
+    this.approvals?.register('bill_paid', async (orgId, actorId, request) => {
+      const p = request.payload as { billId: string; paidOn?: string; amountPaise?: number };
+      return String((await this.markPaid(p.billId, orgId, actorId, p.paidOn, p.amountPaise, { approved: true }))._id);
+    });
+  }
 
   async create(input: CreateBillInput): Promise<PurchaseBillDocument> {
     const vendor = await withOrg(input.orgId, () => this.vendorModel.findById(input.vendorId).exec());
@@ -157,6 +171,7 @@ export class PurchaseBillsService {
       amountsPaise: input.amountsPaise,
       lineItems: input.lineItems ?? [],
       notes: input.notes ?? null,
+      createdBy: input.actorId && Types.ObjectId.isValid(input.actorId) ? input.actorId : null,
       isReverseCharge: input.isReverseCharge ?? false,
       source: input.source ?? null,
       tds,
@@ -254,10 +269,16 @@ export class PurchaseBillsService {
    *   Cr  TDS Payable                  (TDS withheld, if any)
    *   Cr  GST Payable (Reverse Charge) (the tax, under reverse charge)
    */
-  async post(id: string, orgId: string, actorId: string): Promise<PurchaseBillDocument> {
+  async post(id: string, orgId: string, actorId: string, actorRole = ''): Promise<PurchaseBillDocument> {
     const bill = await this.findById(id, orgId);
     if (bill.status !== BillStatus.DRAFT) {
       throw new BadRequestException(`Bill is already ${bill.status}`);
+    }
+    if (this.approvals) {
+      await this.approvals.gate({
+        orgId, docType: 'bill', docId: id, summary: `Bill ${bill.billNumber ?? ''} — ${rupeesOf(bill.amountsPaise.total)}`, amountPaise: bill.amountsPaise.total,
+        makerId: bill.createdBy ?? null, actorId, actorRole, facts: await this.approvals.billFacts(orgId, bill),
+      });
     }
 
     const { taxableValue, cgst, sgst, igst, cess } = bill.amountsPaise;
@@ -392,8 +413,17 @@ export class PurchaseBillsService {
     actorId: string,
     paidOn?: string,
     amountPaise?: number,
+    opts: { actorRole?: string; approved?: boolean } = {},
   ): Promise<PurchaseBillDocument> {
-    await this.findById(id, orgId); // 404 for an unknown bill, before any transaction
+    const found = await this.findById(id, orgId); // 404 for an unknown bill, before any transaction
+    if (this.approvals && !opts.approved) {
+      const amount = amountPaise ?? found.amountsPaise.total;
+      await this.approvals.gate({
+        orgId, docType: 'payment', docId: null, payload: { kind: 'bill_paid', billId: id, paidOn, amountPaise },
+        summary: `Pay bill ${found.billNumber ?? ''} — ${rupeesOf(amount)}`, amountPaise: amount, makerId: actorId, actorId, actorRole: opts.actorRole ?? '',
+        facts: { date: paidOn ?? new Date().toISOString().slice(0, 10), amountPaise: amount },
+      });
+    }
 
     const { bill: updated } = await this.postingService.inTransaction((session) =>
       this.settleWithin(session, id, orgId, actorId, {

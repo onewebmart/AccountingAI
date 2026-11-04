@@ -37,12 +37,14 @@ function financialYearFor(dateStr: string): string {
     : `${y - 1}-${y.toString().slice(-2)}`;
 }
 
+import { ManualVouchersService } from './manual-vouchers.service';
 @Controller('journals')
 export class JournalsController {
   constructor(
     private readonly journals: JournalsService,
     private readonly posting: PostingService,
     private readonly reversals: JournalReversalService,
+    private readonly vouchers: ManualVouchersService,
   ) {}
 
   @Get()
@@ -83,20 +85,8 @@ export class JournalsController {
   @HttpCode(HttpStatus.CREATED)
   @RequirePermission(Permission.POST_JOURNAL)
   async create(@CurrentUser() user: JwtPayload, @Body() body: ManualJournalBody) {
-    if (!Array.isArray(body.lines) || body.lines.length < 2) {
-      throw new BadRequestException('A voucher needs at least two lines.');
-    }
-
     const date = body.date ?? new Date().toISOString().slice(0, 10);
-    const journal = await this.posting.post({
-      orgId: user.orgId,
-      voucherType: body.voucherType ?? VoucherType.JOURNAL,
-      financialYear: body.financialYear ?? financialYearFor(date),
-      date,
-      narration: body.narration,
-      postedBy: user.sub,
-      lines: body.lines,
-    });
+    const journal = await this.vouchers.post(user.orgId, user.sub, user.role, { ...body, date, financialYear: body.financialYear ?? financialYearFor(date) });
 
     return this.journals.findOne(user.orgId, journal._id.toString());
   }

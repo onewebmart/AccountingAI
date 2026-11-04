@@ -17,8 +17,10 @@ import { PartyPaymentsService } from './party-payments.service';
 import { PartyPaymentsController } from './party-payments.controller';
 
 /** Receipts and payments across many invoices or bills, and advances. */
+import { ApprovalsModule } from '../approvals/approvals.module';
 @Module({
   imports: [
+    ApprovalsModule, // payments out under approval policies
     MongooseModule.forFeature([
       { name: PartyPayment.name, schema: PartyPaymentSchema },
       { name: SalesInvoice.name, schema: SalesInvoiceSchema },

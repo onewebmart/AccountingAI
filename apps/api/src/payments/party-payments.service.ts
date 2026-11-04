@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { Optional, BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { ClientSession, Model, Types } from 'mongoose';
 import { BillStatus, InvoiceStatus, VoucherType } from '@ai-accounting/shared';
@@ -71,6 +71,7 @@ type SettledDoc = (SalesInvoiceDocument | PurchaseBillDocument) & { amountPaidPa
  * GST is due when an advance is received for services (not for goods).
  * Nothing here charges it; the screen says so.
  */
+import { ApprovalsService } from '../approvals/approvals.service';
 @Injectable()
 export class PartyPaymentsService {
   constructor(
@@ -82,13 +83,30 @@ export class PartyPaymentsService {
     private posting: PostingService,
     private accounts: AccountsService,
     private audit: AuditService,
+    // Optional so specs that build this by hand need no approvals.
+    @Optional() private approvals?: ApprovalsService,
   ) {}
 
-  async record(orgId: string, actorId: string, input: RecordPaymentInput) {
+  onModuleInit() {
+    this.approvals?.register('party_payment', async (orgId, actorId, request) => {
+      const p = request.payload as { input: RecordPaymentInput };
+      return String((await this.record(orgId, actorId, p.input, { approved: true }))._id);
+    });
+  }
+
+  async record(orgId: string, actorId: string, input: RecordPaymentInput, opts: { actorRole?: string; approved?: boolean } = {}) {
     const side = SIDE[input.kind];
     if (!side) throw new BadRequestException('kind must be receipt or payment');
     if (!DATE.test(input.date ?? '')) throw new BadRequestException('date must be a date like 2026-10-14');
     if (!Number.isInteger(input.amountPaise) || input.amountPaise < 0) throw new BadRequestException('The amount must be whole paise.');
+    // Money out, entered by a person, waits for approval where a policy says so.
+    if (input.kind === 'payment' && this.approvals && !opts.approved) {
+      await this.approvals.gate({
+        orgId, docType: 'payment', docId: null, payload: { kind: 'party_payment', input },
+        summary: `Payment of ₹${(input.amountPaise / 100).toLocaleString('en-IN', { minimumFractionDigits: 2 })}${input.reference ? ` — ${input.reference}` : ''}`,
+        amountPaise: input.amountPaise, makerId: actorId, actorId, actorRole: opts.actorRole ?? '', facts: { date: input.date, amountPaise: input.amountPaise },
+      });
+    }
     const allocations = input.allocations ?? [];
     for (const a of allocations) {
       if (!Types.ObjectId.isValid(a.documentId)) throw new BadRequestException(`Unknown ${side.doc}.`);

@@ -9,7 +9,7 @@ import { PermissionGuard } from '../auth/guards/permission.guard';
 import { PaymentRunsService } from './payment-runs.service';
 
 interface AuthRequest {
-  user: { orgId: string; sub: string };
+  user: { orgId: string; sub: string; role: string };
 }
 
 class SuggestRunDto {
@@ -86,7 +86,7 @@ export class PaymentRunsController {
   @Post(':id/paid')
   @RequirePermission(Permission.POST_JOURNAL)
   markPaid(@Request() req: AuthRequest, @Param('id') id: string, @Body() body: MarkPaidDto) {
-    return this.runs.markPaid(req.user.orgId, req.user.sub, id, body.paidOn);
+    return this.runs.markPaid(req.user.orgId, req.user.sub, id, body.paidOn, { actorRole: req.user.role });
   }
 
   @Post(':id/cancel')

@@ -20,7 +20,7 @@ import { DebitNotesService } from './debit-notes.service';
 import { ItemsService } from '../items/items.service';
 
 interface AuthRequest {
-  user: { orgId: string; sub: string };
+  user: { orgId: string; sub: string; role: string };
 }
 
 @UseGuards(JwtAuthGuard, PermissionGuard)
@@ -96,13 +96,13 @@ export class PurchaseController {
   @Post('bills/:id/post')
   @RequirePermission(Permission.POST_JOURNAL)
   postBill(@Request() req: AuthRequest, @Param('id') id: string) {
-    return this.billsService.post(id, req.user.orgId, req.user.sub);
+    return this.billsService.post(id, req.user.orgId, req.user.sub, req.user.role);
   }
 
   @Post('bills/:id/pay')
   @RequirePermission(Permission.POST_JOURNAL)
   payBill(@Request() req: AuthRequest, @Param('id') id: string, @Body() body: PayBillDto) {
-    return this.billsService.markPaid(id, req.user.orgId, req.user.sub, body?.paidOn, body?.amountPaise);
+    return this.billsService.markPaid(id, req.user.orgId, req.user.sub, body?.paidOn, body?.amountPaise, { actorRole: req.user.role });
   }
 
   /** Raise and post a debit note against a posted bill — Dr/Cr in proportion, numbered by its voucher. */

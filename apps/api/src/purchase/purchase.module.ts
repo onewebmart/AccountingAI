@@ -11,6 +11,7 @@ import { PartyPaymentsModule } from '../payments/party-payments.module';
 import { GlModule } from '../gl/gl.module';
 
 import { ItemsModule } from '../items/items.module';
+import { ApprovalsModule } from '../approvals/approvals.module';
 @Module({
   imports: [
     MongooseModule.forFeature([
@@ -20,6 +21,7 @@ import { ItemsModule } from '../items/items.module';
     ]),
     GlModule, // for PostingService
     ItemsModule, // lines that pick an item
+    ApprovalsModule, // bills and bill payments under approval policies
     PartyPaymentsModule, // a note larger than what is owed becomes the party's credit
   ],
   controllers: [PurchaseController],

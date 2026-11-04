@@ -117,6 +117,8 @@ export class PurchaseBill {
 
   /** Actor who posted this bill to the ledger. */
   @Prop({ type: String, default: null }) postedBy: string | null;
+  /** Who entered it; under an approval policy they cannot approve it. Null for bills made by the system. */
+  @Prop({ type: String, default: null }) createdBy: string | null;
   /** Actor who marked this bill as paid. */
   @Prop({ type: String, default: null }) paidBy: string | null;
   @Prop({ type: String, default: null }) notes: string | null;

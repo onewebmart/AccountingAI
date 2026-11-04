@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { Optional, BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { BillStatus } from '@ai-accounting/shared';
@@ -21,6 +21,7 @@ const DATE = /^\d{4}-\d{2}-\d{2}$/;
  * person chooses, downloads the bank file, pays through the bank, and
  * records the run as paid: one payment per vendor, settling its bills.
  */
+import { ApprovalsService } from '../approvals/approvals.service';
 @Injectable()
 export class PaymentRunsService {
   constructor(
@@ -30,7 +31,16 @@ export class PaymentRunsService {
     private payments: PartyPaymentsService,
     private accounts: AccountsService,
     private audit: AuditService,
+    @Optional() private approvals?: ApprovalsService,
   ) {}
+
+  onModuleInit() {
+    this.approvals?.register('payment_run', async (orgId, actorId, request) => {
+      const p = request.payload as { runId: string; paidOn: string };
+      await this.markPaid(orgId, actorId, p.runId, p.paidOn, { approved: true });
+      return p.runId;
+    });
+  }
 
   /** The bills worth paying by `payOn`, ranked, with what the bank holds for context. */
   async suggest(orgId: string, input: { payOn: string; cashLimitPaise?: number | null }, today = todayIst()) {
@@ -139,10 +149,18 @@ export class PaymentRunsService {
    * run's bills. Each vendor's payment commits on its own; one that cannot
    * (a bill paid meanwhile, say) is reported and the rest still record.
    */
-  async markPaid(orgId: string, actorId: string, id: string, paidOn: string) {
+  async markPaid(orgId: string, actorId: string, id: string, paidOn: string, opts: { actorRole?: string; approved?: boolean } = {}) {
     if (!DATE.test(paidOn ?? '')) throw new BadRequestException('paidOn must be a date like 2026-10-31');
     const run = await this.find(orgId, id);
     if (run.status !== 'draft') throw new BadRequestException(`This run is ${run.status}.`);
+    // The run is approved as one; its payments then go through as approved.
+    if (this.approvals && !opts.approved) {
+      await this.approvals.gate({
+        orgId, docType: 'payment', docId: `run:${id}`, payload: { kind: 'payment_run', runId: id, paidOn },
+        summary: `Payment run for ${run.payOn}: ${run.items.length} bill${run.items.length === 1 ? '' : 's'}`, amountPaise: run.totalPaise,
+        makerId: run.createdBy, actorId, actorRole: opts.actorRole ?? '', facts: { date: paidOn, amountPaise: run.totalPaise },
+      });
+    }
     const groups = new Map<string, typeof run.items>();
     for (const i of run.items) groups.set(String(i.vendorId), [...(groups.get(String(i.vendorId)) ?? []), i]);
 
@@ -157,7 +175,7 @@ export class PaymentRunsService {
           amountPaise: items.reduce((s, i) => s + i.amountPaise, 0),
           reference: `Payment run ${run.payOn}`,
           allocations: items.map((i) => ({ documentId: String(i.billId), amountPaise: i.amountPaise })),
-        });
+        }, { approved: true });
         paymentIds.push(payment._id);
       } catch (err) {
         failed.push({ vendorName: items[0].vendorName, reason: err instanceof Error ? err.message : String(err) });

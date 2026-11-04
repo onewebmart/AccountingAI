@@ -13,8 +13,11 @@ import { PartyPayment, PartyPaymentSchema } from '../payments/schemas/party-paym
 import { TdsDeposit, TdsDepositSchema } from '../tds/schemas/tds-deposit.schema';
 
 import { EInvoice, EInvoiceSchema } from '../einvoice/schemas/e-invoice.schema';
+import { ApprovalsModule } from '../approvals/approvals.module';
+import { ManualVouchersService } from './manual-vouchers.service';
 @Module({
   imports: [
+    ApprovalsModule, // vouchers under approval policies
     GlModule,
     // A reversal reopens the invoice, bill, note or bank line that pointed at the voucher.
     MongooseModule.forFeature([
@@ -30,7 +33,7 @@ import { EInvoice, EInvoiceSchema } from '../einvoice/schemas/e-invoice.schema';
     ]),
   ],
   controllers: [JournalsController],
-  providers: [JournalsService, JournalReversalService],
+  providers: [JournalsService, JournalReversalService, ManualVouchersService],
   exports: [JournalsService, JournalReversalService],
 })
 export class JournalsModule {}

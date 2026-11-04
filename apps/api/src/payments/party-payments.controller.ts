@@ -132,7 +132,7 @@ export class PartyPaymentsController {
   @RequirePermission(Permission.POST_JOURNAL)
   record(@Request() req: AuthRequest, @Body() body: RecordPaymentDto) {
     assertMayHandle(req.user.role, body.kind);
-    return this.payments.record(req.user.orgId, req.user.sub, body);
+    return this.payments.record(req.user.orgId, req.user.sub, body, { actorRole: req.user.role });
   }
 
   /** Give an advance or credit back as money. */
