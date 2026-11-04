@@ -56,6 +56,7 @@ export interface DepositInput {
  * (the 7th of the next month, 30 April for March).
  */
 import { Quarter, build26q } from './form26q';
+import { parse26asCsv, reconcile26as } from './reconcile-26as';
 import { todayIst } from '../automation/schedule';
 import { OrgSettings, OrgSettingsDocument } from '../org-settings/schemas/org-settings.schema';
 @Injectable()
@@ -289,5 +290,17 @@ export class TdsService {
           })),
       )
       .sort((a, b) => a.paidOn.localeCompare(b.paidOn));
+  }
+
+  /** The year's TDS receivable against Form 26AS rows (CSV). Reads only. */
+  async reconcile26as(orgId: string, financialYear: string, csv: string) {
+    let parsed: ReturnType<typeof parse26asCsv>;
+    try {
+      parsed = parse26asCsv(csv ?? '');
+    } catch (err) {
+      throw new BadRequestException(err instanceof Error ? err.message : String(err));
+    }
+    const books = await this.receivable(orgId, financialYear);
+    return { financialYear, skipped: parsed.skipped, ...reconcile26as(books, parsed.rows) };
   }
 }

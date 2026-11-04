@@ -9,6 +9,7 @@ import { api, ApiError } from '@/lib/api';
 import { currentFinancialYear, recentFinancialYears } from '@/lib/financial-year';
 import { formatRupees } from '@/lib/utils';
 import { Form26qPanel } from '@/components/tds/form26q-panel';
+import { Reconcile26asPanel } from '@/components/tds/reconcile-26as-panel';
 
 // ── Shapes from GET /tds/* (paise) ──────────────────────────────────────────
 
@@ -374,6 +375,7 @@ export default function TdsPage() {
       </section>
 
       <Form26qPanel financialYear={financialYear} />
+      <Reconcile26asPanel financialYear={financialYear} />
 
       {toast && (
         <div role="status" className="fixed bottom-6 right-6 z-50 rounded-md border border-success-fg bg-success-bg px-4 py-3 text-body font-medium text-success-fg shadow-lg">

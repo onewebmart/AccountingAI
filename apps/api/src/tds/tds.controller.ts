@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Post, Query, Request, Res, UseGuards } from '@nestjs/common';
-import { IsIn, IsISO8601, IsString, Length, Matches } from 'class-validator';
+import { IsIn, IsISO8601, IsOptional, IsString, Length, Matches } from 'class-validator';
 import { Permission } from '@ai-accounting/shared';
 import { RequirePermission } from '../auth/decorators';
 import { PermissionGuard } from '../auth/guards/permission.guard';
@@ -29,6 +29,12 @@ class DepositTdsDto {
 
 import { Response } from 'express';
 import { Quarter, form26qCsv } from './form26q';
+
+class Reconcile26asDto {
+  @IsOptional() @Matches(/^\d{4}-\d{2}$/) financialYear?: string;
+  // Requests are capped at 100 KB: about a thousand 26AS rows.
+  @IsString() @Length(1, 95_000, { message: 'The 26AS file is too large to send at once: split it by quarter.' }) csv: string;
+}
 const thisYear = () => financialYearOf(new Date().toISOString().slice(0, 10));
 
 @UseGuards(JwtAuthGuard, PermissionGuard)
@@ -72,6 +78,13 @@ export class TdsController {
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="26Q-${fy}-${quarter}.csv"`);
     res.send(form26qCsv(r));
+  }
+
+  /** TDS customers deducted, matched against Form 26AS Part I as CSV. Nothing is stored. */
+  @Post('26as/reconcile')
+  @RequirePermission(Permission.VIEW_REPORTS)
+  reconcile26as(@Request() req: AuthRequest, @Body() body: Reconcile26asDto) {
+    return this.tds.reconcile26as(req.user.orgId, body.financialYear || thisYear(), body.csv);
   }
 
   /** TDS customers deducted from payments to us, to match against Form 26AS. */
