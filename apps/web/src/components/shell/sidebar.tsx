@@ -8,6 +8,7 @@ import {
   CheckSquare,
   FileText,
   ShoppingCart,
+  Package,
   TrendingUp,
   Building2,
   ReceiptIndianRupee,
@@ -75,6 +76,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: '/sales', label: 'Sales', icon: <TrendingUp size={18} /> },
       { href: '/purchase', label: 'Purchase', icon: <ShoppingCart size={18} /> },
+      { href: '/items', label: 'Items', icon: <Package size={18} /> },
       { href: '/banking', label: 'Banking', icon: <Building2 size={18} /> },
       { href: '/recurring', label: 'Recurring', icon: <Repeat size={18} /> },
     ],

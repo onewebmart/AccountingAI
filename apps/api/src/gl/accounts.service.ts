@@ -417,6 +417,13 @@ export class AccountsService {
     return found;
   }
 
+  /** Names of this org's accounts by id, for journal line descriptions. */
+  async namesOf(orgId: string, ids: string[]): Promise<Map<string, string>> {
+    if (ids.length === 0) return new Map();
+    const accounts = await withOrg(orgId, () => this.accountModel.find({ _id: { $in: ids } }, { name: 1 }).lean().exec());
+    return new Map(accounts.map((a) => [String(a._id), a.name]));
+  }
+
   /**
    * Find the best posting account for a free-text expense/income description.
    * Used by the AI proposal builder to map "Zomato — food delivery" onto a real

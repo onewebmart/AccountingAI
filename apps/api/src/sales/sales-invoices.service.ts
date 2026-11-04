@@ -70,6 +70,9 @@ export interface CreateInvoiceInput {
     ratePaise: number;
     amountPaise: number;
     taxRatePct?: number;
+    itemId?: Types.ObjectId | null;
+    uqc?: string | null;
+    accountId?: Types.ObjectId | null;
   }>;
   notes?: string | null;
   /** Set when a recurring template drafts this invoice. */
@@ -88,6 +91,7 @@ function rupees(paise: number): string {
   return `₹${(paise / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+import { splitByAccount } from '../items/line-accounts';
 @Injectable()
 export class SalesInvoicesService {
   private readonly logger = new Logger(SalesInvoicesService.name);
@@ -249,6 +253,10 @@ export class SalesInvoicesService {
     const outIgst = accounts.get(SystemAccountKey.GST_OUTPUT_IGST)!;
     const outCess = accounts.get(SystemAccountKey.GST_OUTPUT_CESS)!;
 
+    // Lines whose item has its own income account are credited there; the
+    // rest go to Sales, in proportion, to the paise.
+    const revenueParts = splitByAccount(taxableValue, invoice.lineItems, revenue._id.toString());
+    const names = await this.accountsService.namesOf(orgId, revenueParts.map((p) => p.accountId));
     const lines = [
       {
         accountId: receivable._id.toString(),
@@ -256,12 +264,12 @@ export class SalesInvoicesService {
         debitPaise: total,
         creditPaise: 0,
       },
-      {
-        accountId: revenue._id.toString(),
-        description: revenue.name,
+      ...revenueParts.map((p) => ({
+        accountId: p.accountId,
+        description: names.get(p.accountId) ?? revenue.name,
         debitPaise: 0,
-        creditPaise: taxableValue,
-      },
+        creditPaise: p.amountPaise,
+      })),
     ];
     // One line per tax head, as the return expects.
     for (const [account, amount] of [

@@ -35,6 +35,7 @@ import { PartyPaymentsModule } from './payments/party-payments.module';
 import { PortalModule } from './portal/portal.module';
 import { AttachmentsModule } from './attachments/attachments.module';
 import { InboundModule } from './inbound/inbound.module';
+import { ItemsModule } from './items/items.module';
 
 @Module({
   imports: [
@@ -83,6 +84,7 @@ import { InboundModule } from './inbound/inbound.module';
     PortalModule,
     AttachmentsModule,
     InboundModule,
+    ItemsModule,
     CrmModule,
     WorkspaceModule,
   ],

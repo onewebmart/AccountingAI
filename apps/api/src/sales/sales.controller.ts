@@ -21,6 +21,7 @@ import { CreditNotesService } from './credit-notes.service';
 import { InvoiceDeliveryService } from './invoice-delivery.service';
 import { Response } from 'express';
 
+import { ItemsService } from '../items/items.service';
 interface AuthRequest {
   user: { orgId: string; sub: string };
 }
@@ -33,6 +34,7 @@ export class SalesController {
     private readonly invoicesService: SalesInvoicesService,
     private readonly creditNotesService: CreditNotesService,
     private readonly delivery: InvoiceDeliveryService,
+    private readonly items: ItemsService,
   ) {}
 
   // ── Customers ────────────────────────────────────────────────────────────
@@ -83,8 +85,9 @@ export class SalesController {
 
   @Post('invoices')
   @RequirePermission(Permission.MANAGE_SALES)
-  createInvoice(@Request() req: AuthRequest, @Body() body: CreateSalesInvoiceDto) {
-    return this.invoicesService.create({ ...body, orgId: req.user.orgId, actorId: req.user.sub });
+  async createInvoice(@Request() req: AuthRequest, @Body() body: CreateSalesInvoiceDto) {
+    const lineItems = await this.items.resolveLines(req.user.orgId, body.lineItems, 'sale');
+    return this.invoicesService.create({ ...body, lineItems, orgId: req.user.orgId, actorId: req.user.sub });
   }
 
   @Get('invoices/:id')

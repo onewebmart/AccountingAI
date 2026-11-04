@@ -16,6 +16,7 @@ import { tdsOn } from '../gl/tds';
 import { outstandingPaise } from '../gl/schemas/settlement.schema';
 import { formatVoucherNumber } from '../journals/journals.service';
 import { withOrg } from '../database/tenant.plugin';
+import { allocate } from '../gst/gst-returns';
 
 export interface CreateDebitNoteInput {
   noteDate: string;
@@ -121,7 +122,7 @@ export class DebitNotesService {
         ...TAX_KEYS.map(([, key]) => key),
       ]);
       const control = accounts.get(SystemAccountKey.ACCOUNTS_PAYABLE)!;
-      const main = await this.originalLedger(
+      const mains = await this.originalLedgers(
         doc.journalId,
         new Set([control, accounts.get(SystemAccountKey.ROUND_OFF)!, ...TAX_KEYS.map(([, key]) => accounts.get(key)!)].map((a) => String(a._id))),
         accounts.get(SystemAccountKey.PURCHASE_EXPENSE)!,
@@ -129,9 +130,10 @@ export class DebitNotesService {
         session,
       );
 
-      const lines: Array<{ accountId: string; description: string; debitPaise: number; creditPaise: number }> = [
-        { accountId: main._id, description: main.name, debitPaise: 0, creditPaise: amounts.taxableValue },
-      ];
+      const shares = allocate(amounts.taxableValue, mains.map((m) => m.weight));
+      const lines: Array<{ accountId: string; description: string; debitPaise: number; creditPaise: number }> = mains
+        .map((m, i) => ({ accountId: m._id, description: m.name, debitPaise: 0, creditPaise: shares[i] }))
+        .filter((l, i) => l.creditPaise > 0 || i === 0);
       for (const [head, key] of TAX_KEYS) {
         if (amounts[head] > 0) {
           const tax = accounts.get(key)!;
@@ -288,21 +290,26 @@ export class DebitNotesService {
    * The ledger the bill posted its expense to: the largest debit line
    * on its journal that is not tax, round-off or the payable.
    */
-  private async originalLedger(
+  private async originalLedgers(
     journalId: Types.ObjectId | null,
     exclude: Set<string>,
     fallback: { _id: Types.ObjectId; name: string },
     orgId: string,
     session: ClientSession,
-  ): Promise<{ _id: string; name: string }> {
+  ): Promise<Array<{ _id: string; name: string; weight: number }>> {
     const journal = journalId
       ? await withOrg(orgId, () => this.journalModel.findById(journalId).session(session).lean().exec())
       : null;
-    const main = (journal?.lines ?? [])
-      .filter((l) => l.debitPaise > 0 && !exclude.has(String(l.accountId)))
-      .sort((a, b) => b.debitPaise - a.debitPaise)[0];
-    return main
-      ? { _id: String(main.accountId), name: main.description || fallback.name }
-      : { _id: String(fallback._id), name: fallback.name };
+    // Every account the original's value went to (one per item account), so
+    // the note comes back off each in the same proportion.
+    const byAccount = new Map<string, { _id: string; name: string; weight: number }>();
+    for (const l of journal?.lines ?? []) {
+      if (l.debitPaise <= 0 || exclude.has(String(l.accountId))) continue;
+      const id = String(l.accountId);
+      const entry = byAccount.get(id) ?? { _id: id, name: l.description || fallback.name, weight: 0 };
+      entry.weight += l.debitPaise;
+      byAccount.set(id, entry);
+    }
+    return byAccount.size ? [...byAccount.values()] : [{ _id: String(fallback._id), name: fallback.name, weight: 1 }];
   }
 }

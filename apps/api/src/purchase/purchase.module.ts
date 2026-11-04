@@ -10,6 +10,7 @@ import { PurchaseController } from './purchase.controller';
 import { PartyPaymentsModule } from '../payments/party-payments.module';
 import { GlModule } from '../gl/gl.module';
 
+import { ItemsModule } from '../items/items.module';
 @Module({
   imports: [
     MongooseModule.forFeature([
@@ -18,6 +19,7 @@ import { GlModule } from '../gl/gl.module';
       { name: DebitNote.name, schema: DebitNoteSchema },
     ]),
     GlModule, // for PostingService
+    ItemsModule, // lines that pick an item
     PartyPaymentsModule, // a note larger than what is owed becomes the party's credit
   ],
   controllers: [PurchaseController],

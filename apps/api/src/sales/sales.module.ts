@@ -13,6 +13,7 @@ import { OrgSettings, OrgSettingsSchema } from '../org-settings/schemas/org-sett
 import { PartyPaymentsModule } from '../payments/party-payments.module';
 import { GlModule } from '../gl/gl.module';
 
+import { ItemsModule } from '../items/items.module';
 @Module({
   imports: [
     MongooseModule.forFeature([
@@ -23,6 +24,7 @@ import { GlModule } from '../gl/gl.module';
       { name: OrgSettings.name, schema: OrgSettingsSchema },
     ]),
     GlModule, // for PostingService
+    ItemsModule, // lines that pick an item
     PartyPaymentsModule, // a note larger than what is owed becomes the party's credit
     MailModule, // emails the invoice PDF
   ],

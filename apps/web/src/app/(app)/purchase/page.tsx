@@ -15,6 +15,7 @@ import { PaymentRunsPanel } from '@/components/payments/payment-runs-panel';
 import { Plus, ChevronRight } from 'lucide-react';
 import { api } from '@/lib/api';
 import { GST_RATES, GstRate, splitGst, rupeesToPaise, formatPaise } from '@/lib/gst';
+import { ItemSelect } from '@/components/items/item-picker';
 import { TableError } from '@/components/ui/query-error';
 
 // ── Types ─────────────────────────────────────────────────────────────────
@@ -103,6 +104,7 @@ function AddBillModal({ vendors, onClose, onSuccess, showToast }: AddBillModalPr
     rate: 18 as GstRate,
     interState: false,
     description: '',
+    itemId: '',
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -147,6 +149,7 @@ function AddBillModal({ vendors, onClose, onSuccess, showToast }: AddBillModalPr
       lineItems: [
         {
           description: form.description.trim() || 'Purchase',
+          ...(form.itemId ? { itemId: form.itemId } : {}),
           qty: 1,
           ratePaise: amounts.taxableValue,
           amountPaise: amounts.taxableValue,
@@ -295,6 +298,24 @@ function AddBillModal({ vendors, onClose, onSuccess, showToast }: AddBillModalPr
               </div>
             </dl>
           )}
+
+          <div>
+            <label className="text-caption font-medium text-ink-700 block mb-1">Item</label>
+            <ItemSelect
+              className={field}
+              value={form.itemId}
+              onPick={(item) =>
+                setForm((f) => ({
+                  ...f,
+                  itemId: item?._id ?? '',
+                  description: item ? item.name : f.description,
+                  rate: item && (GST_RATES as readonly number[]).includes(item.gstRatePct ?? -1) ? (item.gstRatePct as GstRate) : f.rate,
+                  // A price on the item fills an empty amount; one already typed stays.
+                  taxableRupees: f.taxableRupees || (item?.purchasePricePaise != null ? String(item.purchasePricePaise / 100) : ''),
+                }))
+              }
+            />
+          </div>
 
           <div>
             <label className="text-caption font-medium text-ink-700 block mb-1">Description</label>

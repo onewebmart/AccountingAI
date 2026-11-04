@@ -26,6 +26,8 @@ export interface LineLike {
   qty?: number | null;
   amountPaise: number;
   taxRatePct?: number | null;
+  /** GST unit, when the line's item says; guessed from the HSN otherwise. */
+  uqc?: string | null;
 }
 
 /** Taxable value and tax, the five columns every GST table carries. */
@@ -57,6 +59,7 @@ export function sumHeads(rows: TaxHeads[]): TaxHeads {
 export interface RateBucket extends TaxHeads {
   rate: number;
   hsn: string | null;
+  uqc: string | null;
   description: string | null;
   qty: number;
 }
@@ -121,20 +124,21 @@ export function rateBuckets(
   const inferred = usable.length === 0 || (tax > 0) !== linesCarryTax;
   const implied = inferRate(amounts.taxableValue, tax);
 
-  type Group = { rate: number; hsn: string | null; description: string | null; weight: number; qty: number };
+  type Group = { rate: number; hsn: string | null; uqc: string | null; description: string | null; weight: number; qty: number };
   const groups: Group[] = [];
   if (usable.length === 0) {
-    groups.push({ rate: implied.rate, hsn: null, description: null, weight: amounts.taxableValue, qty: 0 });
+    groups.push({ rate: implied.rate, hsn: null, uqc: null, description: null, weight: amounts.taxableValue, qty: 0 });
   } else {
     for (const l of usable) {
       const rate = inferred ? implied.rate : l.taxRatePct ?? 0;
       const hsn = l.hsnSac?.trim() || null;
-      const found = groups.find((g) => g.rate === rate && g.hsn === hsn);
+      const uqc = l.uqc?.trim() || null;
+      const found = groups.find((g) => g.rate === rate && g.hsn === hsn && g.uqc === uqc);
       if (found) {
         found.weight += l.amountPaise;
         found.qty += l.qty ?? 0;
       } else {
-        groups.push({ rate, hsn, description: l.description?.trim() || null, weight: l.amountPaise, qty: l.qty ?? 0 });
+        groups.push({ rate, hsn, uqc, description: l.description?.trim() || null, weight: l.amountPaise, qty: l.qty ?? 0 });
       }
     }
   }
@@ -152,6 +156,7 @@ export function rateBuckets(
     buckets: groups.map((g, i) => ({
       rate: g.rate,
       hsn: g.hsn,
+      uqc: g.uqc,
       description: g.description,
       qty: g.qty,
       txval: txval[i],
@@ -332,11 +337,13 @@ export function buildGstr1(input: {
   const addHsn = (registered: boolean, b: RateBucket, sign: 1 | -1) => {
     const code = b.hsn ?? '';
     const table = registered ? hsn.b2b : hsn.b2c;
-    const key = `${code}|${b.rate}`;
+    // The portal lists one row per code, unit and rate.
+    const uqc = b.uqc ?? uqcFor(b.hsn);
+    const key = `${code}|${uqc}|${b.rate}`;
     const row = table.get(key) ?? {
       hsn: code,
       description: b.description ?? '',
-      uqc: uqcFor(b.hsn),
+      uqc,
       qty: 0,
       rate: b.rate,
       ...ZERO_HEADS,

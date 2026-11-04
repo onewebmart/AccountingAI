@@ -16,6 +16,7 @@ import { InvoiceStatus as SharedInvoiceStatus } from '@ai-accounting/shared';
 import { api, downloadFile } from '@/lib/api';
 import { EmailInvoiceDialog } from '@/components/sales/email-invoice-dialog';
 import { GST_RATES, GST_STATES, GstRate, splitGst, rupeesToPaise, formatPaise } from '@/lib/gst';
+import { ItemSelect } from '@/components/items/item-picker';
 import { TableError } from '@/components/ui/query-error';
 
 // ── Types ─────────────────────────────────────────────────────────────────
@@ -240,6 +241,7 @@ function AddInvoiceModal({ customers, onClose, onSuccess, showToast }: AddInvoic
     interState: false,
     description: '',
     hsnSac: '',
+    itemId: '',
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -285,6 +287,7 @@ function AddInvoiceModal({ customers, onClose, onSuccess, showToast }: AddInvoic
         {
           description: form.description.trim() || 'Sale',
           hsnSac: form.hsnSac.trim() || null,
+          ...(form.itemId ? { itemId: form.itemId } : {}),
           qty: 1,
           ratePaise: amounts.taxableValue,
           amountPaise: amounts.taxableValue,
@@ -433,6 +436,25 @@ function AddInvoiceModal({ customers, onClose, onSuccess, showToast }: AddInvoic
               </div>
             </dl>
           )}
+
+          <div>
+            <label className="text-caption font-medium text-ink-700 block mb-1">Item</label>
+            <ItemSelect
+              className={field}
+              value={form.itemId}
+              onPick={(item) =>
+                setForm((f) => ({
+                  ...f,
+                  itemId: item?._id ?? '',
+                  description: item ? item.name : f.description,
+                  hsnSac: item?.hsnSac ?? f.hsnSac,
+                  rate: item && (GST_RATES as readonly number[]).includes(item.gstRatePct ?? -1) ? (item.gstRatePct as GstRate) : f.rate,
+                  // A price on the item fills an empty amount; one already typed stays.
+                  taxableRupees: f.taxableRupees || (item?.salePricePaise != null ? String(item.salePricePaise / 100) : ''),
+                }))
+              }
+            />
+          </div>
 
           <div className="grid grid-cols-[1fr_9rem] gap-3">
             <div>

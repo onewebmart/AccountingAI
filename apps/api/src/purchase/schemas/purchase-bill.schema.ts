@@ -31,6 +31,12 @@ class BillLineItem {
   @Prop({ type: Number, required: true }) ratePaise: number;
   @Prop({ type: Number, required: true }) amountPaise: number;
   @Prop({ type: Number, default: 0 }) taxRatePct: number;
+  /** The item picked for this line, if any. */
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Item', default: null }) itemId: Types.ObjectId | null;
+  /** GST unit (UQC) for the HSN summary; from the item when one is picked. */
+  @Prop({ type: String, default: null }) uqc: string | null;
+  /** Where this line's value posts, from the item; the default account when null. */
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'LedgerAccount', default: null }) accountId: Types.ObjectId | null;
 }
 
 /** TDS deducted from this bill — booked when the bill is, as the law expects. */

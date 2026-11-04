@@ -81,6 +81,9 @@ export interface CreateBillInput {
     ratePaise: number;
     amountPaise: number;
     taxRatePct?: number;
+    itemId?: Types.ObjectId | null;
+    uqc?: string | null;
+    accountId?: Types.ObjectId | null;
   }>;
   notes?: string | null;
   /** GST on this purchase is ours to pay (reverse charge). */
@@ -125,6 +128,7 @@ function billTds(
   return amountPaise > 0 ? { section, rateBps, amountPaise, depositId: null } : null;
 }
 
+import { splitByAccount } from '../items/line-accounts';
 @Injectable()
 export class PurchaseBillsService {
   private readonly logger = new Logger(PurchaseBillsService.name);
@@ -280,14 +284,16 @@ export class PurchaseBillsService {
     const inputIgst = accounts.get(SystemAccountKey.GST_INPUT_IGST)!;
     const inputCess = accounts.get(SystemAccountKey.GST_INPUT_CESS)!;
 
-    const lines = [
-      {
-        accountId: expense._id.toString(),
-        description: expense.name,
-        debitPaise: taxableValue,
-        creditPaise: 0,
-      },
-    ];
+    // Lines whose item has its own expense or asset account are debited
+    // there; the rest go to Purchases, in proportion, to the paise.
+    const expenseParts = splitByAccount(taxableValue, bill.lineItems, expense._id.toString());
+    const names = await this.accountsService.namesOf(orgId, expenseParts.map((p) => p.accountId));
+    const lines = expenseParts.map((p) => ({
+      accountId: p.accountId,
+      description: names.get(p.accountId) ?? expense.name,
+      debitPaise: p.amountPaise,
+      creditPaise: 0,
+    }));
     // Each tax head posts to its own account, as the return expects — lumping
     // them into one "GST Input Tax Credit" line loses the CGST/SGST/IGST split.
     for (const [account, amount] of [

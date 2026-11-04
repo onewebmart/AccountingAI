@@ -17,6 +17,7 @@ import { VendorsService } from './vendors.service';
 import { PurchaseBillsService } from './purchase-bills.service';
 import { CreateVendorDto, CreateBillDto, PayBillDto, CreateDebitNoteDto, UpdateVendorDto } from './dto/purchase.dto';
 import { DebitNotesService } from './debit-notes.service';
+import { ItemsService } from '../items/items.service';
 
 interface AuthRequest {
   user: { orgId: string; sub: string };
@@ -29,6 +30,7 @@ export class PurchaseController {
     private readonly vendorsService: VendorsService,
     private readonly billsService: PurchaseBillsService,
     private readonly debitNotesService: DebitNotesService,
+    private readonly items: ItemsService,
   ) {}
 
   // ── Vendors ───────────────────────────────────────────────────────────────
@@ -80,8 +82,9 @@ export class PurchaseController {
 
   @Post('bills')
   @RequirePermission(Permission.MANAGE_PURCHASE)
-  createBill(@Request() req: AuthRequest, @Body() body: CreateBillDto) {
-    return this.billsService.create({ ...body, orgId: req.user.orgId, actorId: req.user.sub });
+  async createBill(@Request() req: AuthRequest, @Body() body: CreateBillDto) {
+    const lineItems = await this.items.resolveLines(req.user.orgId, body.lineItems, 'purchase');
+    return this.billsService.create({ ...body, lineItems, orgId: req.user.orgId, actorId: req.user.sub });
   }
 
   @Get('bills/:id')

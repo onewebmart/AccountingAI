@@ -1,8 +1,10 @@
 import { Type } from 'class-transformer';
 import {
   IsArray,
+  IsIn,
   IsInt,
   IsISO8601,
+  IsMongoId,
   IsOptional,
   IsString,
   Length,
@@ -10,6 +12,7 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
+import { UQC_CODES } from '../../items/hsn';
 
 /**
  * Bodies for POST /api/v1/sales/*.
@@ -75,6 +78,15 @@ export class LineItemDto {
   @IsInt()
   @Min(0)
   taxRatePct?: number;
+
+  /** An item from the item master; its HSN/SAC, unit, rate and account fill what the line leaves out. */
+  @IsOptional()
+  @IsMongoId()
+  itemId?: string;
+
+  @IsOptional()
+  @IsIn(UQC_CODES)
+  uqc?: string;
 }
 
 export class CreateCustomerDto {

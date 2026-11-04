@@ -6,7 +6,7 @@
  * worked out is here, not twice in two modals that could drift apart.
  */
 
-export const GST_RATES = [0, 5, 12, 18, 28] as const;
+export const GST_RATES = [0, 3, 5, 12, 18, 28, 40] as const;
 export type GstRate = (typeof GST_RATES)[number];
 
 export interface AmountsPaise {

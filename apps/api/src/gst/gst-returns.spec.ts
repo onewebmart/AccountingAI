@@ -63,6 +63,18 @@ describe('inferRate', () => {
 });
 
 describe('rateBuckets', () => {
+  it('keeps one code sold in two units apart, as the HSN summary lists them', () => {
+    const { buckets } = rateBuckets(amounts(30000, { cgst: 750, sgst: 750 }), [
+      { description: 'Turmeric, loose', hsnSac: '0910', qty: 5, uqc: 'KGS', amountPaise: 20000, taxRatePct: 5 },
+      { description: 'Turmeric, packs', hsnSac: '0910', qty: 4, uqc: 'PAC', amountPaise: 10000, taxRatePct: 5 },
+      { description: 'More loose', hsnSac: '0910', qty: 1, uqc: 'KGS', amountPaise: 0, taxRatePct: 5 },
+    ]);
+    expect(buckets.map((b) => [b.hsn, b.uqc, b.qty, b.txval])).toEqual([
+      ['0910', 'KGS', 5, 20000],
+      ['0910', 'PAC', 4, 10000],
+    ]);
+  });
+
   it('splits a two-rate invoice by its lines', () => {
     const result = rateBuckets(amounts(30000, { cgst: 2050, sgst: 2050 }), [
       { description: 'Rice', hsnSac: '1006', qty: 10, amountPaise: 10000, taxRatePct: 5 },
@@ -79,7 +91,7 @@ describe('rateBuckets', () => {
     const result = rateBuckets(amounts(100000, { igst: 18000 }), []);
     expect(result).toMatchObject({ rateInferred: true, rateUnclear: false });
     expect(result.buckets).toEqual([
-      { rate: 18, hsn: null, description: null, qty: 0, txval: 100000, iamt: 18000, camt: 0, samt: 0, csamt: 0 },
+      { rate: 18, hsn: null, uqc: null, description: null, qty: 0, txval: 100000, iamt: 18000, camt: 0, samt: 0, csamt: 0 },
     ]);
   });
 });
