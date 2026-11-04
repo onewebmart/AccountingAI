@@ -1,6 +1,6 @@
 # Architecture diagrams
 
-Three pictures of the platform as the code stands on `feat/phase-1` (4 November 2026, commit `744a64c`): how the parts connect, what the database holds, and an accounting year from signup to year close.
+Three pictures of the platform as the code stands on `feat/phase-1` (4 November 2026, commit `8129314`): how the parts connect, what the database holds, and an accounting year from signup to year close.
 They were drawn from `apps/api/src` and `apps/web/src` and checked against [the workflow and AI plan](../END_TO_END_WORKFLOW_AND_AI_PLAN.md). The plan's status marks were written before most of the building, so trust the marks here instead.
 Each diagram is a plain Mermaid block, which GitHub and the VS Code Markdown preview both render. Edit them by hand. To change a box's status, change its `:::class`.
 
@@ -56,7 +56,7 @@ flowchart LR
     wTrade["Sell and buy<br/>/sales /purchase /orders /items<br/>/expenses /approvals /recurring"]:::built
     wLedger["Bank and ledger<br/>/banking /vouchers /accounts"]:::built
     wTax["Tax and close<br/>/gst /tds /month-end /closing"]:::built
-    wReports["Reports<br/>/dashboard /insights /reports<br/>/exports /audit"]:::built
+    wReports["Reports<br/>/dashboard /insights /reports<br/>/reports/management /exports /audit"]:::built
     wSetup["Setup<br/>/onboarding /settings /migration"]:::built
     wFirm["CA firm and platform<br/>/crm /firm-portal /platform-admin"]:::built
     wPortal["Customer portal<br/>/portal/token"]:::built
@@ -80,7 +80,7 @@ flowchart LR
     aClose["month-end: assets, depreciation,<br/>schedules, assistant"]:::built
     aReports["reports, insights, exports, migration"]:::built
     aFirm["org-settings, workspace, white-label,<br/>platform-admin, crm"]:::built
-    aPhase8["Phase 8: management reports, budgets,<br/>report PDFs, narrative, Ask your books"]:::pending
+    aPhase8["reports: management reports, budgets,<br/>report PDFs and emails, narrative, Ask your books"]:::built
     aPhase9["Phase 9: projects, timesheets,<br/>multi-currency"]:::pending
   end
 
@@ -409,6 +409,23 @@ erDiagram
     string tallyGuid
     string status
   }
+  %% Phase 8. Plans and report emails: neither touches the ledger.
+  ledger_accounts ||--o{ budgets : "budgeted"
+  organizations ||--o{ report_schedules : "emails reports by"
+  budgets {
+    string orgId
+    string financialYear
+    ObjectId accountId FK
+    array monthsPaise "twelve ints, April to March"
+  }
+  report_schedules {
+    string orgId
+    string report "a report key"
+    string period "relative: last month, last quarter"
+    string frequency "monthly or weekly"
+    array recipients
+    string nextRunOn
+  }
 ```
 
 ### 2.3 Document pipeline and AI
@@ -474,7 +491,7 @@ erDiagram
   }
   ai_suggestions {
     string orgId
-    string kind "hsn, quote draft"
+    string kind "hsn, quote draft, narrative, ask"
     string entityType "points at any record"
     string entityId
     float confidence
@@ -896,9 +913,6 @@ erDiagram
   users ||--o{ time_entries : "logs"
   time_entries }o--o| sales_invoices : "billed on"
   projects |o--o{ journal_line : "projectId set at posting"
-  %% PLANNED (Phase 8): budgets and scheduled report emails.
-  ledger_accounts ||--o{ budgets : "budgeted"
-  organizations ||--o{ report_schedules : "emails reports by"
   %% PLANNED (Phase 9): multi-currency. Journals stay in INR paise.
   exchange_rates |o--o{ sales_invoices : "rate on the document"
   exchange_rates |o--o{ purchase_bills : "rate on the document"
@@ -917,18 +931,6 @@ erDiagram
     float hours
     int billableRatePaise
     ObjectId invoiceId FK "null until billed"
-  }
-  budgets {
-    string orgId "PLANNED"
-    ObjectId accountId FK
-    string month
-    int amountPaise
-  }
-  report_schedules {
-    string orgId "PLANNED, name not fixed by the plan"
-    string report
-    string cadence
-    array recipients
   }
   exchange_rates {
     string orgId "PLANNED"
@@ -949,7 +951,7 @@ erDiagram
   }
 ```
 
-The plan also names `depreciation_runs`. The code doesn't need it: each depreciation run is a `proposed_entries` record with `adjustment.kind = depreciation`. "Ask your books" and the monthly narrative need no new collection. They read reports, and the narrative would be an `ai_suggestions` record.
+The plan also names `depreciation_runs`. The code doesn't need it: each depreciation run is a `proposed_entries` record with `adjustment.kind = depreciation`. "Ask your books" and the monthly narrative needed no new collection: they read reports, and each narrative and question is an `ai_suggestions` record.
 
 ---
 
@@ -1052,15 +1054,15 @@ flowchart TB
     M9["Form 27Q,<br/>FVU file"]:::pending
     M10["Closing checklist,<br/>then period lock"]:::built
     M11["Reports: TB, P&L, balance sheet,<br/>cash flow, ledger, day book,<br/>Excel, CSV, Tally"]:::built
-    M12["Management reports, comparisons,<br/>budgets, report PDFs and email"]:::pending
-    M13["AI monthly narrative,<br/>Ask your books"]:::pending
+    M12["Management reports, comparisons,<br/>budgets, report PDFs and email"]:::built
+    M13["AI monthly narrative,<br/>Ask your books"]:::built
     M1 --> M2 --> M3 --> M10
     M4 --> M5 --> M6 --> M7 --> M10
     M8 --> M10
     M8 -.- M9
     M10 --> M11
-    M11 -.- M12
-    M11 -.- M13
+    M11 --- M12
+    M11 --- M13
   end
 
   subgraph yearEnd["Year close"]
