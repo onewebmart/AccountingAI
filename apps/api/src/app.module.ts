@@ -38,6 +38,7 @@ import { InboundModule } from './inbound/inbound.module';
 import { ItemsModule } from './items/items.module';
 import { EinvoiceModule } from './einvoice/einvoice.module';
 import { MonthEndModule } from './month-end/month-end.module';
+import { OrdersModule } from './orders/orders.module';
 
 @Module({
   imports: [
@@ -89,6 +90,7 @@ import { MonthEndModule } from './month-end/month-end.module';
     ItemsModule,
     EinvoiceModule,
     MonthEndModule,
+    OrdersModule,
     CrmModule,
     WorkspaceModule,
   ],

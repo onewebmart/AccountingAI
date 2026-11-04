@@ -94,12 +94,12 @@ export class PostingService {
    */
   async nextDocumentNumber(
     orgId: string,
-    series: 'INVOICE_SERIAL',
+    series: 'INVOICE_SERIAL' | 'QUOTE' | 'SALES_ORDER' | 'CHALLAN' | 'PURCHASE_ORDER' | 'GRN' | 'EXPENSE_CLAIM',
     financialYear: string,
-    session: ClientSession,
+    session?: ClientSession,
   ): Promise<number> {
     const counter = await this.counterModel
-      .findByIdAndUpdate(`${orgId}:${series}:${financialYear}`, { $inc: { seq: 1 } }, { upsert: true, new: true, session })
+      .findByIdAndUpdate(`${orgId}:${series}:${financialYear}`, { $inc: { seq: 1 } }, { upsert: true, new: true, session: session ?? null })
       .exec();
     if (!counter) throw new Error(`Failed to allocate the next ${series} number.`);
     return counter.seq;

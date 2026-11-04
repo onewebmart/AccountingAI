@@ -22,6 +22,11 @@ export interface InvoicePdfData {
   footer: string | null;
   /** Shown across the top while the invoice is not yet posted. */
   draft: boolean;
+  /** QUOTATION, SALES ORDER, DELIVERY CHALLAN: other documents on the same layout. */
+  title?: string;
+  numberLabel?: string;
+  /** Under the number: valid until, expected by, the reason goods move. */
+  extraRows?: Array<[string, string]>;
   /** Registered with the IRP: its IRN, acknowledgement and the signed QR, as a grid of dark modules. */
   einvoice?: { irn: string; ackNo: string; ackDate: string; qr: boolean[][]; test: boolean } | null;
 }
@@ -204,12 +209,13 @@ export function renderInvoicePdf(d: InvoicePdfData): Buffer {
     page.text(MARGIN, sy, l, 8.5);
     sy -= 11;
   }
-  page.right(right, y - 12, d.seller.gstin ? 'TAX INVOICE' : 'INVOICE', 14, true);
+  page.right(right, y - 12, d.title ?? (d.seller.gstin ? 'TAX INVOICE' : 'INVOICE'), 14, true);
   let ry = y - 30;
   for (const [k, v] of [
-    ['Invoice no.', d.number ?? 'Not numbered yet'],
+    [d.numberLabel ?? 'Invoice no.', d.number ?? 'Not numbered yet'],
     ['Date', displayDate(d.date)],
     ...(d.dueDate ? [['Due', displayDate(d.dueDate)]] : []),
+    ...(d.extraRows ?? []),
     ['Place of supply', stateName(d.buyer.stateCode)],
     ['Reverse charge', 'No'],
   ] as Array<[string, string]>) {

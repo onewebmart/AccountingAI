@@ -77,6 +77,7 @@ export interface CreateInvoiceInput {
   notes?: string | null;
   /** Set when a recurring template drafts this invoice. */
   recurringTemplateId?: string | null;
+  source?: { kind: 'quote' | 'sales_order'; id: string; lines?: Array<{ orderLine: number; qty: number }> } | null;
 }
 
 function getFY(dateStr: string): string {
@@ -117,6 +118,7 @@ export class SalesInvoicesService {
       lineItems: input.lineItems ?? [],
       notes: input.notes ?? null,
       recurringTemplateId: input.recurringTemplateId ? new Types.ObjectId(input.recurringTemplateId) : null,
+      source: input.source ?? null,
     });
     await this.auditService.record({
       orgId: input.orgId,

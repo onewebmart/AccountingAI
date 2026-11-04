@@ -140,6 +140,10 @@ export class SalesInvoice {
    */
   @Prop({ type: Object, default: null }) partyAtIssue: PartyAsIssued | null;
 
+  /** Made from a quote or a sales order; for an order, how much of each of its lines this invoice bills. */
+  @Prop({ type: Object, default: null })
+  source: { kind: 'quote' | 'sales_order'; id: string; lines?: Array<{ orderLine: number; qty: number }> } | null;
+
 }
 
 export const SalesInvoiceSchema = SchemaFactory.createForClass(SalesInvoice);

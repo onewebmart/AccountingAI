@@ -9,6 +9,7 @@ import {
   FileText,
   ShoppingCart,
   Package,
+  ClipboardList,
   CalendarCheck,
   TrendingUp,
   Building2,
@@ -76,6 +77,7 @@ const NAV_GROUPS: NavGroup[] = [
     heading: 'Transactions',
     items: [
       { href: '/sales', label: 'Sales', icon: <TrendingUp size={18} /> },
+      { href: '/orders', label: 'Quotes & orders', icon: <ClipboardList size={18} /> },
       { href: '/purchase', label: 'Purchase', icon: <ShoppingCart size={18} /> },
       { href: '/items', label: 'Items', icon: <Package size={18} /> },
       { href: '/banking', label: 'Banking', icon: <Building2 size={18} /> },
