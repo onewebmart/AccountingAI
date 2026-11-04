@@ -17,6 +17,12 @@ import { DeliveryChallan, DeliveryChallanSchema, Quote, QuoteSchema, SalesOrder,
 import { QUOTE_DRAFT_QUEUE, SalesDocsService } from './sales-docs.service';
 import { GeminiQuoteModel, QUOTE_MODEL } from './quote-model';
 import { OrdersController } from './orders.controller';
+import { PurchaseOrdersController } from './purchase-orders.controller';
+import { PurchaseDocsService } from './purchase-docs.service';
+import { GoodsReceipt, GoodsReceiptSchema, PurchaseOrder, PurchaseOrderSchema } from './schemas/purchase-docs.schema';
+import { PurchaseModule } from '../purchase/purchase.module';
+import { PurchaseBill, PurchaseBillSchema } from '../purchase/schemas/purchase-bill.schema';
+import { Vendor, VendorSchema } from '../purchase/schemas/vendor.schema';
 
 /** Quotes the model drafts from a message, one job each, off the request path. */
 @Processor(QUOTE_DRAFT_QUEUE)
@@ -42,16 +48,21 @@ export class QuoteDraftProcessor extends WorkerHost {
       { name: Item.name, schema: ItemSchema },
       { name: OrgSettings.name, schema: OrgSettingsSchema },
       { name: AiSuggestion.name, schema: AiSuggestionSchema },
+      { name: PurchaseOrder.name, schema: PurchaseOrderSchema },
+      { name: GoodsReceipt.name, schema: GoodsReceiptSchema },
+      { name: PurchaseBill.name, schema: PurchaseBillSchema },
+      { name: Vendor.name, schema: VendorSchema },
     ]),
     BullModule.registerQueue({ name: QUOTE_DRAFT_QUEUE }),
     GlModule,
     ItemsModule,
     SalesModule, // SalesInvoicesService: converting makes a draft invoice
+    PurchaseModule, // PurchaseBillsService: billing a PO makes a draft bill
     MailModule,
     OcrModule, // UsageMeterService
   ],
-  controllers: [OrdersController],
-  providers: [SalesDocsService, QuoteDraftProcessor, { provide: QUOTE_MODEL, useClass: GeminiQuoteModel }],
-  exports: [SalesDocsService],
+  controllers: [OrdersController, PurchaseOrdersController],
+  providers: [SalesDocsService, PurchaseDocsService, QuoteDraftProcessor, { provide: QUOTE_MODEL, useClass: GeminiQuoteModel }],
+  exports: [SalesDocsService, PurchaseDocsService],
 })
 export class OrdersModule {}

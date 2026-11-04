@@ -93,6 +93,7 @@ export interface CreateBillInput {
   tdsRateBps?: number;
   /** Set when a recurring template drafts this bill. */
   recurringTemplateId?: string | null;
+  source?: { kind: 'purchase_order'; id: string; lines: Array<{ poLine: number; qty: number }> } | null;
 }
 
 function getFY(dateStr: string): string {
@@ -157,6 +158,7 @@ export class PurchaseBillsService {
       lineItems: input.lineItems ?? [],
       notes: input.notes ?? null,
       isReverseCharge: input.isReverseCharge ?? false,
+      source: input.source ?? null,
       tds,
       recurringTemplateId: input.recurringTemplateId ? new Types.ObjectId(input.recurringTemplateId) : null,
     });

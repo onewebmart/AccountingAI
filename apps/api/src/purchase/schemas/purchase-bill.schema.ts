@@ -98,6 +98,10 @@ export class PurchaseBill {
   /** TDS withheld from the vendor, if their section applies. */
   @Prop({ type: BillTdsSchema, default: null }) tds: BillTds | null;
 
+  /** Billed against a purchase order: which, and how much of each of its lines. */
+  @Prop({ type: Object, default: null })
+  source: { kind: 'purchase_order'; id: string; lines: Array<{ poLine: number; qty: number }> } | null;
+
   /**
    * GST on this purchase is ours to pay the government (reverse charge): the
    * vendor is owed the taxable value only, and the tax is booked as a liability

@@ -10,6 +10,7 @@ import { GST_STATES } from '@/lib/gst';
 import { formatRupees } from '@/lib/utils';
 import { AttachmentsSection } from './attachments-section';
 import { EinvoiceSection } from '@/components/einvoice/einvoice-section';
+import { PoMatchSection } from '@/components/orders/po-match-section';
 
 /** GET /sales/invoices/:id or /purchase/bills/:id — the stored record. */
 interface ApiRecord {
@@ -142,6 +143,7 @@ export function DocumentDetailDialog({
               </button>
             )}
             {kind === 'invoice' && <EinvoiceSection invoiceId={record._id} />}
+            {kind === 'bill' && <PoMatchSection billId={record._id} />}
             <AttachmentsSection entityType={kind === 'invoice' ? 'SalesInvoice' : 'PurchaseBill'} entityId={record._id} />
             <a
               href={`/audit?entityType=${kind === 'invoice' ? 'SalesInvoice' : 'PurchaseBill'}&entityId=${record._id}`}

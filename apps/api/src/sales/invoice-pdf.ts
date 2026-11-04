@@ -27,6 +27,8 @@ export interface InvoicePdfData {
   numberLabel?: string;
   /** Under the number: valid until, expected by, the reason goods move. */
   extraRows?: Array<[string, string]>;
+  /** BILL TO by default; TO on a purchase order. */
+  partyLabel?: string;
   /** Registered with the IRP: its IRN, acknowledgement and the signed QR, as a grid of dark modules. */
   einvoice?: { irn: string; ackNo: string; ackDate: string; qr: boolean[][]; test: boolean } | null;
 }
@@ -247,7 +249,7 @@ export function renderInvoicePdf(d: InvoicePdfData): Buffer {
   const buyerLines = [...wrap(d.buyer.address ?? '', 8.5, 300), d.buyer.gstin ? `GSTIN ${d.buyer.gstin}` : 'Unregistered', `State: ${stateName(d.buyer.stateCode)}`].filter(Boolean);
   const boxH = 30 + buyerLines.length * 11;
   page.box(MARGIN, y - boxH, right - MARGIN, boxH);
-  page.text(MARGIN + 10, y - 14, 'BILL TO', 7.5, true);
+  page.text(MARGIN + 10, y - 14, d.partyLabel ?? 'BILL TO', 7.5, true);
   page.text(MARGIN + 10, y - 27, d.buyer.name, 10, true);
   buyerLines.forEach((l, i) => page.text(MARGIN + 10, y - 40 - i * 11, l, 8.5));
   y -= boxH + 18;

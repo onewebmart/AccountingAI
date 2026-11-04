@@ -175,10 +175,24 @@ export class OrdersController {
     return this.docs.setChallanStatus(req.user.orgId, req.user.sub, id, action === 'cancel' ? 'cancelled' : 'returned');
   }
 
-  @Get(':kind/:id/pdf')
-  async pdf(@Request() req: AuthRequest, @Param('kind') kind: string, @Param('id') id: string, @Res() res: Response) {
-    const k = kind === 'quotes' ? 'quote' : kind === 'sales-orders' ? 'sales_order' : 'challan';
-    const { filename, content } = await this.docs.pdf(req.user.orgId, k, id);
+  // Named routes, not :kind/:id/pdf, which would also catch purchase-orders/:id/pdf.
+  @Get('quotes/:id/pdf')
+  quotePdf(@Request() req: AuthRequest, @Param('id') id: string, @Res() res: Response) {
+    return this.sendPdf(req.user.orgId, 'quote', id, res);
+  }
+
+  @Get('sales-orders/:id/pdf')
+  orderPdf(@Request() req: AuthRequest, @Param('id') id: string, @Res() res: Response) {
+    return this.sendPdf(req.user.orgId, 'sales_order', id, res);
+  }
+
+  @Get('challans/:id/pdf')
+  challanPdf(@Request() req: AuthRequest, @Param('id') id: string, @Res() res: Response) {
+    return this.sendPdf(req.user.orgId, 'challan', id, res);
+  }
+
+  private async sendPdf(orgId: string, kind: 'quote' | 'sales_order' | 'challan', id: string, res: Response) {
+    const { filename, content } = await this.docs.pdf(orgId, kind, id);
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
     res.send(content);

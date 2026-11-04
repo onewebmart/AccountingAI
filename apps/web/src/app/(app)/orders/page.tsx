@@ -8,8 +8,9 @@ import { Button } from '@/components/ui/button';
 import { api, ApiError } from '@/lib/api';
 import { formatPaise } from '@/lib/gst';
 import { EditLine, LineEditor, emptyLine, toApiLines } from '@/components/orders/line-editor';
+import { GoodsReceivedTab, PurchaseOrdersTab } from '@/components/orders/purchase-orders-tab';
 
-type Tab = 'quotes' | 'orders' | 'challans';
+type Tab = 'quotes' | 'orders' | 'challans' | 'purchase-orders' | 'grns';
 
 interface Customer { _id: string; name: string }
 interface Line { description: string; qty: number; ratePaise: number; amountPaise: number; taxRatePct: number; invoicedQty?: number; deliveredQty?: number }
@@ -298,16 +299,18 @@ export default function OrdersPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-h1 font-display text-ink-900">Quotes & orders</h1>
-        <p className="text-body text-ink-500">What comes before an invoice. None of it posts: an accepted quote or an order becomes a draft invoice you post from Sales.</p>
+        <p className="text-body text-ink-500">What comes before an invoice or a bill. None of it posts: an order becomes a draft invoice or bill, posted from Sales or Purchase.</p>
       </div>
       <div className="flex gap-1 border-b border-line-200">
-        {([['quotes', 'Quotes'], ['orders', 'Sales orders'], ['challans', 'Delivery challans']] as const).map(([id, l]) => (
+        {([['quotes', 'Quotes'], ['orders', 'Sales orders'], ['challans', 'Delivery challans'], ['purchase-orders', 'Purchase orders'], ['grns', 'Goods received']] as const).map(([id, l]) => (
           <button key={id} onClick={() => setTab(id)} className={`px-4 py-2 text-body font-medium ${tab === id ? 'border-b-2 border-saffron-600 text-ink-900' : 'text-ink-500 hover:text-ink-900'}`}>{l}</button>
         ))}
       </div>
       {tab === 'quotes' && <QuotesTab onToast={showToast} />}
       {tab === 'orders' && <OrdersTab onToast={showToast} />}
       {tab === 'challans' && <ChallansTab onToast={showToast} />}
+      {tab === 'purchase-orders' && <PurchaseOrdersTab onToast={showToast} />}
+      {tab === 'grns' && <GoodsReceivedTab onToast={showToast} />}
       {toast && <div className="fixed bottom-6 right-6 z-50 rounded-lg border border-success-fg bg-success-bg px-4 py-3 text-body text-success-fg shadow-lg">{toast}</div>}
     </div>
   );
