@@ -63,6 +63,7 @@ const ADJUSTMENT_LABEL: Record<string, string> = {
   reclass: 'Reclassification',
   closing_stock: 'Closing stock',
   opening_stock: 'Opening stock',
+  fx_revaluation: 'Exchange revaluation',
 };
 
 const CATEGORY_SOURCE: Record<NonNullable<ProposedEntryData['category']>['source'], { label: string; className: string }> = {

@@ -102,6 +102,12 @@ export class CurrencyController {
     return this.foreign.setRate(req.user.orgId, req.user.sub, body);
   }
 
+  @Get('documents')
+  @RequirePermission(Permission.VIEW_REPORTS)
+  documents(@Request() req: AuthRequest) {
+    return this.foreign.documents(req.user.orgId);
+  }
+
   @Post('invoices')
   @RequirePermission(Permission.MANAGE_SALES)
   createInvoice(@Request() req: AuthRequest, @Body() body: InvoiceDto) {

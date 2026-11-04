@@ -36,6 +36,8 @@ import {
   Palette,
   Lock,
   Warehouse,
+  FolderKanban,
+  Globe,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -86,6 +88,7 @@ const NAV_GROUPS: NavGroup[] = [
       { href: '/expenses', label: 'Expense claims', icon: <Receipt size={18} /> },
       { href: '/items', label: 'Items', icon: <Package size={18} /> },
       { href: '/stock', label: 'Stock', icon: <Warehouse size={18} /> },
+      { href: '/projects', label: 'Projects', icon: <FolderKanban size={18} /> },
       { href: '/banking', label: 'Banking', icon: <Building2 size={18} /> },
       { href: '/recurring', label: 'Recurring', icon: <Repeat size={18} /> },
     ],
@@ -97,6 +100,7 @@ const NAV_GROUPS: NavGroup[] = [
       { href: '/accounts', label: 'Chart of accounts', icon: <BookOpen size={18} /> },
       { href: '/gst', label: 'GST', icon: <ReceiptIndianRupee size={18} /> },
       { href: '/tds', label: 'TDS', icon: <IndianRupee size={18} /> },
+      { href: '/currency', label: 'Foreign currency', icon: <Globe size={18} /> },
       { href: '/migration', label: 'Opening balances', icon: <Upload size={18} /> },
     ],
   },

@@ -192,6 +192,27 @@ export class ForeignService {
     });
   }
 
+  /** Foreign invoices and bills, newest first, with what is still owed in their currency. */
+  async documents(orgId: string): Promise<Array<Record<string, unknown>>> {
+    const [invoices, bills] = await Promise.all([
+      this.invoiceModel.find({ orgId, foreign: { $ne: null } }).sort({ invoiceDate: -1 }).limit(200).lean().exec(),
+      this.billModel.find({ orgId, foreign: { $ne: null } }).sort({ billDate: -1 }).limit(200).lean().exec(),
+    ]);
+    const [customers, vendors] = await Promise.all([
+      this.customerModel.find({ orgId, _id: { $in: invoices.map((i) => i.customerId) } }, { name: 1 }).lean().exec(),
+      this.vendorModel.find({ orgId, _id: { $in: bills.map((b) => b.vendorId) } }, { name: 1 }).lean().exec(),
+    ]);
+    const name = new Map([...customers, ...vendors].map((p) => [String(p._id), p.name]));
+    const row = (kind: 'invoice' | 'bill', d: SalesInvoiceDocument | PurchaseBillDocument, number: string | null, date: string, partyId: unknown) => ({
+      kind, id: String(d._id), number, date, status: d.status, party: name.get(String(partyId)) ?? '', currency: d.foreign!.currency, rate: d.foreign!.rate,
+      totalMinor: d.foreign!.totalMinor, openMinor: d.foreign!.totalMinor - d.foreign!.paidMinor, digits: d.foreign!.digits, totalPaise: d.amountsPaise.total,
+    });
+    return [
+      ...invoices.map((d) => row('invoice', d as SalesInvoiceDocument, d.invoiceNumber, d.invoiceDate, d.customerId)),
+      ...bills.map((d) => row('bill', d as PurchaseBillDocument, d.billNumber, d.billDate, d.vendorId)),
+    ].sort((a, b) => b.date.localeCompare(a.date));
+  }
+
   // ── Payments: the realised difference ─────────────────────────────────
 
   /**
@@ -288,7 +309,7 @@ export class ForeignService {
       const booked = outstandingPaise(d);
       const rate = rates.get(f.currency) ?? null;
       const revalued = rate === null ? null : toPaise(openMinor, rate, f.digits);
-      return { kind, id: String(d._id), number, currency: f.currency, openMinor, bookedRate: f.rate, rate, bookedPaise: booked, revaluedPaise: revalued, differencePaise: revalued === null ? null : revalued - booked };
+      return { kind, id: String(d._id), number, currency: f.currency, digits: f.digits, openMinor, bookedRate: f.rate, rate, bookedPaise: booked, revaluedPaise: revalued, differencePaise: revalued === null ? null : revalued - booked };
     });
     const missing = [...rates].filter(([, r]) => r === null).map(([c]) => c);
     const sum = (k: 'invoice' | 'bill') => rows.filter((r) => r.kind === k).reduce((s, r) => s + (r.differencePaise ?? 0), 0);

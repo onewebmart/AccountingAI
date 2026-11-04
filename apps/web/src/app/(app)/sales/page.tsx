@@ -1,5 +1,6 @@
 'use client';
 
+import { ProjectSelect } from '@/components/projects/project-select';
 import { useState } from 'react';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -242,6 +243,7 @@ function AddInvoiceModal({ customers, onClose, onSuccess, showToast }: AddInvoic
     description: '',
     hsnSac: '',
     itemId: '',
+    projectId: '',
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -288,6 +290,7 @@ function AddInvoiceModal({ customers, onClose, onSuccess, showToast }: AddInvoic
           description: form.description.trim() || 'Sale',
           hsnSac: form.hsnSac.trim() || null,
           ...(form.itemId ? { itemId: form.itemId } : {}),
+          ...(form.projectId ? { projectId: form.projectId } : {}),
           qty: 1,
           ratePaise: amounts.taxableValue,
           amountPaise: amounts.taxableValue,
@@ -454,6 +457,11 @@ function AddInvoiceModal({ customers, onClose, onSuccess, showToast }: AddInvoic
                 }))
               }
             />
+          </div>
+
+          <div>
+            <label className="text-caption font-medium text-ink-700 block mb-1">Project</label>
+            <ProjectSelect className={field} value={form.projectId} onChange={(projectId) => setForm((f) => ({ ...f, projectId }))} customerId={form.customerId} />
           </div>
 
           <div className="grid grid-cols-[1fr_9rem] gap-3">

@@ -1,5 +1,6 @@
 'use client';
 
+import { ProjectSelect } from '@/components/projects/project-select';
 import { useState } from 'react';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -105,6 +106,7 @@ function AddBillModal({ vendors, onClose, onSuccess, showToast }: AddBillModalPr
     interState: false,
     description: '',
     itemId: '',
+    projectId: '',
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -150,6 +152,7 @@ function AddBillModal({ vendors, onClose, onSuccess, showToast }: AddBillModalPr
         {
           description: form.description.trim() || 'Purchase',
           ...(form.itemId ? { itemId: form.itemId } : {}),
+          ...(form.projectId ? { projectId: form.projectId } : {}),
           qty: 1,
           ratePaise: amounts.taxableValue,
           amountPaise: amounts.taxableValue,
@@ -315,6 +318,11 @@ function AddBillModal({ vendors, onClose, onSuccess, showToast }: AddBillModalPr
                 }))
               }
             />
+          </div>
+
+          <div>
+            <label className="text-caption font-medium text-ink-700 block mb-1">Project</label>
+            <ProjectSelect className={field} value={form.projectId} onChange={(projectId) => setForm((f) => ({ ...f, projectId }))} />
           </div>
 
           <div>
