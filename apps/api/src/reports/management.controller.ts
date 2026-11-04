@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Param, Post, Put, Query, Request, Res, UseGuards } from '@nestjs/common';
 import { Type } from 'class-transformer';
-import { ArrayMaxSize, ArrayMinSize, IsArray, IsEmail, IsIn, IsInt, IsMongoId, IsNumber, IsOptional, Matches, Max, Min, ValidateNested } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsEmail, IsIn, IsInt, IsMongoId, IsNumber, IsOptional, IsString, Length, Matches, Max, Min, ValidateNested } from 'class-validator';
 import { Response } from 'express';
 import { Permission } from '@ai-accounting/shared';
 import { RequirePermission } from '../auth/decorators';
@@ -9,6 +9,7 @@ import { PermissionGuard } from '../auth/guards/permission.guard';
 import { ManagementReportsService } from './management.service';
 import { ReportCatalogService, ReportParams } from './report-catalog.service';
 import { ReportSchedulesService } from './report-schedules.service';
+import { ReportAiService } from './report-ai.service';
 import { toCsv } from './report-table';
 
 interface AuthRequest {
@@ -41,6 +42,14 @@ class FromYearDto {
   @IsOptional() @IsNumber() @Min(-99) @Max(500) changePct?: number;
 }
 
+class PeriodDto {
+  @Matches(MONTH, { message: 'period is a month like 2026-10' }) period: string;
+}
+
+class AskDto {
+  @IsString() @Length(3, 500) question: string;
+}
+
 class ScheduleDto {
   @IsIn(['pl_monthly', 'comparison', 'expenses', 'budget_vs_actual', 'sales_by_customer', 'sales_by_item', 'sales_by_month', 'purchases_by_vendor', 'purchases_by_item', 'purchases_by_month', 'receivables', 'payables', 'gst_summary', 'trial_balance', 'balance_sheet'])
   report: string;
@@ -58,6 +67,7 @@ export class ManagementController {
     private readonly catalog: ReportCatalogService,
     private readonly management: ManagementReportsService,
     private readonly schedules: ReportSchedulesService,
+    private readonly ai: ReportAiService,
   ) {}
 
   @Get('catalog')
@@ -137,5 +147,43 @@ export class ManagementController {
   @RequirePermission(Permission.VIEW_REPORTS)
   sendNow(@Request() req: AuthRequest, @Param('id') id: string) {
     return this.schedules.sendNow(req.user.orgId, req.user.sub, id);
+  }
+
+  // ── The monthly narrative and Ask your books: advice, read-only ─────────
+
+  @Post('narrative')
+  @RequirePermission(Permission.VIEW_REPORTS)
+  requestNarrative(@Request() req: AuthRequest, @Body() body: PeriodDto) {
+    return this.ai.requestNarrative(req.user.orgId, req.user.sub, body.period);
+  }
+
+  @Get('narrative')
+  @RequirePermission(Permission.VIEW_REPORTS)
+  latestNarrative(@Request() req: AuthRequest, @Query() q: PeriodDto) {
+    return this.ai.latestNarrative(req.user.orgId, q.period);
+  }
+
+  @Get('narrative/:id')
+  @RequirePermission(Permission.VIEW_REPORTS)
+  narrative(@Request() req: AuthRequest, @Param('id') id: string) {
+    return this.ai.narrative(req.user.orgId, id);
+  }
+
+  @Post('ask')
+  @RequirePermission(Permission.VIEW_REPORTS)
+  ask(@Request() req: AuthRequest, @Body() body: AskDto) {
+    return this.ai.ask(req.user.orgId, req.user.sub, body.question);
+  }
+
+  @Get('ask/recent')
+  @RequirePermission(Permission.VIEW_REPORTS)
+  recent(@Request() req: AuthRequest) {
+    return this.ai.recentQuestions(req.user.orgId);
+  }
+
+  @Get('ask/:id')
+  @RequirePermission(Permission.VIEW_REPORTS)
+  answer(@Request() req: AuthRequest, @Param('id') id: string) {
+    return this.ai.answer(req.user.orgId, id);
   }
 }

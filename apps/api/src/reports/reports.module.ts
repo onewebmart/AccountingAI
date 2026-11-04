@@ -1,5 +1,10 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
+import { BullModule, Processor, WorkerHost } from '@nestjs/bullmq';
+import { Job } from 'bullmq';
+import { withOrg } from '../database/tenant.plugin';
+import { OcrModule } from '../ocr/ocr.module';
+import { AiSuggestion, AiSuggestionSchema } from '../ai-suggestions/schemas/ai-suggestion.schema';
 import { Journal, JournalSchema } from '../gl/schemas/journal.schema';
 import { LedgerAccount, LedgerAccountSchema } from '../gl/schemas/ledger-account.schema';
 import { GlModule } from '../gl/gl.module';
@@ -20,8 +25,23 @@ import { ManagementReportsService } from './management.service';
 import { ReportCatalogService } from './report-catalog.service';
 import { ReportSchedulesService } from './report-schedules.service';
 import { ManagementController } from './management.controller';
+import { REPORT_AI_QUEUE, ReportAiService } from './report-ai.service';
+import { GeminiReportModel, REPORT_MODEL } from './report-model';
 
-/** The books' reports, management reports and budgets, PDFs and CSVs of any of them, and scheduled report emails. */
+/** The narrative and the questions the model words, one job each, off the request path. */
+@Processor(REPORT_AI_QUEUE)
+export class ReportAiProcessor extends WorkerHost {
+  constructor(private readonly ai: ReportAiService) {
+    super();
+  }
+
+  async process(job: Job<{ orgId: string; suggestionId: string }>): Promise<void> {
+    const { orgId, suggestionId } = job.data;
+    await withOrg(orgId, () => (job.name === 'ask' ? this.ai.runAsk(orgId, suggestionId) : this.ai.runNarrative(orgId, suggestionId)));
+  }
+}
+
+/** The books' reports, management reports and budgets, PDFs and CSVs of any of them, scheduled report emails, the monthly narrative and Ask your books. */
 @Module({
   imports: [
     MongooseModule.forFeature([
@@ -37,12 +57,15 @@ import { ManagementController } from './management.controller';
       { name: OrgSettings.name, schema: OrgSettingsSchema },
       { name: Budget.name, schema: BudgetSchema },
       { name: ReportSchedule.name, schema: ReportScheduleSchema },
+      { name: AiSuggestion.name, schema: AiSuggestionSchema },
     ]),
+    BullModule.registerQueue({ name: REPORT_AI_QUEUE }),
     GlModule, // AuditService
     MailModule, // scheduled reports go out by email
+    OcrModule, // UsageMeterService: the model's tokens are metered per org
   ],
   controllers: [ReportsController, ManagementController],
-  providers: [ReportsService, ManagementReportsService, ReportCatalogService, ReportSchedulesService],
+  providers: [ReportsService, ManagementReportsService, ReportCatalogService, ReportSchedulesService, ReportAiService, ReportAiProcessor, { provide: REPORT_MODEL, useClass: GeminiReportModel }],
   exports: [ReportsService, ManagementReportsService, ReportCatalogService, ReportSchedulesService],
 })
 export class ReportsModule {}
