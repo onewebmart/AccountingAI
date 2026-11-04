@@ -28,6 +28,6 @@ import { GlModule } from '../gl/gl.module';
   ],
   controllers: [SalesController],
   providers: [CustomersService, SalesInvoicesService, CreditNotesService, InvoiceDeliveryService],
-  exports: [CustomersService, SalesInvoicesService, CreditNotesService],
+  exports: [CustomersService, SalesInvoicesService, CreditNotesService, InvoiceDeliveryService],
 })
 export class SalesModule {}

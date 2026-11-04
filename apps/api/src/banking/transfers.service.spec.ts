@@ -108,6 +108,7 @@ describe('transfers', () => {
     expect((await transfers.moneyLedgers(orgId)).map((l) => [l.name, l.kind])).toEqual([
       ['Bank Accounts', 'bank'],
       ['Cash in Hand', 'cash'],
+      ['Payment Gateway Clearing', 'gateway'],
       ['Petty Cash', 'other'],
     ]);
   });
@@ -164,13 +165,26 @@ describe('transfers', () => {
     expect(await lines.findById(out._id).lean().exec()).toMatchObject({ matchStatus: MatchStatus.UNMATCHED, transferLineId: null });
   });
 
+  it('settles the payment gateway into the bank, booking its fee', async () => {
+    const { orgId, bank, hdfc, statement } = await seed();
+    const gateway = (await transfers.moneyLedgers(orgId)).find((l) => l.kind === 'gateway')!._id;
+    const st = await statement(String(hdfc._id), [{ date: '2026-10-09', description: 'NEFT CR-RAZORPAY SOFTWARE-SETTLEMENT', in: 96500 }]);
+    const line = await lineOf(st._id, 'NEFT CR-RAZORPAY SOFTWARE-SETTLEMENT');
+    await expect(transfers.record(orgId, ACTOR, { fromAccountId: bank, toAccountId: gateway, amountPaise: 100, date: '2026-10-09', feePaise: 10 })).rejects.toThrow(/Only a payment gateway settlement/);
+    const done = await transfers.record(orgId, ACTOR, { fromAccountId: gateway, toAccountId: bank, amountPaise: 96500, feePaise: 3500, date: '2026-10-09', bankLineId: String(line._id) });
+    const journal = await journals.findById(done.journalId).lean().exec();
+    expect(journal).toMatchObject({ voucherType: VoucherType.CONTRA, narration: 'Payment gateway settlement' });
+    expect(journal!.lines.map((l) => [l.debitPaise, l.creditPaise])).toEqual([[96500, 0], [3500, 0], [0, 100000]]);
+  });
+
   it('suggests cash movements, and auto-match pairs a hand-posted contra with its line', async () => {
     const { orgId, bank, cash, hdfc, statement } = await seed();
     const st = await statement(String(hdfc._id), [
       { date: '2026-10-07', description: 'CASH DEP MUMBAI BR', in: 300000 },
       { date: '2026-10-08', description: 'NWD-512345XXXX-ATM', out: 200000 },
+      { date: '2026-10-09', description: 'NEFT CR-RAZORPAY SOFTWARE-SETTLEMENT', in: 96500 },
     ]);
-    expect((await transfers.suggestions(orgId)).map((s) => s.kind)).toEqual(['cash_deposit', 'cash_withdrawal']);
+    expect((await transfers.suggestions(orgId)).map((s) => s.kind)).toEqual(['cash_deposit', 'cash_withdrawal', 'gateway_settlement']);
 
     // Recorded from the cash side first, then the statement arrives.
     await transfers.record(orgId, ACTOR, { fromAccountId: cash, toAccountId: bank, amountPaise: 300000, date: '2026-10-07' });

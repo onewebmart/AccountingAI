@@ -12,12 +12,12 @@ interface MoneyLedger {
   _id: string;
   name: string;
   code: string;
-  kind: 'bank' | 'cash' | 'other';
+  kind: 'bank' | 'cash' | 'gateway' | 'other';
 }
 
 type Suggestion =
   | { kind: 'between_accounts'; lineId: string; otherLineId: string; date: string; amountPaise: number; fromBank: string; toBank: string; reason: string }
-  | { kind: 'cash_withdrawal' | 'cash_deposit'; lineId: string; date: string; amountPaise: number; bank: string; reason: string };
+  | { kind: 'cash_withdrawal' | 'cash_deposit' | 'gateway_settlement'; lineId: string; date: string; amountPaise: number; bank: string; reason: string };
 
 function message(err: unknown, fallback: string): string {
   return err instanceof ApiError && err.message ? err.message : fallback;
@@ -46,9 +46,12 @@ export function TransfersCard({ onToast }: { onToast: (text: string, error?: boo
   };
   const bank = ledgers.data?.find((l) => l.kind === 'bank');
   const cash = ledgers.data?.find((l) => l.kind === 'cash');
+  const gateway = ledgers.data?.find((l) => l.kind === 'gateway');
+  // A gateway settlement's fee, per line: what it kept out of what it collected.
+  const [fees, setFees] = useState<Record<string, string>>({});
 
   const record = useMutation({
-    mutationFn: (body: { fromAccountId: string; toAccountId: string; amountPaise: number; date: string; narration?: string; bankLineId?: string }) =>
+    mutationFn: (body: { fromAccountId: string; toAccountId: string; amountPaise: number; date: string; narration?: string; bankLineId?: string; feePaise?: number }) =>
       api.post('/banking/transfers', body),
     onSuccess: () => {
       refresh();
@@ -144,7 +147,13 @@ export function TransfersCard({ onToast }: { onToast: (text: string, error?: boo
             <div key={s.lineId} className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-pending-fg/30 bg-pending-bg px-3 py-2">
               <div className="min-w-0">
                 <p className="text-body text-ink-900">
-                  {s.kind === 'between_accounts' ? `${s.fromBank} → ${s.toBank}` : s.kind === 'cash_withdrawal' ? `Cash withdrawn from ${s.bank}` : `Cash paid into ${s.bank}`}
+                  {s.kind === 'between_accounts'
+                    ? `${s.fromBank} → ${s.toBank}`
+                    : s.kind === 'cash_withdrawal'
+                      ? `Cash withdrawn from ${s.bank}`
+                      : s.kind === 'gateway_settlement'
+                        ? `Payment gateway settled into ${s.bank}`
+                        : `Cash paid into ${s.bank}`}
                   <span className="ml-2 font-mono">{formatRupees(s.amountPaise)}</span>
                   <span className="ml-2 text-caption text-ink-500">{shortDate(s.date)}</span>
                 </p>
@@ -154,6 +163,34 @@ export function TransfersCard({ onToast }: { onToast: (text: string, error?: boo
                 <Button size="sm" disabled={busy} onClick={() => pair.mutate({ lineId: s.lineId, otherLineId: s.otherLineId })}>
                   Pair as transfer
                 </Button>
+              ) : s.kind === 'gateway_settlement' ? (
+                <span className="flex items-center gap-2">
+                  <input
+                    aria-label="Fee the gateway kept (₹)"
+                    title="The fee the gateway kept: what it collected for these payments, less this settlement"
+                    placeholder="Fee ₹"
+                    inputMode="decimal"
+                    className="w-24 rounded border border-line-200 bg-white px-2 py-1 text-right font-mono text-caption"
+                    value={fees[s.lineId] ?? ''}
+                    onChange={(e) => setFees({ ...fees, [s.lineId]: e.target.value })}
+                  />
+                  <Button
+                    size="sm"
+                    disabled={busy || !bank || !gateway || parseRupees(fees[s.lineId] ?? '') === null}
+                    onClick={() =>
+                      record.mutate({
+                        fromAccountId: gateway!._id,
+                        toAccountId: bank!._id,
+                        amountPaise: s.amountPaise,
+                        feePaise: parseRupees(fees[s.lineId] ?? '') ?? 0,
+                        date: s.date,
+                        bankLineId: s.lineId,
+                      })
+                    }
+                  >
+                    Post from gateway
+                  </Button>
+                </span>
               ) : (
                 <Button
                   size="sm"

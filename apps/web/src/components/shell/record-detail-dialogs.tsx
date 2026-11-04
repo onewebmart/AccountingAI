@@ -463,6 +463,45 @@ function VendorBankingSection({ id, onSaved }: { id: string; onSaved: (message: 
   );
 }
 
+/**
+ * A link the customer can open to see their invoices and PDFs, and pay
+ * where a payment link is open. No login; it expires, and can be withdrawn.
+ */
+function PortalLinkSection({ customerId, onDone }: { customerId: string; onDone: (message: string) => void }) {
+  const [url, setUrl] = useState<string | null>(null);
+  const share = useMutation({
+    mutationFn: () => api.post<{ url: string; expiresAt: string }>('/portal-links', { customerId, days: 30 }),
+    onSuccess: async (res) => {
+      setUrl(res.url);
+      await navigator.clipboard?.writeText(res.url).catch(() => undefined);
+      onDone('Portal link copied');
+    },
+  });
+  const withdraw = useMutation({
+    mutationFn: () => api.post<{ revoked: number }>('/portal-links/revoke', { customerId }),
+    onSuccess: (res) => {
+      setUrl(null);
+      onDone(res.revoked ? `Withdrew ${res.revoked} link${res.revoked === 1 ? '' : 's'}` : 'No live links to withdraw');
+    },
+  });
+  return (
+    <div>
+      <p className="mb-1 text-caption font-semibold uppercase tracking-wide text-ink-500">Customer portal</p>
+      <div className="flex flex-wrap items-center gap-3">
+        <Button size="sm" variant="secondary" disabled={share.isPending} onClick={() => share.mutate()}>
+          {share.isPending ? 'Making a link…' : 'Copy portal link'}
+        </Button>
+        <button type="button" className="text-caption font-medium text-ink-500 hover:text-error-fg" disabled={withdraw.isPending} onClick={() => withdraw.mutate()}>
+          Withdraw links
+        </button>
+      </div>
+      {url && <p className="mt-1 break-all font-mono text-caption text-ink-600">{url}</p>}
+      <p className="mt-1 text-caption text-ink-500">They see their invoices and PDFs for 30 days, and can pay any with a payment link. No login needed.</p>
+      {(share.isError || withdraw.isError) && <p className="mt-1 text-caption text-error-fg">Couldn&apos;t change the portal link. Try again.</p>}
+    </div>
+  );
+}
+
 export function PartyDetailDialog({
   kind,
   party,
@@ -517,6 +556,7 @@ export function PartyDetailDialog({
               </button>
             </div>
             {kind === 'vendor' && <VendorBankingSection id={party.id} onSaved={(m) => onSaved?.(m)} />}
+            {kind === 'customer' && <PortalLinkSection customerId={party.id} onDone={(m) => onSaved?.(m)} />}
             <div>
               <Row label="GSTIN"><span className="font-mono">{party.gstin ?? '—'}</span></Row>
               <Row label={kind === 'customer' ? 'They owe you' : 'You owe them'}>

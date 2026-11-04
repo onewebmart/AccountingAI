@@ -28,6 +28,17 @@ export default () => ({
     callbackUrl: process.env.GOOGLE_CALLBACK_URL ?? 'http://localhost:3001/api/v1/auth/google/callback',
   },
 
+  /**
+   * Payment links. Without a key id and secret, links come from a test
+   * provider that takes no money. The webhook secret verifies Razorpay's
+   * "paid" callbacks.
+   */
+  razorpay: {
+    keyId: process.env.RAZORPAY_KEY_ID ?? '',
+    keySecret: process.env.RAZORPAY_KEY_SECRET ?? '',
+    webhookSecret: process.env.RAZORPAY_WEBHOOK_SECRET ?? '',
+  },
+
   email: {
     host: process.env.SMTP_HOST ?? '',
     port: parseInt(process.env.SMTP_PORT ?? '587', 10),

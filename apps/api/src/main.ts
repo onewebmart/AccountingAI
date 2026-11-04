@@ -6,6 +6,8 @@ import { AppModule } from './app.module';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
     logger: ['error', 'warn', 'log', 'debug'],
+    // Kept beside the parsed body, so a webhook's signature is checked against the exact bytes sent.
+    rawBody: true,
   });
 
   app.useGlobalPipes(

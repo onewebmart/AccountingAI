@@ -109,6 +109,26 @@ export class SalesInvoice {
   @Prop({ type: Date, default: null }) emailedAt: Date | null;
 
   /**
+   * An online payment link for what the invoice owes. created → paid (the
+   * gateway says so; nothing posted) → confirmed (a person recorded the
+   * receipt, receiptId).
+   */
+  @Prop({ type: Object, default: null })
+  paymentLink: {
+    provider: string;
+    linkId: string;
+    url: string;
+    referenceId: string;
+    amountPaise: number;
+    status: 'created' | 'paid' | 'confirmed';
+    createdAt: Date;
+    paidPaise: number | null;
+    paidOn: string | null;
+    gatewayPaymentId: string | null;
+    receiptId: Types.ObjectId | null;
+  } | null;
+
+  /**
    * The party as it stood when this was issued, stamped before the party's
    * name, GSTIN or state is edited. Null: read the party as it is now.
    */

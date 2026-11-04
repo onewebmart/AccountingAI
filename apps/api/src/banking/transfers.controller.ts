@@ -32,6 +32,12 @@ class RecordTransferDto {
   @IsOptional()
   @IsMongoId()
   bankLineId?: string;
+
+  /** A payment gateway's settlement: the fee it kept. */
+  @IsOptional()
+  @IsInt({ message: 'feePaise must be whole paise' })
+  @Min(0)
+  feePaise?: number;
 }
 
 class PairLinesDto {

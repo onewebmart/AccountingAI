@@ -68,6 +68,7 @@ export class InvoiceDeliveryService {
       ...(input.message?.trim() ? [input.message.trim(), ''] : []),
       `Please find attached invoice ${invoice.invoiceNumber} dated ${data.date.split('-').reverse().join('/')} for ${rupees(invoice.amountsPaise.total)}.`,
       owed > 0 && invoice.dueDate ? `${rupees(owed)} is due by ${invoice.dueDate.split('-').reverse().join('/')}.` : owed > 0 ? `${rupees(owed)} is due.` : 'It has been paid in full. Thank you.',
+      ...(owed > 0 && invoice.paymentLink?.status === 'created' ? ['', `Pay online: ${invoice.paymentLink.url}`] : []),
       ...(data.footer ? ['', data.footer] : []),
       '',
       'Regards,',

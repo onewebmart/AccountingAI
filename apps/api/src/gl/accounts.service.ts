@@ -68,6 +68,7 @@ const DEFAULT_COA: SeedNode[] = [
     children: [
       { code: '1100', name: 'Bank Accounts', type: AccountType.ASSETS, systemKey: SystemAccountKey.BANK },
       { code: '1110', name: 'Cash in Hand', type: AccountType.ASSETS, systemKey: SystemAccountKey.CASH },
+      { code: '1120', name: 'Payment Gateway Clearing', type: AccountType.ASSETS, systemKey: SystemAccountKey.PAYMENT_GATEWAY },
       {
         code: '1200',
         name: 'Accounts Receivable',

@@ -23,7 +23,7 @@ export interface RecordPaymentInput {
   /** What moved through the bank or cash. */
   amountPaise: number;
   /** Receipts only: TDS the customer deducted, per invoice in the allocations. */
-  via?: 'bank' | 'cash';
+  via?: 'bank' | 'cash' | 'gateway';
   reference?: string | null;
   allocations: Array<{ documentId: string; amountPaise: number; tdsPaise?: number }>;
   bankLineId?: string | null;
@@ -119,13 +119,10 @@ export class PartyPaymentsService {
         if (a.amountPaise + (a.tdsPaise ?? 0) > owed) throw new BadRequestException(`${number(doc)} has only ${rupees(owed)} outstanding.`);
       }
 
-      const sys = await this.accounts.resolveSystemAccounts(orgId, [
-        input.via === 'cash' ? SystemAccountKey.CASH : SystemAccountKey.BANK,
-        side.control,
-        side.advances,
-        SystemAccountKey.TDS_RECEIVABLE,
-      ]);
-      const money = sys.get(input.via === 'cash' ? SystemAccountKey.CASH : SystemAccountKey.BANK)!;
+      if (input.via === 'gateway' && input.kind !== 'receipt') throw new BadRequestException('Only money in can come through the payment gateway.');
+      const moneyKey = input.via === 'cash' ? SystemAccountKey.CASH : input.via === 'gateway' ? SystemAccountKey.PAYMENT_GATEWAY : SystemAccountKey.BANK;
+      const sys = await this.accounts.resolveSystemAccounts(orgId, [moneyKey, side.control, side.advances, SystemAccountKey.TDS_RECEIVABLE]);
+      const money = sys.get(moneyKey)!;
       const control = sys.get(side.control)!;
       const advances = sys.get(side.advances)!;
       const tdsReceivable = sys.get(SystemAccountKey.TDS_RECEIVABLE)!;

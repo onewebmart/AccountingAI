@@ -16,6 +16,8 @@ const PAIR_DAYS = 2;
 /** Cash taken out of, or paid into, the bank, as narrations say it. */
 const CASH_OUT = /\b(ATM|ATW|NWD|CASH ?WDL|CASH WITHDRAWAL|CASH WD|SELF CHQ|SELF CHEQUE|BY SELF|TO SELF)\b/i;
 const CASH_IN = /\b(CASH DEP|CASH DEPOSIT|BY CASH|CDM|CASH CREDIT BY)\b/i;
+/** A payment gateway paying out what it collected, as narrations say it. */
+const GATEWAY_IN = /\b(RAZORPAY|RZP|PAYU|CASHFREE|CCAVENUE|BILLDESK|PAYTM PAYMENTS? SETTLE|STRIPE)\b/i;
 /** Asset ledgers that hold money, beside the Bank and Cash ones the chart starts with. */
 const MONEY_NAME = /\b(bank|cash|petty|wallet|imprest|current a\/?c|savings a\/?c)\b/i;
 
@@ -23,7 +25,7 @@ export interface MoneyLedger {
   _id: string;
   name: string;
   code: string;
-  kind: 'bank' | 'cash' | 'other';
+  kind: 'bank' | 'cash' | 'gateway' | 'other';
 }
 
 export interface TransferInput {
@@ -34,6 +36,11 @@ export interface TransferInput {
   narration?: string | null;
   /** The bank statement line this transfer accounts for, if it came from one. */
   bankLineId?: string | null;
+  /**
+   * From the payment gateway only: the fee it kept. The gateway ledger is
+   * credited with the amount plus the fee; the fee goes to Bank Charges.
+   */
+  feePaise?: number;
 }
 
 export type TransferSuggestion =
@@ -48,7 +55,7 @@ export type TransferSuggestion =
       reason: string;
     }
   | {
-      kind: 'cash_withdrawal' | 'cash_deposit';
+      kind: 'cash_withdrawal' | 'cash_deposit' | 'gateway_settlement';
       lineId: string;
       date: string;
       amountPaise: number;
@@ -81,9 +88,10 @@ export class TransfersService {
 
   /** The ledgers money can move between: Bank, Cash, and any asset ledger named like one. */
   async moneyLedgers(orgId: string): Promise<MoneyLedger[]> {
-    const sys = await this.accounts.resolveSystemAccounts(orgId, [SystemAccountKey.BANK, SystemAccountKey.CASH]);
+    const sys = await this.accounts.resolveSystemAccounts(orgId, [SystemAccountKey.BANK, SystemAccountKey.CASH, SystemAccountKey.PAYMENT_GATEWAY]);
     const bank = sys.get(SystemAccountKey.BANK)!;
     const cash = sys.get(SystemAccountKey.CASH)!;
+    const gateway = sys.get(SystemAccountKey.PAYMENT_GATEWAY)!;
     const others = await this.ledgerModel
       .find({
         orgId,
@@ -91,13 +99,14 @@ export class TransfersService {
         isGroup: false,
         isActive: { $ne: false },
         systemKey: { $exists: false },
-        _id: { $nin: [bank._id, cash._id] },
+        _id: { $nin: [bank._id, cash._id, gateway._id] },
       })
       .lean()
       .exec();
     return [
       { _id: bank._id.toString(), name: bank.name, code: bank.code, kind: 'bank' as const },
       { _id: cash._id.toString(), name: cash.name, code: cash.code, kind: 'cash' as const },
+      { _id: gateway._id.toString(), name: gateway.name, code: gateway.code, kind: 'gateway' as const },
       ...others
         .filter((a) => MONEY_NAME.test(a.name))
         .map((a) => ({ _id: a._id.toString(), name: a.name, code: a.code, kind: 'other' as const })),
@@ -117,6 +126,10 @@ export class TransfersService {
     const from = ledgers.find((l) => l._id === input.fromAccountId);
     const to = ledgers.find((l) => l._id === input.toAccountId);
     if (!from || !to) throw new BadRequestException('A transfer moves money between bank and cash ledgers only.');
+    const fee = input.feePaise ?? 0;
+    if (!Number.isInteger(fee) || fee < 0) throw new BadRequestException('The fee must be whole paise.');
+    if (fee > 0 && from.kind !== 'gateway') throw new BadRequestException('Only a payment gateway settlement has a fee to book.');
+    const feeAccount = fee > 0 ? await this.accounts.findByNameOrFallback(orgId, 'Bank Charges', SystemAccountKey.SUSPENSE) : null;
 
     return this.posting.inTransaction(async (session) => {
       let line: BankStatementLineDocument | null = null;
@@ -137,7 +150,13 @@ export class TransfersService {
 
       const narration =
         input.narration?.trim() ||
-        (to.kind === 'cash' && from.kind === 'bank' ? 'Cash withdrawn from bank' : from.kind === 'cash' && to.kind === 'bank' ? 'Cash deposited into bank' : `Transfer from ${from.name} to ${to.name}`);
+        (to.kind === 'cash' && from.kind === 'bank'
+          ? 'Cash withdrawn from bank'
+          : from.kind === 'cash' && to.kind === 'bank'
+            ? 'Cash deposited into bank'
+            : from.kind === 'gateway'
+              ? 'Payment gateway settlement'
+              : `Transfer from ${from.name} to ${to.name}`);
       const journal = await this.posting.post(
         {
           orgId,
@@ -148,7 +167,8 @@ export class TransfersService {
           postedBy: actorId,
           lines: [
             { accountId: to._id, description: narration, debitPaise: input.amountPaise, creditPaise: 0 },
-            { accountId: from._id, description: narration, debitPaise: 0, creditPaise: input.amountPaise },
+            ...(feeAccount ? [{ accountId: feeAccount._id.toString(), description: 'Payment gateway fee', debitPaise: fee, creditPaise: 0 }] : []),
+            { accountId: from._id, description: narration, debitPaise: 0, creditPaise: input.amountPaise + fee },
           ],
         },
         session,
@@ -284,6 +304,8 @@ export class TransfersService {
         out.push({ kind: 'cash_withdrawal', lineId: l._id.toString(), date: l.date, amountPaise: l.debitPaise, bank: name(l.bankAccountId), reason: `"${l.description}" reads as cash taken out` });
       } else if (l.creditPaise > 0 && CASH_IN.test(l.description)) {
         out.push({ kind: 'cash_deposit', lineId: l._id.toString(), date: l.date, amountPaise: l.creditPaise, bank: name(l.bankAccountId), reason: `"${l.description}" reads as cash paid in` });
+      } else if (l.creditPaise > 0 && GATEWAY_IN.test(l.description)) {
+        out.push({ kind: 'gateway_settlement', lineId: l._id.toString(), date: l.date, amountPaise: l.creditPaise, bank: name(l.bankAccountId), reason: `"${l.description}" reads as a payment gateway settling what it collected` });
       }
     }
     return out;

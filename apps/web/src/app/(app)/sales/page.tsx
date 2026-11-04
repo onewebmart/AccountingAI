@@ -11,7 +11,7 @@ import { AdjustmentNoteDialog } from '@/components/shell/adjustment-note-dialog'
 import { AgeingBuckets } from '@/components/shell/ageing-buckets';
 import { RecordPartyPaymentDialog } from '@/components/payments/record-party-payment-dialog';
 import { AdvancesPanel } from '@/components/payments/advances-panel';
-import { Plus, ChevronRight, Send, FileDown, Mail } from 'lucide-react';
+import { Plus, ChevronRight, Send, FileDown, Mail, Link2 } from 'lucide-react';
 import { InvoiceStatus as SharedInvoiceStatus } from '@ai-accounting/shared';
 import { api, downloadFile } from '@/lib/api';
 import { EmailInvoiceDialog } from '@/components/sales/email-invoice-dialog';
@@ -41,6 +41,7 @@ interface Invoice {
   sourceDocumentId?: string | null;
   /** Set when a recurring schedule drafted this invoice. */
   recurringTemplateId?: string | null;
+  paymentLink?: { url: string; status: 'created' | 'paid' | 'confirmed'; paidPaise: number | null; paidOn: string | null } | null;
 }
 
 interface Customer {
@@ -564,6 +565,23 @@ export default function SalesPage() {
   });
 
   // Chase one invoice now. The API words it, logs it and queues it.
+  // Getting paid online: a link for what is owed; the gateway's "paid" is confirmed by a person.
+  const gatewayQuery = useQuery({ queryKey: ['payments', 'gateway'], queryFn: () => api.get<{ name: string; isMock: boolean }>('/payments/online/gateway') });
+  const onlineMutation = useMutation({
+    mutationFn: ({ id, action }: { id: string; action: 'link' | 'confirm' | 'mock-pay' }) =>
+      api.post<{ url?: string }>(`/payments/online/${id}/${action}`),
+    onSuccess: async (res, { action }) => {
+      void queryClient.invalidateQueries({ queryKey: ['sales'] });
+      void queryClient.invalidateQueries({ queryKey: ['payments'] });
+      if (action === 'link' && res?.url) {
+        await navigator.clipboard?.writeText(res.url).catch(() => undefined);
+        showToast(gatewayQuery.data?.isMock ? 'Test payment link copied. It takes no money.' : 'Payment link copied');
+      } else if (action === 'confirm') showToast('Receipt recorded');
+      else if (action === 'mock-pay') showToast('Marked paid online (test). Confirm the receipt to post it.');
+    },
+    onError: (e) => showToast((e as Error).message, 'info'),
+  });
+
   const remindMutation = useMutation({
     mutationFn: (id: string) => api.post<{ to: string }>(`/reminders/invoices/${id}`),
     onSuccess: (reminder) => showToast(`Reminder sent to ${reminder.to}`),
@@ -809,6 +827,39 @@ export default function SalesPage() {
                           >
                             <FileDown size={14} />
                           </button>
+                          {inv.status === 'posted' && inv.paymentLink?.status !== 'paid' && (
+                            <button
+                              type="button"
+                              title={inv.paymentLink?.status === 'created' ? 'New payment link (replaces the old one)' : 'Payment link'}
+                              aria-label={`Payment link for invoice ${inv.invoiceNumber ?? ''}`}
+                              onClick={() => onlineMutation.mutate({ id: inv._id, action: 'link' })}
+                              disabled={onlineMutation.isPending}
+                              className={`transition-colors disabled:opacity-40 ${inv.paymentLink?.status === 'created' ? 'text-saffron-600' : 'text-ink-400 hover:text-saffron-600'}`}
+                            >
+                              <Link2 size={14} />
+                            </button>
+                          )}
+                          {inv.paymentLink?.status === 'created' && gatewayQuery.data?.isMock && (
+                            <button
+                              type="button"
+                              onClick={() => onlineMutation.mutate({ id: inv._id, action: 'mock-pay' })}
+                              disabled={onlineMutation.isPending}
+                              className="text-caption font-medium text-ink-500 hover:text-ink-900"
+                            >
+                              Test: pay
+                            </button>
+                          )}
+                          {inv.paymentLink?.status === 'paid' && (
+                            <button
+                              type="button"
+                              title="The payment gateway says this was paid. Confirm to record the receipt."
+                              onClick={() => onlineMutation.mutate({ id: inv._id, action: 'confirm' })}
+                              disabled={onlineMutation.isPending}
+                              className="rounded border border-pending-fg/40 bg-pending-bg px-2 py-0.5 text-caption font-medium text-pending-fg disabled:opacity-40"
+                            >
+                              Paid online · confirm
+                            </button>
+                          )}
                           {inv.invoiceNumber && (
                             <button
                               type="button"

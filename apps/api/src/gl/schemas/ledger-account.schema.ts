@@ -39,6 +39,8 @@ export enum SystemAccountKey {
   CUSTOMER_ADVANCES = 'CUSTOMER_ADVANCES',
   /** Money paid to vendors before the bill it pays (an asset). */
   VENDOR_ADVANCES = 'VENDOR_ADVANCES',
+  /** Paid online, held by the payment gateway until it settles to the bank, less its fee. */
+  PAYMENT_GATEWAY = 'PAYMENT_GATEWAY',
 }
 
 @Schema({ timestamps: true, collection: 'ledger_accounts' })

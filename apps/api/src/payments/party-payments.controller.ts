@@ -40,8 +40,8 @@ class RecordPaymentDto {
   amountPaise: number;
 
   @IsOptional()
-  @IsIn(['bank', 'cash'])
-  via?: 'bank' | 'cash';
+  @IsIn(['bank', 'cash', 'gateway'])
+  via?: 'bank' | 'cash' | 'gateway';
 
   @IsOptional()
   @IsString()

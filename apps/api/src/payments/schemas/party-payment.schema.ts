@@ -43,7 +43,8 @@ export class PartyPayment {
   @Prop({ type: Number, required: true, min: 0, validate: integerPaise }) amountPaise: number;
   /** TDS the customer deducted, across the invoices (receipts only). */
   @Prop({ type: Number, default: 0, min: 0, validate: integerPaise }) tdsPaise: number;
-  @Prop({ type: String, enum: ['bank', 'cash'], default: 'bank' }) via: 'bank' | 'cash';
+  /** gateway: paid online; it reaches the bank when the gateway settles. */
+  @Prop({ type: String, enum: ['bank', 'cash', 'gateway'], default: 'bank' }) via: 'bank' | 'cash' | 'gateway';
   /**
    * money: a receipt or payment. credit_note / debit_note: a note that took
    * back more than was still owed; the excess is the party's credit, held

@@ -168,6 +168,9 @@ export class SalesInvoicesService {
         journalId: i.journalId?.toString() ?? null,
         sourceDocumentId: i.sourceDocumentId?.toString() ?? null,
         recurringTemplateId: i.recurringTemplateId?.toString() ?? null,
+        paymentLink: i.paymentLink
+          ? { url: i.paymentLink.url, status: i.paymentLink.status, paidPaise: i.paymentLink.paidPaise, paidOn: i.paymentLink.paidOn }
+          : null,
       };
     });
   }
