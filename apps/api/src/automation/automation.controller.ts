@@ -20,6 +20,7 @@ import {
   IsString,
   Length,
   Matches,
+  IsMongoId,
   Max,
   Min,
   ValidateNested,
@@ -76,9 +77,27 @@ class ReminderSettingsDto {
 }
 
 /** Recurring bills need purchase rights; recurring invoices, sales rights. */
+class JournalLineDto {
+  @IsMongoId() accountId: string;
+  @IsInt() @Min(0) debitPaise: number;
+  @IsInt() @Min(0) creditPaise: number;
+}
+
+class CreateRecurringJournalDto {
+  @IsString() @Length(1, 120) name: string;
+  @IsIn(['monthly', 'quarterly', 'yearly']) frequency: 'monthly' | 'quarterly' | 'yearly';
+  @IsInt() @Min(1) @Max(31) dayOfMonth: number;
+  @Matches(DATE, { message: 'startDate must be a date like 2026-10-01' }) startDate: string;
+  @IsOptional() @Matches(DATE, { message: 'endDate must be a date like 2027-03-31' }) endDate?: string | null;
+  @IsArray() @ValidateNested({ each: true }) @Type(() => JournalLineDto) journalLines: JournalLineDto[];
+  @IsOptional() @IsString() @Length(0, 500) notes?: string | null;
+}
+
 const RIGHT: Record<RecurringKind, Permission> = {
   bill: Permission.MANAGE_PURCHASE,
   invoice: Permission.MANAGE_SALES,
+  // A recurring journal is drafted for review; making one is a poster's call.
+  journal: Permission.POST_JOURNAL,
 };
 
 @UseGuards(JwtAuthGuard, PermissionGuard)
@@ -109,6 +128,12 @@ export class AutomationController {
     return this.recurring.create(req.user.orgId, req.user.sub, { ...body, kind: 'invoice' });
   }
 
+  @Post('recurring/journals')
+  @RequirePermission(Permission.POST_JOURNAL)
+  createJournal(@Request() req: AuthRequest, @Body() body: CreateRecurringJournalDto) {
+    return this.recurring.create(req.user.orgId, req.user.sub, { ...body, kind: 'journal' });
+  }
+
   /** Pause, resume or end. Checked against the template's own kind. */
   @Post('recurring/:id/:action')
   @RequirePermission(Permission.VIEW_REPORTS)
@@ -124,7 +149,7 @@ export class AutomationController {
   @Post('recurring-run')
   @RequirePermission(Permission.VIEW_REPORTS)
   run(@Request() req: AuthRequest) {
-    const kinds = (['bill', 'invoice'] as const).filter((k) => hasPermission(req.user.role as UserRole, RIGHT[k]));
+    const kinds = (['bill', 'invoice', 'journal'] as const).filter((k) => hasPermission(req.user.role as UserRole, RIGHT[k]));
     if (kinds.length === 0) throw new ForbiddenException('Your role cannot create bills or invoices.');
     return this.recurring.runDue(req.user.orgId, undefined, req.user.sub, [...kinds]);
   }

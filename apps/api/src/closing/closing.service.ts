@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { Optional, BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { ClientSession, Model, Types } from 'mongoose';
 import {
@@ -42,6 +42,7 @@ const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
  *
  * Every step is a deliberate human action (Invariant 4) and is audited.
  */
+import { AssetsService } from '../month-end/assets.service';
 @Injectable()
 export class ClosingService {
   private readonly logger = new Logger(ClosingService.name);
@@ -58,6 +59,8 @@ export class ClosingService {
     private accountsService: AccountsService,
     private postingService: PostingService,
     private auditService: AuditService,
+    // Optional so specs that build this by hand need not wire the asset register.
+    @Optional() private assets?: AssetsService,
   ) {}
 
   async status(orgId: string) {
@@ -108,6 +111,10 @@ export class ClosingService {
       { key: 'bank-unmatched', label: 'Bank lines not in the books', count: unmatched, href: '/banking' },
       { key: 'bank-unconfirmed', label: 'Bank matches waiting to be confirmed', count: unconfirmed, href: '/banking' },
     ];
+    if (this.assets) {
+      const register = await this.assets.list(orgId, through);
+      items.push({ key: 'depreciation', label: 'Assets with depreciation not booked to this date', count: register.filter((a) => a.dueToDatePaise > 0).length, href: '/month-end' });
+    }
     return { through, items, ready: items.every((i) => i.count === 0) };
   }
 

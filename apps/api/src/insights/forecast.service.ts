@@ -165,17 +165,21 @@ export class ForecastService {
     }
 
     // ── Recurring bills and invoices still to come ───────────────────────────
-    const templates = await this.templateModel.find({ orgId, status: 'active', nextRunDate: { $ne: null } }).lean().exec();
+    // Journals move no money: only bills and invoices are cash to come.
+    const templates = await this.templateModel.find({ orgId, status: 'active', kind: { $in: ['bill', 'invoice'] }, nextRunDate: { $ne: null } }).lean().exec();
     for (const t of templates) {
+      if (!t.amountsPaise || !t.partyId) continue;
+      const amounts = t.amountsPaise;
+      const partyId = t.partyId;
       let run = t.nextRunDate!;
       for (let guard = 0; guard < 60 && run <= horizonEnd; guard++, run = nextOccurrence(run, t.dayOfMonth, t.frequency)) {
         if (t.endDate && run > t.endDate) break;
         const incoming = t.kind === 'invoice';
-        const delay = incoming ? typicalDelayDays(paymentsByCustomer.get(t.partyId.toString()) ?? []) ?? everyone : 0;
+        const delay = incoming ? typicalDelayDays(paymentsByCustomer.get(partyId.toString()) ?? []) ?? everyone : 0;
         const date = addDays(run, t.dueInDays + delay);
         if (date > horizonEnd) continue;
         // A reverse-charge vendor is paid the taxable value; the GST goes to the government.
-        const amount = t.isReverseCharge ? t.amountsPaise.taxableValue : t.amountsPaise.total;
+        const amount = t.isReverseCharge ? amounts.taxableValue : amounts.total;
         items.push({
           kind: incoming ? 'recurring_in' : 'recurring_out',
           direction: incoming ? 'in' : 'out',

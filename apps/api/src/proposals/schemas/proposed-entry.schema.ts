@@ -101,6 +101,29 @@ export class ProposedEntry {
   @Prop({ type: Object, default: null })
   category: { source: 'learned' | 'rule' | 'ai' | 'default'; reason: string; accountName: string; confidence: number } | null;
 
+  /**
+   * Month-end adjustments (sourceType 'adjustment'): what made it, for which
+   * period, and why. Assets lists each asset's depreciation in the entry.
+   */
+  @Prop({ type: Object, default: null })
+  adjustment: {
+    kind: 'recurring_journal' | 'accrual' | 'prepaid' | 'depreciation' | 'capitalise' | 'disposal' | 'reclass';
+    refId: string | null;
+    period: string | null;
+    reason: string;
+    /** An accrual reverses itself on this date once approved. */
+    reverseOn?: string | null;
+    /** Set once the accrual has been reversed ('manual' when a person did it). */
+    reversalJournalId?: string;
+    assets?: Array<{ assetId: string; amountPaise: number; from: string; to: string }>;
+  } | null;
+
+  /** kind:refId:period, unique while in review or approved; cleared on reject so it can be drafted again. */
+  @Prop({ type: String, default: undefined }) adjustmentKey?: string;
+
+  /** The voucher narration, when the proposal is not a document's. */
+  @Prop({ type: String, default: null }) narration: string | null;
+
   // ── AI-suggested journal lines ────────────────────────────────────────
   @Prop({ type: [SuggestedLine], required: true }) suggestedLines: SuggestedLine[];
 
@@ -123,4 +146,5 @@ ProposedEntrySchema.index(
   { orgId: 1, bankLineId: 1 },
   { unique: true, partialFilterExpression: { bankLineId: { $type: 'objectId' }, status: ProposedEntryStatus.PROPOSED } },
 );
+ProposedEntrySchema.index({ orgId: 1, adjustmentKey: 1 }, { unique: true, partialFilterExpression: { adjustmentKey: { $type: 'string' } } });
 ProposedEntrySchema.plugin(tenantIsolationPlugin);

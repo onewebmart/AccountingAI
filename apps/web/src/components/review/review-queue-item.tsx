@@ -48,7 +48,20 @@ export interface ProposedEntryData {
     accountName: string;
     confidence: number;
   } | null;
+  /** Month-end entries: their own narration, and what made them and why. */
+  narration?: string | null;
+  adjustment?: { kind: string; period: string | null; reason: string; reverseOn?: string | null } | null;
 }
+
+const ADJUSTMENT_LABEL: Record<string, string> = {
+  recurring_journal: 'Recurring journal',
+  accrual: 'Accrual',
+  prepaid: 'Prepaid expense',
+  depreciation: 'Depreciation',
+  capitalise: 'Capitalise an asset',
+  disposal: 'Asset disposal',
+  reclass: 'Reclassification',
+};
 
 const CATEGORY_SOURCE: Record<NonNullable<ProposedEntryData['category']>['source'], { label: string; className: string }> = {
   learned: { label: 'Your past choice', className: 'bg-success-bg text-success-fg' },
@@ -130,9 +143,9 @@ export function ReviewQueueItem({ entry, accounts, onApprove, onReject }: Review
           <div className="flex flex-col items-center gap-3 text-ink-400">
             <FileText size={40} strokeWidth={1} />
             <p className="text-caption text-center">
-              {entry.documentType.replace(/_/g, ' ')}
+              {entry.adjustment ? `Month-end · ${ADJUSTMENT_LABEL[entry.adjustment.kind] ?? entry.adjustment.kind}` : entry.documentType.replace(/_/g, ' ')}
               <br />
-              <span className="text-ink-500 font-medium">{entry.vendorName ?? 'Unknown vendor'}</span>
+              <span className="text-ink-500 font-medium">{entry.adjustment ? entry.adjustment.period ?? '' : entry.vendorName ?? 'Unknown vendor'}</span>
             </p>
           </div>
         )}
@@ -160,8 +173,22 @@ export function ReviewQueueItem({ entry, accounts, onApprove, onReject }: Review
           </span>
         </div>
 
+        {entry.adjustment && (
+          <div className="space-y-2">
+            <p className="text-body font-medium text-ink-900">{entry.narration}</p>
+            <p className="text-caption text-ink-500">
+              {ADJUSTMENT_LABEL[entry.adjustment.kind] ?? entry.adjustment.kind} · dated {entry.invoiceDate}
+              {entry.adjustment.reverseOn ? ` · reverses itself on ${entry.adjustment.reverseOn}` : ''}
+            </p>
+            <p className={cn('rounded-md p-2 text-caption', entry.confidenceOverall < 1 ? 'bg-pending-bg text-pending-fg' : 'bg-surface-sink text-ink-600')}>
+              {entry.confidenceOverall < 1 ? 'Suggested by the month-end assistant: ' : ''}
+              {entry.adjustment.reason}
+            </p>
+          </div>
+        )}
+
         {/* Fields */}
-        <div className="space-y-0">
+        <div className={cn('space-y-0', entry.adjustment && 'hidden')}>
           <ConfidenceField
             label="Vendor"
             value={entry.vendorName}

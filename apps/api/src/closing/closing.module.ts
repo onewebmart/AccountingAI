@@ -9,6 +9,7 @@ import { GlModule } from '../gl/gl.module';
 import { ClosingService } from './closing.service';
 import { ClosingController } from './closing.controller';
 
+import { MonthEndModule } from '../month-end/month-end.module';
 @Module({
   imports: [
     MongooseModule.forFeature([
@@ -20,6 +21,7 @@ import { ClosingController } from './closing.controller';
       { name: BankStatementLine.name, schema: BankStatementLineSchema },
     ]),
     GlModule, // PostingService, AccountsService, AuditService; Journal, LedgerAccount and PeriodLock models
+    MonthEndModule, // depreciation due, for the checklist
   ],
   controllers: [ClosingController],
   providers: [ClosingService],

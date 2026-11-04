@@ -1,4 +1,5 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
+import { AdjustmentsService } from '../month-end/adjustments.service';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { AuditService } from '../gl/audit.service';
@@ -21,13 +22,16 @@ const MAX_CATCH_UP = 12;
 export interface CreateRecurringInput {
   kind: RecurringKind;
   name: string;
-  partyId: string;
+  /** Bills and invoices. */
+  partyId?: string;
   frequency: Frequency;
   dayOfMonth: number;
   startDate: string;
   endDate?: string | null;
   dueInDays?: number;
-  amountsPaise: { taxableValue: number; cgst: number; sgst: number; igst: number; cess: number; total: number };
+  amountsPaise?: { taxableValue: number; cgst: number; sgst: number; igst: number; cess: number; total: number };
+  /** Journals: balanced lines. */
+  journalLines?: Array<{ accountId: string; debitPaise: number; creditPaise: number }>;
   lineItems?: Array<{
     description: string;
     hsnSac?: string | null;
@@ -63,10 +67,15 @@ export class RecurringService {
     private bills: PurchaseBillsService,
     private invoices: SalesInvoicesService,
     private audit: AuditService,
+    // Optional so specs that build this by hand need not wire month-end.
+    @Optional() private adjustments?: AdjustmentsService,
   ) {}
 
   async create(orgId: string, actorId: string, input: CreateRecurringInput): Promise<RecurringTemplateDocument> {
+    if (input.kind === 'journal') return this.createJournal(orgId, actorId, input);
     const a = input.amountsPaise;
+    if (!a) throw new BadRequestException('A recurring bill or invoice needs its amounts.');
+    if (!input.partyId) throw new BadRequestException('Pick the vendor or customer.');
     const parts = [a.taxableValue, a.cgst, a.sgst, a.igst, a.cess, a.total];
     if (!parts.every((p) => Number.isInteger(p) && p >= 0)) {
       throw new BadRequestException('Amounts must be whole paise, zero or more.');
@@ -121,6 +130,32 @@ export class RecurringService {
     return template;
   }
 
+  /** A journal that repeats (a monthly provision, a fixed allocation), drafted into the review queue. */
+  private async createJournal(orgId: string, actorId: string, input: CreateRecurringInput): Promise<RecurringTemplateDocument> {
+    const lines = (input.journalLines ?? []).filter((l) => l.debitPaise > 0 || l.creditPaise > 0);
+    if (lines.length < 2) throw new BadRequestException('A journal needs at least two lines.');
+    for (const l of lines) {
+      if (!Number.isInteger(l.debitPaise) || !Number.isInteger(l.creditPaise) || l.debitPaise < 0 || l.creditPaise < 0) throw new BadRequestException('Amounts are whole paise, not negative.');
+      if (l.debitPaise > 0 && l.creditPaise > 0) throw new BadRequestException('A line is a debit or a credit, not both.');
+      if (!Types.ObjectId.isValid(l.accountId)) throw new BadRequestException('No such account.');
+    }
+    const debit = lines.reduce((s, l) => s + l.debitPaise, 0);
+    if (debit !== lines.reduce((s, l) => s + l.creditPaise, 0)) throw new BadRequestException('Debits and credits must be equal.');
+    if (!DATE.test(input.startDate)) throw new BadRequestException('startDate must be a date like 2026-10-01');
+    if (input.endDate && (!DATE.test(input.endDate) || input.endDate < input.startDate)) throw new BadRequestException('endDate must be a date on or after startDate');
+    if (!Number.isInteger(input.dayOfMonth) || input.dayOfMonth < 1 || input.dayOfMonth > 31) throw new BadRequestException('dayOfMonth must be 1 to 31; 31 means the last day of the month');
+    const nextRunDate = firstOccurrence(input.startDate, input.dayOfMonth, input.frequency);
+    if (input.endDate && nextRunDate > input.endDate) throw new BadRequestException(`The first one would fall on ${nextRunDate}, after the end date.`);
+    const template = await this.templateModel.create({
+      orgId, kind: 'journal', name: input.name.trim(), partyId: null, frequency: input.frequency, dayOfMonth: input.dayOfMonth,
+      startDate: input.startDate, endDate: input.endDate ?? null, nextRunDate, amountsPaise: null,
+      journalLines: lines.map((l) => ({ accountId: new Types.ObjectId(l.accountId), debitPaise: l.debitPaise, creditPaise: l.creditPaise })),
+      notes: input.notes ?? null, status: 'active', createdBy: actorId,
+    });
+    await this.audit.record({ orgId, entityType: 'RecurringTemplate', entityId: template._id.toString(), action: 'CREATE', performedBy: actorId, after: { kind: 'journal', name: template.name, frequency: template.frequency, nextRunDate, totalPaise: debit } });
+    return template;
+  }
+
   async list(orgId: string) {
     const templates = await this.templateModel.find({ orgId }).sort({ status: 1, nextRunDate: 1 }).lean().exec();
     const ids = (kind: RecurringKind) => templates.filter((t) => t.kind === kind).map((t) => t.partyId);
@@ -133,16 +168,17 @@ export class RecurringService {
       _id: t._id.toString(),
       kind: t.kind,
       name: t.name,
-      partyId: t.partyId.toString(),
-      partyName: names.get(t.partyId.toString()) ?? 'Unknown',
+      partyId: t.partyId ? t.partyId.toString() : null,
+      partyName: t.partyId ? names.get(t.partyId.toString()) ?? 'Unknown' : null,
       frequency: t.frequency,
       dayOfMonth: t.dayOfMonth,
       startDate: t.startDate,
       endDate: t.endDate,
       nextRunDate: t.nextRunDate,
       dueInDays: t.dueInDays,
-      totalPaise: t.amountsPaise.total,
+      totalPaise: t.amountsPaise?.total ?? (t.journalLines ?? []).reduce((s, l) => s + l.debitPaise, 0),
       amountsPaise: t.amountsPaise,
+      journalLines: t.journalLines ?? [],
       isReverseCharge: t.isReverseCharge,
       status: t.status,
       draftedCount: t.generated.length,
@@ -208,7 +244,7 @@ export class RecurringService {
     orgId: string,
     today = todayIst(),
     actorId = 'system:recurring',
-    kinds: RecurringKind[] = ['bill', 'invoice'],
+    kinds: RecurringKind[] = ['bill', 'invoice', 'journal'],
   ): Promise<RecurringRun> {
     const run: RecurringRun = { drafted: [], failed: [] };
     const due = await this.templateModel
@@ -272,11 +308,22 @@ export class RecurringService {
     date: string,
     actorId: string,
   ): Promise<Types.ObjectId> {
+    if (t.kind === 'journal') {
+      if (!this.adjustments) throw new Error('Recurring journals need the month-end module.');
+      const proposal = await this.adjustments.propose({
+        orgId, actorId, kind: 'recurring_journal', refId: t._id.toString(), period: date, date,
+        narration: t.notes ? `${t.name} — ${t.notes}` : t.name,
+        reason: `The recurring journal "${t.name}", due ${date}.`,
+        lines: t.journalLines.map((l) => ({ accountId: l.accountId.toString(), debitPaise: l.debitPaise, creditPaise: l.creditPaise })),
+        unique: true,
+      });
+      return proposal._id as Types.ObjectId;
+    }
     const common = {
       orgId,
       actorId,
       dueDate: addDays(date, t.dueInDays),
-      amountsPaise: t.amountsPaise,
+      amountsPaise: t.amountsPaise!,
       lineItems: t.lineItems,
       notes: t.notes ? `${t.name} — ${t.notes}` : t.name,
       recurringTemplateId: t._id.toString(),
@@ -284,17 +331,18 @@ export class RecurringService {
     if (t.kind === 'bill') {
       const bill = await this.bills.create({
         ...common,
-        vendorId: t.partyId.toString(),
+        vendorId: t.partyId!.toString(),
         billDate: date,
         isReverseCharge: t.isReverseCharge,
       });
       return bill._id;
     }
-    const invoice = await this.invoices.create({ ...common, customerId: t.partyId.toString(), invoiceDate: date });
+    const invoice = await this.invoices.create({ ...common, customerId: t.partyId!.toString(), invoiceDate: date });
     return invoice._id;
   }
 
   private async party(orgId: string, kind: RecurringKind, partyId: string) {
+    if (kind === 'journal') return;
     if (!Types.ObjectId.isValid(partyId)) throw new BadRequestException('partyId is not a valid id');
     const found =
       kind === 'bill'

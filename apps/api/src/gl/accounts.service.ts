@@ -106,6 +106,7 @@ const DEFAULT_COA: SeedNode[] = [
         systemKey: SystemAccountKey.TDS_RECEIVABLE,
       },
       { code: '1410', name: 'Advances to Vendors', type: AccountType.ASSETS, systemKey: SystemAccountKey.VENDOR_ADVANCES },
+      { code: '1420', name: 'Prepaid Expenses', type: AccountType.ASSETS, systemKey: SystemAccountKey.PREPAID_EXPENSES },
     ],
   },
   {
@@ -116,6 +117,8 @@ const DEFAULT_COA: SeedNode[] = [
     children: [
       { code: '1510', name: 'Office Equipment', type: AccountType.ASSETS },
       { code: '1520', name: 'Furniture & Fixtures', type: AccountType.ASSETS },
+      { code: '1530', name: 'Computers & IT Equipment', type: AccountType.ASSETS },
+      { code: '1590', name: 'Accumulated Depreciation', type: AccountType.ASSETS, systemKey: SystemAccountKey.ACCUMULATED_DEPRECIATION },
     ],
   },
   {
@@ -162,6 +165,7 @@ const DEFAULT_COA: SeedNode[] = [
       },
       { code: '2300', name: 'TDS Payable', type: AccountType.LIABILITIES, systemKey: SystemAccountKey.TDS_PAYABLE },
       { code: '2310', name: 'Advances from Customers', type: AccountType.LIABILITIES, systemKey: SystemAccountKey.CUSTOMER_ADVANCES },
+      { code: '2320', name: 'Accrued Expenses', type: AccountType.LIABILITIES, systemKey: SystemAccountKey.ACCRUED_EXPENSES },
     ],
   },
   {
@@ -188,6 +192,7 @@ const DEFAULT_COA: SeedNode[] = [
       },
       { code: '4200', name: 'Service Revenue', type: AccountType.INCOME },
       { code: '4900', name: 'Other Income', type: AccountType.INCOME },
+      { code: '4910', name: 'Gain on Sale of Assets', type: AccountType.INCOME, systemKey: SystemAccountKey.ASSET_DISPOSAL_GAIN },
     ],
   },
   {
@@ -221,6 +226,8 @@ const DEFAULT_COA: SeedNode[] = [
       { code: '6170', name: 'Office & Stationery', type: AccountType.EXPENSE },
       { code: '6180', name: 'Advertising & Marketing', type: AccountType.EXPENSE },
       { code: '6190', name: 'Bank Charges', type: AccountType.EXPENSE },
+      { code: '6195', name: 'Depreciation', type: AccountType.EXPENSE, systemKey: SystemAccountKey.DEPRECIATION },
+      { code: '6196', name: 'Loss on Sale of Assets', type: AccountType.EXPENSE, systemKey: SystemAccountKey.ASSET_DISPOSAL_LOSS },
       { code: '6900', name: 'Miscellaneous Expenses', type: AccountType.EXPENSE },
       { code: '6990', name: 'Round Off', type: AccountType.EXPENSE, systemKey: SystemAccountKey.ROUND_OFF },
       { code: '6999', name: 'Suspense', type: AccountType.EXPENSE, systemKey: SystemAccountKey.SUSPENSE },

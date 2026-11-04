@@ -41,6 +41,12 @@ export enum SystemAccountKey {
   VENDOR_ADVANCES = 'VENDOR_ADVANCES',
   /** Paid online, held by the payment gateway until it settles to the bank, less its fee. */
   PAYMENT_GATEWAY = 'PAYMENT_GATEWAY',
+  PREPAID_EXPENSES = 'PREPAID_EXPENSES',
+  ACCRUED_EXPENSES = 'ACCRUED_EXPENSES',
+  ACCUMULATED_DEPRECIATION = 'ACCUMULATED_DEPRECIATION',
+  DEPRECIATION = 'DEPRECIATION',
+  ASSET_DISPOSAL_GAIN = 'ASSET_DISPOSAL_GAIN',
+  ASSET_DISPOSAL_LOSS = 'ASSET_DISPOSAL_LOSS',
 }
 
 @Schema({ timestamps: true, collection: 'ledger_accounts' })

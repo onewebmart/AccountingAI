@@ -17,9 +17,9 @@ type Frequency = 'monthly' | 'quarterly' | 'yearly';
 
 interface Template {
   _id: string;
-  kind: Kind;
+  kind: Kind | 'journal';
   name: string;
-  partyName: string;
+  partyName: string | null;
   frequency: Frequency;
   dayOfMonth: number;
   startDate: string;
@@ -378,11 +378,11 @@ export default function RecurringPage() {
                     <td className="px-4 py-3">
                       <p className="font-medium text-ink-900">{t.name}</p>
                       <p className="text-caption text-ink-500">
-                        {t.kind === 'bill' ? 'Bill' : 'Invoice'}
+                        {t.kind === 'bill' ? 'Bill' : t.kind === 'invoice' ? 'Invoice' : 'Journal'}
                         {t.isReverseCharge ? ' · reverse charge' : ''} · {t.draftedCount} drafted
                       </p>
                     </td>
-                    <td className="px-4 py-3 text-ink-700">{t.partyName}</td>
+                    <td className="px-4 py-3 text-ink-700">{t.partyName ?? <span className="text-ink-400">To the review queue</span>}</td>
                     <td className="px-4 py-3 text-right font-mono text-ink-900">{formatRupees(t.totalPaise)}</td>
                     <td className="px-4 py-3 text-caption text-ink-700 whitespace-nowrap">
                       {FREQUENCY_LABEL[t.frequency]}, {dayLabel(t.dayOfMonth)}

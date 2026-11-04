@@ -37,6 +37,7 @@ import { AttachmentsModule } from './attachments/attachments.module';
 import { InboundModule } from './inbound/inbound.module';
 import { ItemsModule } from './items/items.module';
 import { EinvoiceModule } from './einvoice/einvoice.module';
+import { MonthEndModule } from './month-end/month-end.module';
 
 @Module({
   imports: [
@@ -87,6 +88,7 @@ import { EinvoiceModule } from './einvoice/einvoice.module';
     InboundModule,
     ItemsModule,
     EinvoiceModule,
+    MonthEndModule,
     CrmModule,
     WorkspaceModule,
   ],

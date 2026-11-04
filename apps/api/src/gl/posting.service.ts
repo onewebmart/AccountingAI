@@ -226,7 +226,7 @@ export class PostingService {
    * carries `reversalOf: original._id`, and the unique index on that field
    * means a journal is reversed at most once — even by simultaneous requests.
    */
-  async reverse(journalId: string, reversedBy: string, session?: ClientSession): Promise<JournalDocument> {
+  async reverse(journalId: string, reversedBy: string, session?: ClientSession, opts: { date?: string; narration?: string } = {}): Promise<JournalDocument> {
     const original = await this.journalModel.findById(journalId).session(session ?? null).exec();
     if (!original) throw new NotFoundException(`Journal ${journalId} not found.`);
 
@@ -242,7 +242,8 @@ export class PostingService {
       throw new BadRequestException('This voucher is itself a reversal and cannot be reversed.');
     }
 
-    const date = new Date().toISOString().slice(0, 10);
+    const date = opts.date ?? new Date().toISOString().slice(0, 10);
+    if (date < original.date) throw new BadRequestException('A reversal cannot be dated before the voucher it reverses.');
 
     const work = async (session: ClientSession) => {
       const reversal = await this.postInSession(
@@ -251,7 +252,7 @@ export class PostingService {
           voucherType: original.voucherType,
           financialYear: financialYearOf(date),
           date,
-          narration: `Reversal of voucher #${original.voucherNumber}`,
+          narration: opts.narration ?? `Reversal of voucher #${original.voucherNumber}`,
           postedBy: reversedBy,
           reversalOf: original._id.toString(),
           lines: original.lines.map((l) => ({

@@ -23,6 +23,7 @@ import { AutomationController } from './automation.controller';
  * Money in and out on a schedule: recurring bills and invoices, drafted on
  * their dates, and payment reminders to customers.
  */
+import { MonthEndModule } from '../month-end/month-end.module';
 @Module({
   imports: [
     MongooseModule.forFeature([
@@ -38,6 +39,7 @@ import { AutomationController } from './automation.controller';
     GlModule, // AuditService
     SalesModule, // SalesInvoicesService drafts recurring invoices
     PurchaseModule, // PurchaseBillsService drafts recurring bills
+    MonthEndModule, // recurring journals go to the review queue; the daily month-end sweep
   ],
   controllers: [AutomationController],
   providers: [

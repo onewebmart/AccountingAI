@@ -11,6 +11,7 @@ import {
   SendReminderJob,
 } from './reminders.service';
 import { todayIst } from './schedule';
+import { MonthEndSweepService } from '../month-end/month-end-sweep.service';
 
 /**
  * Two jobs on one queue:
@@ -28,6 +29,7 @@ export class AutomationProcessor extends WorkerHost {
   constructor(
     private readonly recurring: RecurringService,
     private readonly reminders: RemindersService,
+    private readonly monthEnd: MonthEndSweepService,
   ) {
     super();
   }
@@ -41,6 +43,7 @@ export class AutomationProcessor extends WorkerHost {
     if (job.name !== DAILY_BOOKS_JOB) return;
 
     const today = (job.data as { today?: string })?.today ?? todayIst();
+    await this.monthEnd.sweep(today);
     const orgIds = [...new Set([...(await this.recurring.orgIdsDue(today)), ...(await this.reminders.orgIdsEnabled())])];
     for (const orgId of orgIds) {
       try {

@@ -15,6 +15,8 @@ interface ApiProposal {
   _id: string;
   documentType?: string;
   vendorName?: string | null;
+  narration?: string | null;
+  adjustment?: { kind: string; period: string | null; reason: string; reverseOn?: string | null } | null;
   vendorGstin?: string | null;
   invoiceNumber?: string | null;
   invoiceDate?: string | null;
@@ -85,6 +87,8 @@ function mapApiProposal(p: ApiProposal): ProposedEntryData {
     documentUrl: p.documentUrl,
     category: p.category ?? null,
     checks: p.checks ?? [],
+    narration: p.narration ?? null,
+    adjustment: p.adjustment ?? null,
     suggestedLines: (p.suggestedLines ?? []).map((l) => ({
       accountId: String(l.accountId),
       accountName: l.accountName,
@@ -352,8 +356,8 @@ export default function ReviewQueuePage() {
                   : 'border-line-200 bg-surface-card text-ink-500 hover:border-ink-400'
               }`}
             >
-              <p className="font-medium truncate">{e.vendorName ?? 'Unknown vendor'}</p>
-              <p className="text-ink-400 truncate">{e.invoiceNumber ?? '—'}</p>
+              <p className="font-medium truncate">{e.adjustment ? e.narration : e.vendorName ?? 'Unknown vendor'}</p>
+              <p className="text-ink-400 truncate">{e.adjustment ? 'Month-end' : e.invoiceNumber ?? '—'}</p>
               {e.confidenceOverall < 0.8 && (
                 <p className="text-pending-fg mt-0.5">⬤ Needs attention</p>
               )}

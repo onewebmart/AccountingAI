@@ -9,6 +9,7 @@ import {
   FileText,
   ShoppingCart,
   Package,
+  CalendarCheck,
   TrendingUp,
   Building2,
   ReceiptIndianRupee,
@@ -96,6 +97,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: '/reports', label: 'Reports', icon: <BarChart3 size={18} /> },
       { href: '/insights', label: 'Insights', icon: <Lightbulb size={18} /> },
+      { href: '/month-end', label: 'Month-end', icon: <CalendarCheck size={18} /> },
       { href: '/closing', label: 'Close the books', icon: <Lock size={18} /> },
       { href: '/audit', label: 'Audit trail', icon: <ShieldCheck size={18} /> },
     ],

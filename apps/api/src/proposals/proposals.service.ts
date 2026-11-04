@@ -406,7 +406,7 @@ export class ProposalsService {
           voucherType: toVoucherType(proposal.documentType),
           financialYear: proposal.financialYear,
           date: proposal.invoiceDate ?? new Date().toISOString().slice(0, 10),
-          narration: `${proposal.documentType.replace(/_/g, ' ')} — ${proposal.vendorName ?? 'Unknown vendor'} — ${proposal.invoiceNumber ?? 'No ref'}`,
+          narration: proposal.narration ?? `${proposal.documentType.replace(/_/g, ' ')} — ${proposal.vendorName ?? 'Unknown vendor'} — ${proposal.invoiceNumber ?? 'No ref'}`,
           postedBy: actorId,
           lines: linesToPost,
         },
@@ -499,6 +499,8 @@ export class ProposalsService {
                 rejectedBy: actorId,
                 rejectionReason: reason ?? null,
               },
+              // A rejected adjustment may be drafted again for its period.
+              $unset: { adjustmentKey: 1 },
             },
             { new: true, session },
           )

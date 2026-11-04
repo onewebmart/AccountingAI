@@ -4,7 +4,7 @@ import { tenantIsolationPlugin } from '../../database/tenant.plugin';
 
 export type RecurringTemplateDocument = HydratedDocument<RecurringTemplate>;
 
-export type RecurringKind = 'bill' | 'invoice';
+export type RecurringKind = 'bill' | 'invoice' | 'journal';
 export type RecurringStatus = 'active' | 'paused' | 'ended';
 
 const paise = { type: Number, required: true, validate: { validator: Number.isInteger, message: 'must be whole paise' } };
@@ -48,11 +48,11 @@ class Generated {
 export class RecurringTemplate {
   @Prop({ required: true, index: true }) orgId: string;
 
-  @Prop({ type: String, enum: ['bill', 'invoice'], required: true }) kind: RecurringKind;
+  @Prop({ type: String, enum: ['bill', 'invoice', 'journal'], required: true }) kind: RecurringKind;
   /** What people call it: "Office rent". */
   @Prop({ type: String, required: true }) name: string;
-  /** The vendor for a bill, the customer for an invoice. */
-  @Prop({ type: MongooseSchema.Types.ObjectId, required: true }) partyId: Types.ObjectId;
+  /** The vendor for a bill, the customer for an invoice; none for a journal. */
+  @Prop({ type: MongooseSchema.Types.ObjectId, default: null }) partyId: Types.ObjectId | null;
 
   @Prop({ type: String, enum: ['monthly', 'quarterly', 'yearly'], required: true })
   frequency: 'monthly' | 'quarterly' | 'yearly';
@@ -65,7 +65,10 @@ export class RecurringTemplate {
   /** Days from the document date to its due date. */
   @Prop({ type: Number, default: 15, min: 0, max: 365 }) dueInDays: number;
 
-  @Prop({ type: TemplateAmounts, required: true }) amountsPaise: TemplateAmounts;
+  @Prop({ type: TemplateAmounts, default: null }) amountsPaise: TemplateAmounts | null;
+  /** Journals only: the lines each one carries. Drafted into the review queue, never posted by the template. */
+  @Prop({ type: [{ accountId: { type: MongooseSchema.Types.ObjectId, ref: 'LedgerAccount' }, debitPaise: paise, creditPaise: paise }], default: [] })
+  journalLines: Array<{ accountId: Types.ObjectId; debitPaise: number; creditPaise: number }>;
   @Prop({ type: [TemplateLine], default: [] }) lineItems: TemplateLine[];
   /** Bills only: GST on this purchase is ours to pay. */
   @Prop({ type: Boolean, default: false }) isReverseCharge: boolean;
