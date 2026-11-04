@@ -208,6 +208,8 @@ export const api = {
     request<T>(path, { method: 'POST', body: body instanceof FormData ? body : JSON.stringify(body) }),
   patch: <T>(path: string, body?: unknown) =>
     request<T>(path, { method: 'PATCH', body: JSON.stringify(body) }),
+  put: <T>(path: string, body?: unknown) =>
+    request<T>(path, { method: 'PUT', body: JSON.stringify(body) }),
   delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
   /** A file from the API, such as an invoice PDF. */
   blob: async (path: string) => (await authorisedFetch(path)).blob(),

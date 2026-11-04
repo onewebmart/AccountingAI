@@ -2,6 +2,8 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { ReportBarChart } from '@/components/reports/report-chart';
+import { AskBox } from '@/components/reports/ask-box';
+import { NarrativeCard } from '@/components/reports/narrative-card';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -200,6 +202,11 @@ export default function DashboardPage() {
         <h1 className="text-h1 font-display text-ink-900">
           Dashboard
         </h1>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <AskBox />
+        <NarrativeCard />
       </div>
 
       {!hasData && !isLoadingAny ? (

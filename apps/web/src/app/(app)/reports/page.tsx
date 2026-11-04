@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { ReportBarChart } from '@/components/reports/report-chart';
+import Link from 'next/link';
 import { CheckCircle, Download, Send, FileText } from 'lucide-react';
 import { api } from '@/lib/api';
 import { currentFinancialYear, recentFinancialYears } from '@/lib/financial-year';
@@ -483,6 +484,9 @@ export default function ReportsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Link href="/reports/management" className="rounded-md border border-line-200 bg-surface-card px-3 py-1.5 text-body font-medium text-ink-900 hover:bg-surface-sink">
+            Management reports
+          </Link>
           <select
             value={financialYear}
             onChange={(e) => setFinancialYear(e.target.value)}
