@@ -55,7 +55,17 @@ export interface GspProvider {
   updateVehicle(ewbNo: string, vehicleNo: string, reasonCode: string, remark: string): Promise<void>;
   extendEwb(ewbNo: string, remainingKm: number, reasonCode: string, remark: string): Promise<void>;
   cancelEwb(ewbNo: string, reasonCode: string, remark: string): Promise<void>;
+
+  /** Returns: save the JSON to the portal, ask for the OTP, then file with it (EVC). */
+  saveReturn(gstin: string, returnType: ReturnType_, period: string, json: Record<string, unknown>): Promise<{ reference: string }>;
+  requestFilingOtp(gstin: string, returnType: ReturnType_, period: string): Promise<{ sentTo: string }>;
+  fileReturn(gstin: string, returnType: ReturnType_, period: string, otp: string): Promise<{ arn: string; filedAt: string }>;
 }
+
+export type ReturnType_ = 'GSTR1' | 'GSTR3B';
+
+/** The mock's OTP: shown on screen with the test-gateway note, since nothing is sent. */
+export const MOCK_FILING_OTP = '123456';
 
 /** The IRN is a SHA-256 of the supplier's GSTIN, financial year, document type and number. */
 export function irnFor(payload: EinvoicePayload): string {
@@ -105,4 +115,31 @@ export class MockGsp implements GspProvider {
   async updateVehicle() {}
   async extendEwb() {}
   async cancelEwb() {}
+
+  private readonly saved = new Map<string, string>();
+  private readonly filed = new Map<string, string>();
+
+  async saveReturn(gstin: string, returnType: ReturnType_, period: string, json: Record<string, unknown>) {
+    const key = `${gstin}|${returnType}|${period}`;
+    if (this.filed.has(key)) throw new GspRejected([{ code: 'RET191', message: 'Return is already filed for this period' }]);
+    const reference = createHash('sha256').update(`${key}|${JSON.stringify(json)}`).digest('hex').slice(0, 16).toUpperCase();
+    this.saved.set(key, reference);
+    return { reference };
+  }
+
+  async requestFilingOtp(gstin: string, returnType: ReturnType_, period: string) {
+    if (!this.saved.has(`${gstin}|${returnType}|${period}`)) throw new GspRejected([{ code: 'RET400', message: 'Save the return before filing it' }]);
+    return { sentTo: 'the mobile registered on the GST portal (test gateway: use 123456)' };
+  }
+
+  async fileReturn(gstin: string, returnType: ReturnType_, period: string, otp: string) {
+    const key = `${gstin}|${returnType}|${period}`;
+    if (otp !== MOCK_FILING_OTP) throw new GspRejected([{ code: 'AUTH4033', message: 'Invalid OTP' }]);
+    if (this.filed.has(key)) throw new GspRejected([{ code: 'RET191', message: 'Return is already filed for this period' }]);
+    if (!this.saved.has(key)) throw new GspRejected([{ code: 'RET400', message: 'Save the return before filing it' }]);
+    // ARN: AA, state, MMYY, then a serial.
+    const arn = `AA${gstin.slice(0, 2)}${period.slice(5, 7)}${period.slice(2, 4)}${createHash('sha256').update(key).digest('hex').slice(0, 7).toUpperCase()}`;
+    this.filed.set(key, arn);
+    return { arn, filedAt: new Date().toISOString() };
+  }
 }

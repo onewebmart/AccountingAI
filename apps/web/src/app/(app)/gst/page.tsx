@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Rule37Watchlist, TwoBExplanations } from '@/components/gst/itc-panels';
+import { Gstr9Panel } from '@/components/gst/gstr9-panel';
 import { toCsv, paiseToCsvAmount, downloadCsvFile } from '@/lib/csv';
 import { GstReturnsPanel } from '@/components/gst/gst-returns-panel';
 
@@ -119,10 +120,11 @@ function ReconChip({ status }: { status: ReconStatus }) {
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
 
-type Tab = 'returns' | 'purchase' | 'sales' | 'recon' | 'summary';
+type Tab = 'returns' | 'annual' | 'purchase' | 'sales' | 'recon' | 'summary';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'returns', label: 'GSTR-1 / 3B' },
+  { id: 'annual', label: 'GSTR-9' },
   { id: 'purchase', label: 'Purchase register' },
   { id: 'sales', label: 'Sales register' },
   { id: 'recon', label: '2A/2B reconciliation' },
@@ -431,6 +433,7 @@ export default function GstPage() {
 
       {/* ── Returns ── */}
       {tab === 'returns' && <GstReturnsPanel period={period} onDownloaded={showToast} />}
+      {tab === 'annual' && <Gstr9Panel />}
 
       {/* ── Purchase register ── */}
       {tab === 'purchase' && (

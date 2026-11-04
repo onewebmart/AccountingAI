@@ -4,6 +4,7 @@ import {
   Get,
   Post,
   Param,
+  ParseEnumPipe,
   Query,
   Body,
   Request,
@@ -21,6 +22,20 @@ import { GstService, ImportGstr2bLineDto } from './gst.service';
 import { Gstr2bImportService } from './gstr2b-import.service';
 import { GstReturnsService } from './gst-returns.service';
 import { todayIst } from '../automation/schedule';
+import { GstFilingService } from './gst-filing.service';
+import { IsOptional, IsString, Length, Matches } from 'class-validator';
+
+const RETURN_KINDS = { GSTR1: 'GSTR1', GSTR3B: 'GSTR3B' } as const;
+type ReturnKind = keyof typeof RETURN_KINDS;
+
+class FileReturnDto {
+  @Matches(/^\d{6}$/, { message: 'Enter the six-digit OTP.' }) otp: string;
+}
+
+class GstPaymentDto {
+  @IsOptional() @Matches(/^\d{4}-\d{2}-\d{2}$/) paidOn?: string;
+  @IsOptional() @IsString() @Length(0, 30) challanNo?: string;
+}
 
 interface AuthRequest {
   user: { orgId: string; sub: string };
@@ -34,6 +49,7 @@ export class GstController {
     private readonly gstService: GstService,
     private readonly gstr2bImport: Gstr2bImportService,
     private readonly returns: GstReturnsService,
+    private readonly filing: GstFilingService,
   ) {}
 
   // ── Returns ──────────────────────────────────────────────────────────────
@@ -59,6 +75,47 @@ export class GstController {
   @Get('returns/gstr3b/json')
   gstr3bJson(@Request() req: AuthRequest, @Query('period') period: string) {
     return this.returns.gstr3bJson(req.user.orgId, period);
+  }
+
+  // ── Filing through the GSP ────────────────────────────────────────────────
+
+  @Get('filings')
+  filings(@Request() req: AuthRequest, @Query('period') period: string) {
+    return this.filing.status(req.user.orgId, period);
+  }
+
+  /** This month against the last six: what to look at before filing. */
+  @Get('filings/:type/:period/review')
+  review(@Request() req: AuthRequest, @Param('type', new ParseEnumPipe(RETURN_KINDS)) type: ReturnKind, @Param('period') period: string) {
+    return this.filing.review(req.user.orgId, type, period);
+  }
+
+  @Post('filings/:type/:period/save')
+  saveReturn(@Request() req: AuthRequest, @Param('type', new ParseEnumPipe(RETURN_KINDS)) type: ReturnKind, @Param('period') period: string) {
+    return this.filing.save(req.user.orgId, req.user.sub, type, period);
+  }
+
+  @Post('filings/:type/:period/otp')
+  filingOtp(@Request() req: AuthRequest, @Param('type', new ParseEnumPipe(RETURN_KINDS)) type: ReturnKind, @Param('period') period: string) {
+    return this.filing.requestOtp(req.user.orgId, req.user.sub, type, period);
+  }
+
+  /** Final: the return goes to the portal under the business's GSTIN. */
+  @Post('filings/:type/:period/file')
+  fileReturn(@Request() req: AuthRequest, @Param('type', new ParseEnumPipe(RETURN_KINDS)) type: ReturnKind, @Param('period') period: string, @Body() body: FileReturnDto) {
+    return this.filing.file(req.user.orgId, req.user.sub, type, period, body.otp);
+  }
+
+  /** The month's set-off and cash payment as one voucher: a posting, so it needs the right to post. */
+  @Post('filings/GSTR3B/:period/payment')
+  @RequirePermission(Permission.POST_JOURNAL)
+  gstPayment(@Request() req: AuthRequest, @Param('period') period: string, @Body() body: GstPaymentDto) {
+    return this.filing.recordPayment(req.user.orgId, req.user.sub, period, body);
+  }
+
+  @Get('returns/gstr9')
+  gstr9(@Request() req: AuthRequest, @Query('fy') fy: string) {
+    return this.filing.gstr9(req.user.orgId, fy);
   }
 
   /** Each mismatch between GSTR-2B and the books, explained, with the message for the vendor. */

@@ -1,5 +1,4 @@
 import { Module } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
 import { GlModule } from '../gl/gl.module';
 import { JournalsModule } from '../journals/journals.module';
@@ -10,18 +9,7 @@ import { EInvoice, EInvoiceSchema } from './schemas/e-invoice.schema';
 import { EWayBill, EWayBillSchema } from './schemas/e-way-bill.schema';
 import { EinvoiceService } from './einvoice.service';
 import { EinvoiceController } from './einvoice.controller';
-import { GSP_PROVIDER, GspProvider, MockGsp } from './gsp.provider';
-
-/**
- * GSP_PROVIDER picks the gateway. Only the mock exists until a GSP is
- * contracted: an unknown name stops the API rather than quietly pretending
- * invoices were registered.
- */
-export function gspProvider(config: ConfigService): GspProvider {
-  const which = config.get<string>('gsp.provider') ?? 'mock';
-  if (which === 'mock') return new MockGsp();
-  throw new Error(`GSP_PROVIDER "${which}" has no adapter yet: only "mock" is available.`);
-}
+import { GspModule } from '../gsp/gsp.module';
 
 /** E-invoices (IRN) and e-way bills for posted sales. */
 @Module({
@@ -35,9 +23,10 @@ export function gspProvider(config: ConfigService): GspProvider {
     ]),
     GlModule, // AuditService
     JournalsModule, // JournalReversalService: cancelling an IRN reverses the sale
+    GspModule,
   ],
   controllers: [EinvoiceController],
-  providers: [EinvoiceService, { provide: GSP_PROVIDER, inject: [ConfigService], useFactory: gspProvider }],
+  providers: [EinvoiceService],
   exports: [EinvoiceService],
 })
 export class EinvoiceModule {}

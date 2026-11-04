@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { AlertCircle, AlertTriangle, Download } from 'lucide-react';
+import { FilingCard } from './filing-card';
 import { Button } from '@/components/ui/button';
 import { QueryError } from '@/components/ui/query-error';
 import { api } from '@/lib/api';
@@ -544,6 +545,7 @@ export function GstReturnsPanel({ period, onDownloaded }: { period: string; onDo
       ) : (
         <>
           <Issues issues={issues} />
+          <FilingCard kind={kind === 'gstr1' ? 'GSTR1' : 'GSTR3B'} period={period} onToast={onDownloaded} />
           {kind === 'gstr1' ? <Gstr1View r={gstr1.data!} /> : <Gstr3bView r={gstr3b.data!} />}
           <p className="text-caption text-ink-500">
             Worked out from posted invoices, bills and notes dated in this month. Check the JSON in the GST offline

@@ -15,6 +15,9 @@ import { GstController } from './gst.controller';
 import { Gstr2bImportService } from './gstr2b-import.service';
 import { IngestModule } from '../ingest/ingest.module';
 import { GlModule } from '../gl/gl.module';
+import { GspModule } from '../gsp/gsp.module';
+import { GstFiling, GstFilingSchema } from './schemas/gst-filing.schema';
+import { GstFilingService } from './gst-filing.service';
 
 @Module({
   imports: [
@@ -29,12 +32,14 @@ import { GlModule } from '../gl/gl.module';
       { name: CreditNote.name, schema: CreditNoteSchema },
       { name: DebitNote.name, schema: DebitNoteSchema },
       { name: OrgSettings.name, schema: OrgSettingsSchema },
+      { name: GstFiling.name, schema: GstFilingSchema },
     ]),
     IngestModule,
+    GspModule, // filing through the GST Suvidha Provider
     GlModule, // real ledger accounts for 2B entries // spreadsheet parsing for GSTR-2B Excel downloads
   ],
   controllers: [GstController],
-  providers: [GstService, Gstr2bImportService, GstReturnsService],
+  providers: [GstService, Gstr2bImportService, GstReturnsService, GstFilingService],
   exports: [GstService],
 })
 export class GstModule {}
