@@ -47,6 +47,7 @@ export enum SystemAccountKey {
   DEPRECIATION = 'DEPRECIATION',
   ASSET_DISPOSAL_GAIN = 'ASSET_DISPOSAL_GAIN',
   ASSET_DISPOSAL_LOSS = 'ASSET_DISPOSAL_LOSS',
+  EMPLOYEE_PAYABLE = 'EMPLOYEE_PAYABLE',
 }
 
 @Schema({ timestamps: true, collection: 'ledger_accounts' })

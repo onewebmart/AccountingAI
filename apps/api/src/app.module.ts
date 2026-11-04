@@ -40,6 +40,7 @@ import { EinvoiceModule } from './einvoice/einvoice.module';
 import { MonthEndModule } from './month-end/month-end.module';
 import { OrdersModule } from './orders/orders.module';
 import { ApprovalsModule } from './approvals/approvals.module';
+import { ExpensesModule } from './expenses/expenses.module';
 
 @Module({
   imports: [
@@ -93,6 +94,7 @@ import { ApprovalsModule } from './approvals/approvals.module';
     MonthEndModule,
     OrdersModule,
     ApprovalsModule,
+    ExpensesModule,
     CrmModule,
     WorkspaceModule,
   ],

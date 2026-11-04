@@ -166,6 +166,7 @@ const DEFAULT_COA: SeedNode[] = [
       { code: '2300', name: 'TDS Payable', type: AccountType.LIABILITIES, systemKey: SystemAccountKey.TDS_PAYABLE },
       { code: '2310', name: 'Advances from Customers', type: AccountType.LIABILITIES, systemKey: SystemAccountKey.CUSTOMER_ADVANCES },
       { code: '2320', name: 'Accrued Expenses', type: AccountType.LIABILITIES, systemKey: SystemAccountKey.ACCRUED_EXPENSES },
+      { code: '2330', name: 'Employee Reimbursements Payable', type: AccountType.LIABILITIES, systemKey: SystemAccountKey.EMPLOYEE_PAYABLE },
     ],
   },
   {

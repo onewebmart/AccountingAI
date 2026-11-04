@@ -24,6 +24,8 @@ export interface GateInput {
   actorId: string;
   actorRole: string;
   facts: RiskFacts;
+  /** Applies when no policy does: expense claims always need someone else's approval. */
+  fallback?: { name: string; approvalsRequired: 1 | 2 };
 }
 
 /** Thrown when a posting needs approval first: the request is made, and says why. */
@@ -89,9 +91,10 @@ export class ApprovalsService {
    * throws ApprovalNeeded, having made or advanced the request, when not.
    */
   async gate(g: GateInput): Promise<void> {
-    const policies = (await this.policyModel.find({ orgId: g.orgId, docType: g.docType, active: true, minAmountPaise: { $lte: g.amountPaise } }).lean().exec()).filter(
+    const found = (await this.policyModel.find({ orgId: g.orgId, docType: g.docType, active: true, minAmountPaise: { $lte: g.amountPaise } }).lean().exec()).filter(
       (p) => !p.newVendorOnly || g.facts.firstFromVendor,
     );
+    const policies = found.length ? found : g.fallback ? [{ name: g.fallback.name, approvalsRequired: g.fallback.approvalsRequired, approverRoles: [] as string[] }] : [];
     if (policies.length === 0) return;
 
     if (g.docId) {
@@ -158,6 +161,14 @@ export class ApprovalsService {
   }
 
   // ── Requests ──────────────────────────────────────────────────────────────
+
+  /** The latest request for a document, to tell what became of it. */
+  async latestFor(orgId: string, docType: ApprovalDocType, docIds: string[]) {
+    const rows = await this.requestModel.find({ orgId, docType, docId: { $in: docIds } }).sort({ createdAt: -1 }).lean().exec();
+    const out = new Map<string, (typeof rows)[number]>();
+    for (const r of rows) if (r.docId && !out.has(r.docId)) out.set(r.docId, r);
+    return out;
+  }
 
   async list(orgId: string, status?: 'pending' | 'approved' | 'rejected') {
     return this.requestModel.find({ orgId, ...(status ? { status } : {}) }).sort({ createdAt: -1 }).limit(200).lean().exec();

@@ -18,6 +18,7 @@ const MODEL: Record<AttachableType, string> = {
   PartyPayment: 'PartyPayment',
   Customer: 'Customer',
   Vendor: 'Vendor',
+  ExpenseClaim: 'ExpenseClaim',
 };
 
 /**
