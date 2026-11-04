@@ -36,6 +36,7 @@ interface OrgSettings {
   displayName?: string | null;
   gstin?: string | null;
   pan?: string | null;
+  tan?: string | null;
   address?: string | null;
   city?: string | null;
   pincode?: string | null;
@@ -449,6 +450,7 @@ function TaxGstTab() {
   const [form, setForm] = useState({
     gstin: '',
     pan: '',
+    tan: '',
     stateCode: '',
     gstFilingFrequency: 'monthly' as 'monthly' | 'quarterly',
   });
@@ -460,6 +462,7 @@ function TaxGstTab() {
     setForm({
       gstin: remoteSettings.gstin ?? '',
       pan: remoteSettings.pan ?? '',
+      tan: remoteSettings.tan ?? '',
       stateCode: remoteSettings.stateCode ?? '',
       gstFilingFrequency: remoteSettings.gstFilingFrequency ?? 'monthly',
     });
@@ -480,6 +483,7 @@ function TaxGstTab() {
       await updateMutation.mutateAsync({
         gstin: form.gstin || undefined,
         pan: form.pan || undefined,
+        tan: form.tan || undefined,
         stateCode: form.stateCode || undefined,
         gstFilingFrequency: form.gstFilingFrequency,
       });
@@ -526,6 +530,18 @@ function TaxGstTab() {
             onChange={(e) => setForm({ ...form, pan: e.target.value.toUpperCase() })}
             className="w-full rounded-md border border-line-200 bg-surface-card px-3 py-2 font-mono text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-brand-500"
           />
+        </div>
+
+        <div>
+          <label className="block text-caption font-medium text-ink-700 mb-1">TAN</label>
+          <input
+            type="text"
+            value={displayForm.tan}
+            maxLength={10}
+            onChange={(e) => setForm({ ...form, tan: e.target.value.toUpperCase() })}
+            className="w-full rounded-md border border-line-200 bg-surface-card px-3 py-2 font-mono text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-brand-500"
+          />
+          <p className="text-caption text-ink-400 mt-1">For TDS returns (Form 26Q), like MUMK12345A</p>
         </div>
 
         <div>

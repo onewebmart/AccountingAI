@@ -14,6 +14,8 @@ export class OrgSettings {
   @Prop({ type: String, default: null }) displayName: string | null;
   @Prop({ type: String, default: null }) gstin: string | null;
   @Prop({ type: String, default: null }) pan: string | null;
+  /** Tax deduction account number: the TDS statements are filed under it. */
+  @Prop({ type: String, default: null }) tan: string | null;
   /** Printed on invoices: a tax invoice must carry the supplier's address (Rule 46). */
   @Prop({ type: String, default: null }) address: string | null;
   @Prop({ type: String, default: null }) city: string | null;

@@ -9,6 +9,7 @@ import { GlModule } from '../gl/gl.module';
 import { TdsService } from './tds.service';
 import { TdsController } from './tds.controller';
 
+import { OrgSettings, OrgSettingsSchema } from '../org-settings/schemas/org-settings.schema';
 @Module({
   imports: [
     MongooseModule.forFeature([
@@ -17,6 +18,7 @@ import { TdsController } from './tds.controller';
       { name: Vendor.name, schema: VendorSchema },
       { name: SalesInvoice.name, schema: SalesInvoiceSchema },
       { name: Customer.name, schema: CustomerSchema },
+      { name: OrgSettings.name, schema: OrgSettingsSchema },
     ]),
     GlModule,
   ],

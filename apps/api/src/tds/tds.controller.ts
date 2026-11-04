@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Query, Request, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, Query, Request, Res, UseGuards } from '@nestjs/common';
 import { IsIn, IsISO8601, IsString, Length, Matches } from 'class-validator';
 import { Permission } from '@ai-accounting/shared';
 import { RequirePermission } from '../auth/decorators';
@@ -27,6 +27,8 @@ class DepositTdsDto {
   challanNumber: string;
 }
 
+import { Response } from 'express';
+import { Quarter, form26qCsv } from './form26q';
 const thisYear = () => financialYearOf(new Date().toISOString().slice(0, 10));
 
 @UseGuards(JwtAuthGuard, PermissionGuard)
@@ -52,6 +54,24 @@ export class TdsController {
   @RequirePermission(Permission.VIEW_REPORTS)
   deposits(@Request() req: AuthRequest) {
     return this.tds.deposits(req.user.orgId);
+  }
+
+  /** The quarter's Form 26Q, checked, and what each vendor's Form 16A will show. */
+  @Get('26q')
+  @RequirePermission(Permission.VIEW_REPORTS)
+  form26q(@Request() req: AuthRequest, @Query('financialYear') financialYear: string | undefined, @Query('quarter') quarter: Quarter) {
+    return this.tds.form26q(req.user.orgId, financialYear || thisYear(), quarter);
+  }
+
+  /** The deductee rows as CSV, to key into Protean's Return Preparation Utility. */
+  @Get('26q/csv')
+  @RequirePermission(Permission.VIEW_REPORTS)
+  async form26qCsv(@Request() req: AuthRequest, @Query('financialYear') financialYear: string | undefined, @Query('quarter') quarter: Quarter, @Res() res: Response) {
+    const fy = financialYear || thisYear();
+    const r = await this.tds.form26q(req.user.orgId, fy, quarter);
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="26Q-${fy}-${quarter}.csv"`);
+    res.send(form26qCsv(r));
   }
 
   /** TDS customers deducted from payments to us, to match against Form 26AS. */

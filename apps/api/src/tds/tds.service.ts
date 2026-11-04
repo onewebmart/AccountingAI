@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, Optional } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { BillStatus, InvoiceStatus, VoucherType } from '@ai-accounting/shared';
@@ -55,6 +55,9 @@ export interface DepositInput {
  * in and its section, which is how it is deposited (one challan each) and due
  * (the 7th of the next month, 30 April for March).
  */
+import { Quarter, build26q } from './form26q';
+import { todayIst } from '../automation/schedule';
+import { OrgSettings, OrgSettingsDocument } from '../org-settings/schemas/org-settings.schema';
 @Injectable()
 export class TdsService {
   private readonly logger = new Logger(TdsService.name);
@@ -68,6 +71,8 @@ export class TdsService {
     private accountsService: AccountsService,
     private postingService: PostingService,
     private auditService: AuditService,
+    // Optional so specs that build this by hand need not register it.
+    @Optional() @InjectModel(OrgSettings.name) private settingsModel?: Model<OrgSettingsDocument>,
   ) {}
 
   async payable(orgId: string, financialYear: string): Promise<{ rows: TdsPayableRow[]; months: TdsMonth[] }> {
@@ -237,6 +242,26 @@ export class TdsService {
    * TDS customers deducted from what they paid us — to match against Form 26AS
    * before claiming it.
    */
+  /** The quarter's Form 26Q, checked, with what each vendor's Form 16A will show. */
+  async form26q(orgId: string, financialYear: string, quarter: Quarter, today = todayIst()) {
+    if (!['Q1', 'Q2', 'Q3', 'Q4'].includes(quarter)) throw new BadRequestException('quarter is Q1, Q2, Q3 or Q4');
+    const [{ rows }, deposits, settings] = await Promise.all([
+      this.payable(orgId, financialYear),
+      this.deposits(orgId),
+      this.settingsModel?.findOne({ orgId }).lean().exec() ?? null,
+    ]);
+    return build26q({
+      financialYear,
+      quarter,
+      deductor: { name: settings?.displayName?.trim() || 'Your business', tan: settings?.tan?.trim().toUpperCase() || null, pan: settings?.pan?.trim().toUpperCase() || null },
+      rows,
+      deposits: deposits
+        .filter((d) => d.status === 'posted')
+        .map((d) => ({ id: String(d._id), month: d.month, section: d.section, amountPaise: d.amountPaise, paidOn: d.paidOn, challanNumber: d.challanNumber })),
+      today,
+    });
+  }
+
   async receivable(orgId: string, financialYear: string) {
     const { start, end } = financialYearRange(financialYear);
     const invoices = await withOrg(orgId, () =>
