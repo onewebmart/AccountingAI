@@ -88,6 +88,8 @@ export class GstReturnsService {
         customerState: customer.stateCode,
         amounts: inv.amountsPaise,
         lines: inv.lineItems ?? [],
+        exportType: inv.exportType ?? null,
+        shippingBill: inv.shippingBill ?? null,
       };
     };
     const noteInvoiceById = new Map(noteInvoices.map((i) => [i._id.toString(), i]));

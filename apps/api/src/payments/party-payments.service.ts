@@ -411,8 +411,8 @@ export class PartyPaymentsService {
     const party = await this.party(orgId, kind, partyId);
     const docs =
       kind === 'receipt'
-        ? await this.invoiceModel.find({ orgId, customerId: party._id, status: InvoiceStatus.POSTED }).lean().exec()
-        : await this.billModel.find({ orgId, vendorId: party._id, status: BillStatus.POSTED }).lean().exec();
+        ? await this.invoiceModel.find({ orgId, customerId: party._id, status: InvoiceStatus.POSTED, foreign: null }).lean().exec()
+        : await this.billModel.find({ orgId, vendorId: party._id, status: BillStatus.POSTED, foreign: null }).lean().exec();
     return suggestAllocation(
       amountPaise,
       docs.map((d) => ({
@@ -459,6 +459,8 @@ export class PartyPaymentsService {
     session: ClientSession,
   ): Promise<void> {
     const side = SIDE[kind];
+    const foreign = (doc as { foreign?: { currency: string } | null }).foreign;
+    if (foreign) throw new BadRequestException(`${foreign.currency} documents are paid in their currency, with the rate, from the document itself.`);
     const settled = entry.amountPaise + entry.tdsPaise;
     const paidInFull = settled === outstandingPaise(doc);
     const model = (kind === 'receipt' ? this.invoiceModel : this.billModel) as unknown as Model<SettledDoc>;

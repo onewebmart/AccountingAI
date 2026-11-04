@@ -79,6 +79,9 @@ export interface CreateInvoiceInput {
   /** Set when a recurring template drafts this invoice. */
   recurringTemplateId?: string | null;
   source?: { kind: 'quote' | 'sales_order' | 'project'; id: string; lines?: Array<{ orderLine: number; qty: number }> } | null;
+  foreign?: SalesInvoice['foreign'];
+  exportType?: 'lut' | null;
+  shippingBill?: SalesInvoice['shippingBill'];
 }
 
 function getFY(dateStr: string): string {
@@ -120,6 +123,9 @@ export class SalesInvoicesService {
       notes: input.notes ?? null,
       recurringTemplateId: input.recurringTemplateId ? new Types.ObjectId(input.recurringTemplateId) : null,
       source: input.source ?? null,
+      foreign: input.foreign ?? null,
+      exportType: input.exportType ?? null,
+      shippingBill: input.shippingBill ?? null,
     });
     await this.auditService.record({
       orgId: input.orgId,
@@ -402,6 +408,7 @@ export class SalesInvoicesService {
       this.invoiceModel.findById(id).session(session).exec(),
     );
     if (!current) throw new NotFoundException('SalesInvoice not found');
+    if (current.foreign) throw new BadRequestException(`This invoice is in ${current.foreign.currency}: record its payment in ${current.foreign.currency} with the rate, from the invoice, so the exchange difference is booked.`);
     if (current.status === InvoiceStatus.PAID) throw new BadRequestException('Invoice has already been marked paid');
     if (current.status !== InvoiceStatus.POSTED) {
       throw new BadRequestException(`Invoice must be POSTED to record a payment (current: ${current.status})`);

@@ -36,6 +36,9 @@ export class Vendor {
   /** Udyam registration, when the vendor is an MSME: decides the 43B(h) pay-by date. */
   @Prop({ type: Object, default: null })
   msme: VendorMsme | null;
+
+  /** The currency its invoices or bills are in; INR unless it trades abroad. */
+  @Prop({ type: String, default: 'INR' }) currency: string;
 }
 
 export interface VendorBankAccount {

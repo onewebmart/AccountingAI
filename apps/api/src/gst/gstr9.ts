@@ -15,7 +15,8 @@ export interface Gstr9 {
   financialYear: string;
   months: number;
   table4: { b2b: TaxHeads; b2c: TaxHeads; creditNotes: TaxHeads; reverseCharge: TaxHeads; net: TaxHeads };
-  table5: { nilExempt: number };
+  /** 5A: exports under LUT, without payment of tax, net of their credit notes. 5D–F: nil rated and exempt. */
+  table5: { exportsWithoutTax: number; nilExempt: number };
   table6: { reverseCharge: TaxHeads; other: TaxHeads; total: TaxHeads };
   table7: { reversed: TaxHeads };
   table6Net: TaxHeads;
@@ -32,6 +33,7 @@ export function buildGstr9(financialYear: string, months: Array<{ gstr1: Gstr1; 
   let creditNotes = { ...ZERO_HEADS };
   let reverseCharge = { ...ZERO_HEADS };
   let nilExempt = 0;
+  let exportsWithoutTax = 0;
   let itcRc = { ...ZERO_HEADS };
   let itcOther = { ...ZERO_HEADS };
   let reversed = { ...ZERO_HEADS };
@@ -44,6 +46,7 @@ export function buildGstr9(financialYear: string, months: Array<{ gstr1: Gstr1; 
     creditNotes = addHeads(creditNotes, addHeads(docHeads(gstr1.cdnr.flatMap((p) => p.notes)), docHeads(gstr1.cdnur)));
     reverseCharge = addHeads(reverseCharge, gstr3b.inwardReverseCharge);
     nilExempt += gstr1.nil.reduce((s, n) => s + n.nilPaise, 0);
+    exportsWithoutTax += gstr3b.outwardZeroRated?.txval ?? 0;
     itcRc = addHeads(itcRc, gstr3b.itcReverseCharge);
     itcOther = addHeads(itcOther, gstr3b.itcOther);
     reversed = addHeads(reversed, gstr3b.itcReversed ?? ZERO_HEADS);
@@ -69,7 +72,7 @@ export function buildGstr9(financialYear: string, months: Array<{ gstr1: Gstr1; 
     financialYear,
     months: months.length,
     table4: { b2b, b2c, creditNotes, reverseCharge, net },
-    table5: { nilExempt },
+    table5: { exportsWithoutTax, nilExempt },
     table6: { reverseCharge: { ...itcRc, txval: 0 }, other: { ...itcOther, txval: 0 }, total: { ...total, txval: 0 } },
     table7: { reversed: { ...reversed, txval: 0 } },
     table6Net: { ...addHeads(total, reversed, -1), txval: 0 },

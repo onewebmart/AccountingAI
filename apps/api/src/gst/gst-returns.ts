@@ -196,6 +196,9 @@ export interface SaleIn {
   customerState: string | null;
   amounts: Amounts;
   lines: LineLike[];
+  /** An export, zero-rated under LUT: table 6A, not the B2C or nil tables. */
+  exportType?: 'lut' | null;
+  shippingBill?: { number: string; date: string; portCode: string } | null;
 }
 
 export interface CreditNoteIn {
@@ -225,6 +228,9 @@ export interface ReturnDoc {
   pos: string;
   valuePaise: number;
   items: DocLine[];
+  /** Unregistered credit notes: against a large B2C invoice, or an export without tax. */
+  typ?: 'B2CL' | 'EXPWOP';
+  shippingBill?: { number: string; date: string; portCode: string } | null;
 }
 
 export type B2csSupply = 'INTRA' | 'INTER';
@@ -244,6 +250,8 @@ export interface Gstr1 {
   b2b: Array<{ ctin: string; customerName: string; invoices: ReturnDoc[] }>;
   b2cl: Array<{ pos: string; invoices: ReturnDoc[] }>;
   b2cs: Array<TaxHeads & { supplyType: B2csSupply; pos: string; rate: number }>;
+  /** 6A: exports. WOPAY: without payment of tax, under LUT. */
+  exp: Array<{ type: 'WOPAY'; invoices: ReturnDoc[] }>;
   nil: Array<{ supplyType: NilSupply; nilPaise: number }>;
   cdnr: Array<{ ctin: string; customerName: string; notes: ReturnDoc[] }>;
   cdnur: ReturnDoc[];
@@ -330,6 +338,7 @@ export function buildGstr1(input: {
   const nil = new Map<NilSupply, number>();
   const cdnr = new Map<string, { ctin: string; customerName: string; notes: ReturnDoc[] }>();
   const cdnur: ReturnDoc[] = [];
+  const exp: ReturnDoc[] = [];
   const hsn = { b2b: new Map<string, HsnRow>(), b2c: new Map<string, HsnRow>() };
   let missingHsn = 0;
   let unclearRate = 0;
@@ -379,7 +388,16 @@ export function buildGstr1(input: {
     items: itemsByRate(buckets.filter((b) => b.rate > 0)),
   });
 
+  // An export at nil rate on its value: 6A carries the rate the goods would bear as zero, with no tax.
+  const zeroRated = (txval: number): DocLine[] => [{ rate: 0, ...ZERO_HEADS, txval }];
+
   for (const sale of input.invoices) {
+    if (sale.exportType === 'lut') {
+      if (!sale.number) issues.push({ level: 'block', message: `An export invoice to ${sale.customerName} dated ${sale.date} has no number.`, documentId: sale.id });
+      for (const b of split(sale.amounts, sale.lines)) addHsn(false, b, 1);
+      exp.push({ ...docOf(sale.id, sale.number, sale.date, '96', sale.amounts.total, []), items: zeroRated(sale.amounts.taxableValue), shippingBill: sale.shippingBill ?? null });
+      continue;
+    }
     const placed = place(sale, orgState, issues);
     if (!sale.number) {
       issues.push({ level: 'block', message: `An invoice to ${sale.customerName} dated ${sale.date} has no number.`, documentId: sale.id });
@@ -405,6 +423,11 @@ export function buildGstr1(input: {
   }
 
   for (const note of input.creditNotes) {
+    if (note.invoice.exportType === 'lut') {
+      for (const b of split(note.amounts, note.invoice.lines)) addHsn(false, b, -1);
+      cdnur.push({ ...docOf(note.id, note.number, note.date, '96', note.amounts.total, []), items: zeroRated(note.amounts.taxableValue), typ: 'EXPWOP' });
+      continue;
+    }
     // A note follows its invoice: same customer, same place, same table.
     const placed = place(note.invoice, orgState, []);
     const buckets = split(note.amounts, note.invoice.lines);
@@ -478,6 +501,7 @@ export function buildGstr1(input: {
     { section: 'b2b', label: '4A — B2B invoices', count: b2bDocs.length, ...docsHeads(b2bDocs) },
     { section: 'b2cl', label: '5 — B2C large (inter-state)', count: b2clDocs.length, ...docsHeads(b2clDocs) },
     { section: 'b2cs', label: '7 — B2C others', count: b2csList.length, ...sumHeads(b2csList) },
+    { section: 'exp', label: '6A — Exports under LUT', count: exp.length, ...docsHeads(exp) },
     { section: 'cdnr', label: '9B — Credit notes, registered', count: cdnrDocs.length, ...docsHeads(cdnrDocs) },
     { section: 'cdnur', label: '9B — Credit notes, unregistered', count: cdnur.length, ...docsHeads(cdnur) },
     { section: 'nil', label: '8 — Nil rated', count: nilList.length, ...ZERO_HEADS, txval: nilList.reduce((s, n) => s + n.nilPaise, 0) },
@@ -489,6 +513,7 @@ export function buildGstr1(input: {
     b2b: b2bList,
     b2cl: b2clList,
     b2cs: b2csList,
+    exp: exp.length ? [{ type: 'WOPAY' as const, invoices: exp }] : [],
     nil: nilList,
     cdnr: cdnrList,
     cdnur,
@@ -585,6 +610,8 @@ export interface Gstr3b {
   gstin: string | null;
   /** 3.1(a) Outward taxable supplies, net of credit notes. */
   outwardTaxable: TaxHeads;
+  /** 3.1(b) Zero-rated outward supplies: exports, net of their credit notes. */
+  outwardZeroRated: TaxHeads;
   /** 3.1(c) Nil rated and exempted outward supplies. */
   outwardNil: TaxHeads;
   /** 3.1(d) Inward supplies on which you pay tax (reverse charge). */
@@ -638,9 +665,10 @@ export function buildGstr3b(input: {
       docHeads(gstr1.b2cl.flatMap((g) => g.invoices)),
       sumHeads(gstr1.b2cs),
     ]),
-    sumHeads([docHeads(gstr1.cdnr.flatMap((p) => p.notes)), docHeads(gstr1.cdnur)]),
+    sumHeads([docHeads(gstr1.cdnr.flatMap((p) => p.notes)), docHeads(gstr1.cdnur.filter((d) => d.typ !== 'EXPWOP'))]),
     -1,
   );
+  const outwardZeroRated = addHeads(docHeads((gstr1.exp ?? []).flatMap((e) => e.invoices)), docHeads(gstr1.cdnur.filter((d) => d.typ === 'EXPWOP')), -1);
   const outwardNil = { ...ZERO_HEADS, txval: gstr1.nil.reduce((s, n) => s + n.nilPaise, 0) };
 
   // 3.2: inter-state B2C, by state.
@@ -653,7 +681,7 @@ export function buildGstr3b(input: {
   };
   for (const g of gstr1.b2cl) for (const inv of g.invoices) for (const it of inv.items) addPos(g.pos, it.txval, it.iamt);
   for (const row of gstr1.b2cs) if (row.supplyType === 'INTER') addPos(row.pos, row.txval, row.iamt);
-  for (const note of gstr1.cdnur) for (const it of note.items) addPos(note.pos, -it.txval, -it.iamt);
+  for (const note of gstr1.cdnur) if (note.typ !== 'EXPWOP') for (const it of note.items) addPos(note.pos, -it.txval, -it.iamt);
 
   const heads = (a: Amounts): TaxHeads => ({ txval: a.taxableValue, iamt: a.igst, camt: a.cgst, samt: a.sgst, csamt: a.cess });
   let inwardReverseCharge = { ...ZERO_HEADS };
@@ -711,6 +739,7 @@ export function buildGstr3b(input: {
     period: gstr1.period,
     gstin: gstr1.gstin,
     outwardTaxable,
+    outwardZeroRated,
     outwardNil,
     inwardReverseCharge,
     interStateUnregistered: [...byPos.values()].filter((r) => r.txval !== 0).sort((a, b) => a.pos.localeCompare(b.pos)),
@@ -783,8 +812,20 @@ export function gstr1PortalJson(r: Gstr1): Record<string, unknown> {
     }));
   }
   if (r.cdnur.length) {
-    out.cdnur = r.cdnur.map((d) => ({
-      typ: 'B2CL', ntty: 'C', nt_num: d.number, nt_dt: portalDate(d.date), val: rs(d.valuePaise), pos: d.pos, itms: itms(d.items, true),
+    out.cdnur = r.cdnur.map((d) =>
+      d.typ === 'EXPWOP'
+        ? { typ: 'EXPWOP', ntty: 'C', nt_num: d.number, nt_dt: portalDate(d.date), val: rs(d.valuePaise), itms: d.items.map((it) => ({ txval: rs(it.txval), rt: 0, iamt: 0, csamt: 0 })) }
+        : { typ: 'B2CL', ntty: 'C', nt_num: d.number, nt_dt: portalDate(d.date), val: rs(d.valuePaise), pos: d.pos, itms: itms(d.items, true) },
+    );
+  }
+  if ((r.exp ?? []).length) {
+    out.exp = r.exp.map((e) => ({
+      exp_typ: e.type,
+      inv: e.invoices.map((d) => ({
+        inum: d.number, idt: portalDate(d.date), val: rs(d.valuePaise),
+        ...(d.shippingBill ? { sbpcode: d.shippingBill.portCode, sbnum: d.shippingBill.number, sbdt: portalDate(d.shippingBill.date) } : {}),
+        itms: d.items.map((it) => ({ txval: rs(it.txval), rt: 0, iamt: 0, csamt: 0 })),
+      })),
     }));
   }
   if (r.nil.length) {
@@ -820,7 +861,7 @@ export function gstr3bPortalJson(r: Gstr3b): Record<string, unknown> {
     ret_period: portalPeriod(r.period),
     sup_details: {
       osup_det: full(r.outwardTaxable),
-      osup_zero: { txval: 0, iamt: 0, csamt: 0 },
+      osup_zero: { txval: rs(r.outwardZeroRated.txval), iamt: rs(r.outwardZeroRated.iamt), csamt: rs(r.outwardZeroRated.csamt) },
       osup_nil_exmp: { txval: rs(r.outwardNil.txval) },
       isup_rev: full(r.inwardReverseCharge),
       osup_nongst: { txval: 0 },

@@ -43,6 +43,7 @@ import { ApprovalsModule } from './approvals/approvals.module';
 import { ExpensesModule } from './expenses/expenses.module';
 import { StockModule } from './stock/stock.module';
 import { ProjectsModule } from './projects/projects.module';
+import { CurrencyModule } from './currency/currency.module';
 
 @Module({
   imports: [
@@ -99,6 +100,7 @@ import { ProjectsModule } from './projects/projects.module';
     ExpensesModule,
     StockModule,
     ProjectsModule,
+    CurrencyModule,
     CrmModule,
     WorkspaceModule,
   ],

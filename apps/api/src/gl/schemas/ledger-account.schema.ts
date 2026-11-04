@@ -52,6 +52,9 @@ export enum SystemAccountKey {
   INVENTORY = 'INVENTORY',
   /** The P&L side of the closing-stock entry: opening less closing stock. */
   CHANGE_IN_INVENTORY = 'CHANGE_IN_INVENTORY',
+  /** Gain on foreign-currency documents: paid at a better rate than booked, or revalued up. */
+  FX_GAIN = 'FX_GAIN',
+  FX_LOSS = 'FX_LOSS',
 }
 
 @Schema({ timestamps: true, collection: 'ledger_accounts' })

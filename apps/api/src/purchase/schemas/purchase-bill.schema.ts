@@ -154,6 +154,14 @@ export class PurchaseBill {
    */
   @Prop({ type: Object, default: null }) partyAtIssue: PartyAsIssued | null;
 
+  /**
+   * A document in a foreign currency: its own amounts in that currency's
+   * minor units and the rate it was booked at. amountsPaise and the journal
+   * are INR, converted once at that rate; this is kept beside them.
+   */
+  @Prop({ type: Object, default: null })
+  foreign: { currency: string; digits: number; rate: number; taxableMinor: number; totalMinor: number; paidMinor: number; linesMinor: number[] } | null;
+
 }
 
 export const PurchaseBillSchema = SchemaFactory.createForClass(PurchaseBill);

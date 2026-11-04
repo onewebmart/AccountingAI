@@ -195,6 +195,7 @@ const DEFAULT_COA: SeedNode[] = [
       { code: '4200', name: 'Service Revenue', type: AccountType.INCOME },
       { code: '4900', name: 'Other Income', type: AccountType.INCOME },
       { code: '4910', name: 'Gain on Sale of Assets', type: AccountType.INCOME, systemKey: SystemAccountKey.ASSET_DISPOSAL_GAIN },
+      { code: '4920', name: 'Foreign Exchange Gain', type: AccountType.INCOME, systemKey: SystemAccountKey.FX_GAIN },
     ],
   },
   {
@@ -231,6 +232,7 @@ const DEFAULT_COA: SeedNode[] = [
       { code: '6190', name: 'Bank Charges', type: AccountType.EXPENSE },
       { code: '6195', name: 'Depreciation', type: AccountType.EXPENSE, systemKey: SystemAccountKey.DEPRECIATION },
       { code: '6196', name: 'Loss on Sale of Assets', type: AccountType.EXPENSE, systemKey: SystemAccountKey.ASSET_DISPOSAL_LOSS },
+      { code: '6197', name: 'Foreign Exchange Loss', type: AccountType.EXPENSE, systemKey: SystemAccountKey.FX_LOSS },
       { code: '6900', name: 'Miscellaneous Expenses', type: AccountType.EXPENSE },
       { code: '6990', name: 'Round Off', type: AccountType.EXPENSE, systemKey: SystemAccountKey.ROUND_OFF },
       { code: '6999', name: 'Suspense', type: AccountType.EXPENSE, systemKey: SystemAccountKey.SUSPENSE },

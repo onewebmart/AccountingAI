@@ -49,7 +49,7 @@ export class PaymentRunsService {
       throw new BadRequestException('The cash limit must be whole paise.');
     }
     const [bills, vendors, chart] = await Promise.all([
-      this.billModel.find({ orgId, status: BillStatus.POSTED }).lean().exec(),
+      this.billModel.find({ orgId, status: BillStatus.POSTED, foreign: null }).lean().exec(),
       this.vendorModel.find({ orgId }, { name: 1, msme: 1, bankAccount: 1 }).lean().exec(),
       this.accounts.list(orgId),
     ]);

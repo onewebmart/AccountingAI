@@ -42,6 +42,7 @@ export class OnlinePaymentsService {
     const invoice = await this.invoice(orgId, invoiceId);
     if (invoice.status !== InvoiceStatus.POSTED) throw new BadRequestException(`Only a posted invoice with money owed can be paid online (this one is ${invoice.status}).`);
     if (!invoice.invoiceNumber) throw new BadRequestException('Post the invoice first so it carries its number.');
+    if (invoice.foreign) throw new BadRequestException(`Online payment links collect rupees; this invoice is in ${invoice.foreign.currency}.`);
     if (invoice.paymentLink?.status === 'paid') throw new BadRequestException('This invoice was paid online already: confirm that receipt first.');
     const owed = outstandingPaise(invoice);
     if (owed <= 0) throw new BadRequestException('Nothing is owed on this invoice.');

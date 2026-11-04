@@ -21,6 +21,8 @@ export class Customer {
    */
   @Prop({ type: String, default: null }) stateCode: string | null;
   @Prop({ type: String, default: null }) notes: string | null;
+  /** The currency its invoices or bills are in; INR unless it trades abroad. */
+  @Prop({ type: String, default: 'INR' }) currency: string;
 }
 
 export const CustomerSchema = SchemaFactory.createForClass(Customer);

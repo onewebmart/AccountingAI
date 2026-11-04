@@ -88,6 +88,8 @@ export interface CreateBillInput {
     projectId?: Types.ObjectId | null;
   }>;
   notes?: string | null;
+  /** A bill in a foreign currency: its own amounts beside the INR ones. */
+  foreign?: PurchaseBill['foreign'];
   /** GST on this purchase is ours to pay (reverse charge). */
   isReverseCharge?: boolean;
   /** Overrides the vendor's TDS section; 'none' deducts nothing. */
@@ -175,6 +177,7 @@ export class PurchaseBillsService {
       createdBy: input.actorId && Types.ObjectId.isValid(input.actorId) ? input.actorId : null,
       isReverseCharge: input.isReverseCharge ?? false,
       source: input.source ?? null,
+      foreign: input.foreign ?? null,
       tds,
       recurringTemplateId: input.recurringTemplateId ? new Types.ObjectId(input.recurringTemplateId) : null,
     });
@@ -459,6 +462,7 @@ export class PurchaseBillsService {
       this.billModel.findById(id).session(session).exec(),
     );
     if (!current) throw new NotFoundException('PurchaseBill not found');
+    if (current.foreign) throw new BadRequestException(`This bill is in ${current.foreign.currency}: record its payment in ${current.foreign.currency} with the rate, from the bill, so the exchange difference is booked.`);
     if (current.status === BillStatus.PAID) throw new BadRequestException('Bill has already been marked paid');
     if (current.status !== BillStatus.POSTED) {
       throw new BadRequestException(`Bill must be POSTED to record a payment (current: ${current.status})`);

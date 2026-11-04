@@ -17,7 +17,7 @@ interface Heads {
 interface Gstr9 {
   financialYear: string;
   table4: { b2b: Heads; b2c: Heads; creditNotes: Heads; reverseCharge: Heads; net: Heads };
-  table5: { nilExempt: number };
+  table5: { exportsWithoutTax?: number; nilExempt: number };
   table6: { reverseCharge: Heads; other: Heads; total: Heads };
   table7: { reversed: Heads };
   table6Net: Heads;
@@ -85,6 +85,7 @@ export function Gstr9Panel() {
             <Row label="Less credit notes" h={data.table4.creditNotes} />
             <Row label="Net" h={data.table4.net} />
           </Table>
+          {!!data.table5.exportsWithoutTax && <p className="text-caption text-ink-600">5A Exports under LUT, without payment of tax: <span className="font-mono">{formatPaise(data.table5.exportsWithoutTax)}</span></p>}
           <p className="text-caption text-ink-600">5 Nil rated and exempt outward supplies: <span className="font-mono">{formatPaise(data.table5.nilExempt)}</span></p>
           <Table title="6 and 7 Input tax credit">
             <Row label="6 Availed on reverse charge" h={data.table6.reverseCharge} />
