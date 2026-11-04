@@ -243,7 +243,8 @@ export class PostingService {
     }
 
     const date = opts.date ?? new Date().toISOString().slice(0, 10);
-    if (date < original.date) throw new BadRequestException('A reversal cannot be dated before the voucher it reverses.');
+    // A date chosen for it (an accrual's 1st of the month) must not precede the voucher; today's is as before.
+    if (opts.date && opts.date < original.date) throw new BadRequestException('A reversal cannot be dated before the voucher it reverses.');
 
     const work = async (session: ClientSession) => {
       const reversal = await this.postInSession(
