@@ -2,7 +2,89 @@
 
 AI-first bookkeeping for Indian SMEs and CA firms. Upload the pile — we sort the books.
 
-**Stack:** Next.js 14 + NestJS + MongoDB (replica set) + BullMQ/Redis + S3/MinIO + Groq
+**Stack:** Next.js 14 + NestJS + MongoDB (replica set) + BullMQ/Redis + S3/MinIO + Gemini
+
+---
+
+## Architecture
+
+```mermaid
+flowchart TB
+  classDef app fill:#F8F9FA,stroke:#495057,color:#212529
+  classDef ledger fill:#D3F9D8,stroke:#2B8A3E,color:#1B3D24
+  classDef store fill:#E7F5FF,stroke:#1971C2,color:#0B3A66
+  classDef ext fill:#FFF4E6,stroke:#E8590C,color:#5C1F00
+  classDef partly fill:#FFF3BF,stroke:#E67700,color:#4D3000
+
+  users["SME team, CA reviewers, employees, customers"]:::app
+  inbound["WhatsApp Cloud API and inbound email:<br/>bills sent in"]:::ext
+
+  subgraph web["Web: Next.js 14, apps/web"]
+    direction LR
+    w1["Review queue,<br/>inbox"]:::app
+    w2["Sales, purchase,<br/>orders, stock"]:::app
+    w3["Banking, GST, TDS,<br/>month-end, close"]:::app
+    w4["Reports, budgets,<br/>Ask your books"]:::app
+    w1 ~~~ w2 ~~~ w3 ~~~ w4
+  end
+
+  subgraph api["API: NestJS, apps/api. Every request is scoped to the org in its JWT"]
+    direction LR
+    capture["Capture: documents,<br/>OCR, AI extraction"]:::app
+    proposals[("proposed_entries<br/>AI writes here only")]:::store
+    domain["Sales, purchase, orders,<br/>stock, banking, GST,<br/>TDS, month-end"]:::app
+    posting["PostingService<br/>the only ledger writer,<br/>on a person's approval"]:::ledger
+    reports["Reports, PDFs, narrative,<br/>Ask your books: read only"]:::app
+    capture --> proposals --> posting
+    domain --> posting
+  end
+
+  subgraph infra["Infrastructure"]
+    direction LR
+    mongo[("MongoDB replica set<br/>journals, audit log, all data")]:::store
+    redis[("Redis and BullMQ workers<br/>OCR, AI, bank feeds,<br/>daily sweep, report emails")]:::store
+    s3[("S3 or MinIO<br/>uploaded files")]:::store
+    mongo ~~~ redis ~~~ s3
+  end
+
+  subgraph outside["Outside services"]
+    direction LR
+    gemini["Gemini AI"]:::ext
+    setu["Setu bank feeds"]:::ext
+    razorpay["Razorpay"]:::ext
+    smtp["SMTP email"]:::ext
+    gsp["GSP: e-invoice, e-way bill,<br/>GST filing, mock today"]:::partly
+    gemini ~~~ setu ~~~ razorpay ~~~ smtp ~~~ gsp
+  end
+
+  users --> web
+  web -->|"HTTPS and JWT"| api
+  inbound -->|webhooks| api
+  api --> infra
+  infra --> outside
+  api <--> outside
+```
+
+**AI suggests, humans commit.** Every document, AI-read or typed, reaches the ledger the same way:
+
+```mermaid
+flowchart LR
+  classDef store fill:#E7F5FF,stroke:#1971C2,color:#0B3A66
+  classDef human fill:#FFF4E6,stroke:#E8590C,stroke-width:2px,color:#5C1F00
+  classDef ledger fill:#D3F9D8,stroke:#2B8A3E,color:#1B3D24
+  classDef app fill:#F8F9FA,stroke:#495057,color:#212529
+
+  doc["Bill in: upload,<br/>email or WhatsApp"]:::app --> job["Worker job:<br/>OCR, AI extraction,<br/>sums re-checked in code"]:::app
+  job --> pe[("proposed_entries")]:::store
+  pe --> review{"A person reviews"}:::human
+  review ==>|"Approve & post"| post["PostingService.post<br/>one MongoDB transaction"]:::ledger
+  review -->|Reject| kept["Kept, never posted"]:::app
+  post --> jr[("journals<br/>balanced, append-only")]:::store
+  post --> ctr[("counters<br/>gapless numbers")]:::store
+  post --> al[("auditLogs")]:::store
+```
+
+The full, editable diagrams (every module and outside service, the data model by domain, and the year from onboarding to year close, each step marked built, partly built or pending) are in [docs/diagrams/ARCHITECTURE_DIAGRAMS.md](docs/diagrams/ARCHITECTURE_DIAGRAMS.md).
 
 ---
 
@@ -31,7 +113,7 @@ docker-compose up -d
 
 ```bash
 cp apps/api/.env.example apps/api/.env.local
-# Edit GROQ_API_KEY and other values
+# Edit GEMINI_API_KEY and other values
 ```
 
 ### 4. Run both apps
