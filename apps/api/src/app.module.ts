@@ -33,6 +33,7 @@ import { BankFeedsModule } from './bank-feeds/bank-feeds.module';
 import { AuditTrailModule } from './audit/audit-trail.module';
 import { PartyPaymentsModule } from './payments/party-payments.module';
 import { PortalModule } from './portal/portal.module';
+import { AttachmentsModule } from './attachments/attachments.module';
 
 @Module({
   imports: [
@@ -79,6 +80,7 @@ import { PortalModule } from './portal/portal.module';
     AuditTrailModule,
     PartyPaymentsModule,
     PortalModule,
+    AttachmentsModule,
     CrmModule,
     WorkspaceModule,
   ],

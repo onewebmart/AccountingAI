@@ -1,12 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
+import { AttachmentsSection } from '@/components/shell/attachments-section';
 import { api } from '@/lib/api';
 import { currentFinancialYear, recentFinancialYears } from '@/lib/financial-year';
 import { QueryError } from '@/components/ui/query-error';
-import { FileText, Loader2, RotateCcw, X } from 'lucide-react';
+import { FileText, Loader2, RotateCcw, Paperclip, X } from 'lucide-react';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -145,6 +146,7 @@ export default function VouchersPage() {
   const [typeFilter, setTypeFilter] = useState<VoucherType>('all');
   const [fy, setFy] = useState(currentFinancialYear);
   const [reversing, setReversing] = useState<Voucher | null>(null);
+  const [filesFor, setFilesFor] = useState<string | null>(null);
   // Optimistic local overrides: id → 'reversed'
   const [localReversed, setLocalReversed] = useState<Set<string>>(new Set());
 
@@ -295,8 +297,8 @@ export default function VouchersPage() {
               </thead>
               <tbody>
                 {filtered.map((v) => (
+                  <Fragment key={v.id}>
                   <tr
-                    key={v.id}
                     className={`border-b border-line-100 last:border-0 transition-colors hover:bg-honey-50 ${
                       v.status === 'reversed' ? 'opacity-50' : ''
                     }`}
@@ -336,8 +338,23 @@ export default function VouchersPage() {
                       {v.status === 'reversed' && v.reversedBy && (
                         <span className="font-mono text-caption text-ink-400">{v.reversedBy}</span>
                       )}
+                      <button
+                        type="button"
+                        onClick={() => setFilesFor(filesFor === v.id ? null : v.id)}
+                        className="ml-3 inline-flex items-center gap-1 text-caption text-ink-500 hover:text-ink-900"
+                      >
+                        <Paperclip size={12} /> Files
+                      </button>
                     </td>
                   </tr>
+                  {filesFor === v.id && (
+                    <tr className="border-b border-line-100 bg-surface-sink/50">
+                      <td colSpan={8} className="px-6 py-3">
+                        <AttachmentsSection entityType="Journal" entityId={v.id} />
+                      </td>
+                    </tr>
+                  )}
+                  </Fragment>
                 ))}
               </tbody>
             </table>

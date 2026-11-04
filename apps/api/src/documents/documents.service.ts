@@ -16,7 +16,9 @@ export const DOCUMENT_PROCESSING_QUEUE = 'document-processing';
 
 export interface UploadInput {
   orgId: string;
+  /** A user id, or 'system:email-in' / 'system:whatsapp-in' for files sent in. */
   uploadedBy: string;
+  source?: { channel: 'upload' | 'email' | 'whatsapp'; from: string | null; subject: string | null; messageId: string | null };
   originalName: string;
   mimeType: string;
   buffer: Buffer;
@@ -45,6 +47,8 @@ export interface DocumentListItem {
   jobId?: string;
   /** Present only on failed documents — why the pipeline gave up. */
   failureReason?: string;
+  /** How it arrived: uploaded, or sent in by email or WhatsApp, and from whom. */
+  source: { channel: 'upload' | 'email' | 'whatsapp'; from: string | null };
   uploadedAt: Date;
   createdAt: Date;
 }
@@ -61,7 +65,7 @@ export class DocumentsService {
   ) {}
 
   async upload(input: UploadInput): Promise<DocumentDocument> {
-    const { orgId, uploadedBy, originalName, mimeType, buffer } = input;
+    const { orgId, uploadedBy, originalName, mimeType, buffer, source } = input;
 
     // 1. Compute SHA-256 hash of raw file bytes
     const sha256 = createHash('sha256').update(buffer).digest('hex');
@@ -87,7 +91,8 @@ export class DocumentsService {
       mimeType,
       sizeBytes: buffer.length,
       sha256,
-      uploadedBy: new Types.ObjectId(uploadedBy),
+      uploadedBy: Types.ObjectId.isValid(uploadedBy) && !uploadedBy.startsWith('system:') ? new Types.ObjectId(uploadedBy) : null,
+      source: source ?? { channel: 'upload', from: null, subject: null, messageId: null },
       duplicateOf: existing ? existing._id : undefined,
     });
     await this.auditService.record({
@@ -96,7 +101,7 @@ export class DocumentsService {
       entityId: doc._id.toString(),
       action: 'UPLOAD',
       performedBy: uploadedBy,
-      after: { originalName, status: doc.status, sha256 },
+      after: { originalName, status: doc.status, sha256, channel: source?.channel ?? 'upload', from: source?.from ?? null },
     });
 
     // 6. Enqueue processing job — even duplicates get enqueued so a human can decide
@@ -206,6 +211,7 @@ export class DocumentsService {
         jobId: d.jobId,
         // Carried to the Inbox so a failed row can say what went wrong.
         failureReason: d.failureReason,
+        source: { channel: d.source?.channel ?? 'upload', from: d.source?.from ?? null },
         uploadedAt: createdAt,
         createdAt,
       };

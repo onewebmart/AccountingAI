@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { api, ApiError } from '@/lib/api';
 import { GST_STATES } from '@/lib/gst';
 import { formatRupees } from '@/lib/utils';
+import { AttachmentsSection } from './attachments-section';
 
 /** GET /sales/invoices/:id or /purchase/bills/:id — the stored record. */
 interface ApiRecord {
@@ -139,6 +140,7 @@ export function DocumentDetailDialog({
                 <ExternalLink size={12} /> View the original upload
               </button>
             )}
+            <AttachmentsSection entityType={kind === 'invoice' ? 'SalesInvoice' : 'PurchaseBill'} entityId={record._id} />
             <a
               href={`/audit?entityType=${kind === 'invoice' ? 'SalesInvoice' : 'PurchaseBill'}&entityId=${record._id}`}
               className="block text-caption font-medium text-ink-600 hover:text-ink-900 hover:underline"
@@ -557,6 +559,7 @@ export function PartyDetailDialog({
             </div>
             {kind === 'vendor' && <VendorBankingSection id={party.id} onSaved={(m) => onSaved?.(m)} />}
             {kind === 'customer' && <PortalLinkSection customerId={party.id} onDone={(m) => onSaved?.(m)} />}
+            <AttachmentsSection entityType={kind === 'customer' ? 'Customer' : 'Vendor'} entityId={party.id} />
             <div>
               <Row label="GSTIN"><span className="font-mono">{party.gstin ?? '—'}</span></Row>
               <Row label={kind === 'customer' ? 'They owe you' : 'You owe them'}>

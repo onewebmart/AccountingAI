@@ -39,8 +39,13 @@ export class Document {
   @Prop({ required: true, index: true })
   sha256: string;
 
-  @Prop({ type: MongooseSchema.Types.ObjectId, required: true, index: true })
-  uploadedBy: MongooseSchema.Types.ObjectId;
+  /** Null when no person uploaded it: it came in by email or WhatsApp. */
+  @Prop({ type: MongooseSchema.Types.ObjectId, default: null, index: true })
+  uploadedBy: MongooseSchema.Types.ObjectId | null;
+
+  /** How it arrived: uploaded, or sent in, and by whom. */
+  @Prop({ type: Object, default: null })
+  source: { channel: 'upload' | 'email' | 'whatsapp'; from: string | null; subject: string | null; messageId: string | null } | null;
 
   /** Points to the earlier document when this one is flagged as a suspected duplicate */
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Document', index: true })
