@@ -24,6 +24,7 @@ import { AutomationController } from './automation.controller';
  * their dates, and payment reminders to customers.
  */
 import { MonthEndModule } from '../month-end/month-end.module';
+import { ReportsModule } from '../reports/reports.module';
 @Module({
   imports: [
     MongooseModule.forFeature([
@@ -40,6 +41,7 @@ import { MonthEndModule } from '../month-end/month-end.module';
     SalesModule, // SalesInvoicesService drafts recurring invoices
     PurchaseModule, // PurchaseBillsService drafts recurring bills
     MonthEndModule, // recurring journals go to the review queue; the daily month-end sweep
+    ReportsModule, // scheduled report emails go out in the daily sweep
   ],
   controllers: [AutomationController],
   providers: [
