@@ -22,8 +22,8 @@ flowchart TB
   subgraph web["Web: Next.js 14, apps/web"]
     direction LR
     w1["Review queue,<br/>inbox"]:::app
-    w2["Sales, purchase,<br/>orders, stock"]:::app
-    w3["Banking, GST, TDS,<br/>month-end, close"]:::app
+    w2["Sales, purchase, orders,<br/>stock, projects"]:::app
+    w3["Banking, currencies, GST,<br/>TDS, month-end, close"]:::app
     w4["Reports, budgets,<br/>Ask your books"]:::app
     w1 ~~~ w2 ~~~ w3 ~~~ w4
   end
@@ -32,7 +32,7 @@ flowchart TB
     direction LR
     capture["Capture: documents,<br/>OCR, AI extraction"]:::app
     proposals[("proposed_entries<br/>AI writes here only")]:::store
-    domain["Sales, purchase, orders,<br/>stock, banking, GST,<br/>TDS, month-end"]:::app
+    domain["Sales, purchase, orders, stock,<br/>projects, currencies, banking,<br/>GST, TDS, month-end"]:::app
     posting["PostingService<br/>the only ledger writer,<br/>on a person's approval"]:::ledger
     reports["Reports, PDFs, narrative,<br/>Ask your books: read only"]:::app
     capture --> proposals --> posting

@@ -1,6 +1,6 @@
 # Architecture diagrams
 
-Three pictures of the platform as the code stands on `feat/phase-1` (4 November 2026, commit `8129314`): how the parts connect, what the database holds, and an accounting year from signup to year close.
+Three pictures of the platform as the code stands on `feat/phase-1` (4 November 2026, commit `562a206`): how the parts connect, what the database holds, and an accounting year from signup to year close.
 They were drawn from `apps/api/src` and `apps/web/src` and checked against [the workflow and AI plan](../END_TO_END_WORKFLOW_AND_AI_PLAN.md). The plan's status marks were written before most of the building, so trust the marks here instead.
 Each diagram is a plain Mermaid block, which GitHub and the VS Code Markdown preview both render. Edit them by hand. To change a box's status, change its `:::class`.
 
@@ -53,8 +53,8 @@ flowchart LR
   %% One box per group of pages under apps/web/src/app/(app)
   subgraph web["Web app: Next.js 14, apps/web"]
     wCapture["Capture and review<br/>/review /inbox"]:::built
-    wTrade["Sell and buy<br/>/sales /purchase /orders /items<br/>/expenses /approvals /recurring"]:::built
-    wLedger["Bank and ledger<br/>/banking /vouchers /accounts"]:::built
+    wTrade["Sell and buy<br/>/sales /purchase /orders /items<br/>/expenses /approvals /recurring /projects"]:::built
+    wLedger["Bank and ledger<br/>/banking /vouchers /accounts /currency"]:::built
     wTax["Tax and close<br/>/gst /tds /month-end /closing"]:::built
     wReports["Reports<br/>/dashboard /insights /reports<br/>/reports/management /exports /audit"]:::built
     wSetup["Setup<br/>/onboarding /settings /migration"]:::built
@@ -81,7 +81,7 @@ flowchart LR
     aReports["reports, insights, exports, migration"]:::built
     aFirm["org-settings, workspace, white-label,<br/>platform-admin, crm"]:::built
     aPhase8["reports: management reports, budgets,<br/>report PDFs and emails, narrative, Ask your books"]:::built
-    aPhase9["Phase 9: projects, timesheets,<br/>multi-currency"]:::pending
+    aPhase9["projects: timesheets, invoices from time<br/>currency: rates, foreign documents, exchange"]:::built
   end
 
   subgraph data["Data stores"]
@@ -220,7 +220,7 @@ flowchart LR
 - Every collection except `platforms`, `firms`, `users`, `counters` and the CRM's firm-level collections carries an indexed `orgId`, scoped by the tenant plugin. `orgId` is left out of most boxes to save space.
 - A collection that appears again in a later diagram shows only the fields that matter there.
 - **Partly built** collections have `PARTLY BUILT` in a `%%` comment and in their first attribute's comment.
-- **Planned** collections, and planned fields on existing collections, live only in diagram 2.10. When one is built, move it into its domain diagram.
+- **Planned** collections, and planned fields on existing collections, go in a diagram of their own headed *Planned*. None is left: all nine phases of the plan are built. When something new is planned, add that diagram, and move each collection into its domain diagram once it is built.
 
 ### 2.1 Tenancy, platform and CA-firm CRM
 
@@ -901,53 +901,60 @@ erDiagram
   }
 ```
 
-### 2.10 Planned: not in the code yet
+### 2.10 Projects and currencies
 
-Everything below is pending. Existing collections appear here only with the fields the plan would add to them.
+A project's income and costs are the journal lines that carry its `projectId`, set when the journal posts and never after. A foreign document keeps its own amounts beside the INR ones; journals stay in INR paise.
 
 ```mermaid
 erDiagram
-  %% PLANNED (Phase 9): projects and timesheets.
-  customers ||--o{ projects : "work for"
+  %% Phase 9.
+  customers |o--o{ projects : "work for"
+  items |o--o{ projects : "service item its time is invoiced as"
   projects ||--o{ time_entries : "time booked to"
   users ||--o{ time_entries : "logs"
   time_entries }o--o| sales_invoices : "billed on"
   projects |o--o{ journal_line : "projectId set at posting"
-  %% PLANNED (Phase 9): multi-currency. Journals stay in INR paise.
   exchange_rates |o--o{ sales_invoices : "rate on the document"
   exchange_rates |o--o{ purchase_bills : "rate on the document"
 
   projects {
-    string orgId "PLANNED"
-    ObjectId customerId FK
-    string billingMethod "fixed or time and materials"
+    string orgId
+    ObjectId customerId FK "null for internal work"
+    string billing "time or fixed"
     int budgetPaise
-    string status
+    float budgetHours
+    int ratePaise "per hour"
+    ObjectId serviceItemId FK
+    string status "active, on_hold or completed"
   }
   time_entries {
-    string orgId "PLANNED"
+    string orgId
     ObjectId projectId FK
-    ObjectId userId FK
+    string userId
+    string date
     float hours
-    int billableRatePaise
-    ObjectId invoiceId FK "null until billed"
+    string task
+    bool billable
+    int ratePaise "null takes the project's"
+    string status "unbilled, billing or billed"
+    ObjectId invoiceId FK "set when invoiced"
   }
   exchange_rates {
-    string orgId "PLANNED"
+    string orgId
     string currency
     string date
-    float rate "fetched from RBI, never guessed"
+    float rate "entered, never guessed"
   }
   journal_line {
-    ObjectId projectId FK "PLANNED field"
+    ObjectId projectId FK
   }
   sales_invoices {
-    string currency "PLANNED field"
-    int foreignAmountMinor "PLANNED field, that currency's minor units"
+    object foreign "currency, rate, totalMinor, paidMinor"
+    string exportType "lut: GSTR-1 table 6A"
+    object shippingBill
   }
   purchase_bills {
-    string currency "PLANNED field"
-    int foreignAmountMinor "PLANNED field"
+    object foreign "currency, rate, totalMinor, paidMinor"
   }
 ```
 
@@ -1037,7 +1044,7 @@ flowchart TB
     subgraph more["Stock and projects"]
       direction TB
       D21["Bill lines linked to items,<br/>adjustments, reorder to a draft PO"]:::built
-      D22["Projects, timesheets,<br/>foreign-currency documents"]:::pending
+      D22["Projects, timesheets, invoices from time,<br/>foreign-currency documents"]:::built
     end
   end
 
@@ -1056,6 +1063,7 @@ flowchart TB
     M11["Reports: TB, P&L, balance sheet,<br/>cash flow, ledger, day book,<br/>Excel, CSV, Tally"]:::built
     M12["Management reports, comparisons,<br/>budgets, report PDFs and email"]:::built
     M13["AI monthly narrative,<br/>Ask your books"]:::built
+    M14["Foreign-currency revaluation,<br/>reversed on the 1st"]:::built
     M1 --> M2 --> M3 --> M10
     M4 --> M5 --> M6 --> M7 --> M10
     M8 --> M10
@@ -1063,6 +1071,7 @@ flowchart TB
     M10 --> M11
     M11 --- M12
     M11 --- M13
+    M14 --> M10
   end
 
   subgraph yearEnd["Year close"]
