@@ -45,6 +45,20 @@ export default () => ({
    * INBOUND_EMAIL_SECRET. WhatsApp: Meta's Cloud API webhook, verified with
    * the app secret; media fetched with the access token.
    */
+  /** Bank feeds: 'mock' (the default) or 'setu', Setu's Account Aggregator gateway. */
+  bankFeeds: {
+    provider: process.env.BANK_FEED_PROVIDER ?? 'mock',
+    setu: {
+      baseUrl: process.env.SETU_AA_BASE_URL ?? 'https://fiu-sandbox.setu.co',
+      clientId: process.env.SETU_AA_CLIENT_ID ?? '',
+      clientSecret: process.env.SETU_AA_CLIENT_SECRET ?? '',
+      productInstanceId: process.env.SETU_AA_PRODUCT_INSTANCE_ID ?? '',
+      purposeCode: process.env.SETU_AA_PURPOSE_CODE ?? '102',
+      consentMonths: parseInt(process.env.SETU_AA_CONSENT_MONTHS ?? '12', 10),
+      redirectUrl: process.env.SETU_AA_REDIRECT_URL ?? '',
+    },
+  },
+
   inbound: {
     emailDomain: process.env.INBOUND_EMAIL_DOMAIN ?? '',
     emailSecret: process.env.INBOUND_EMAIL_SECRET ?? '',
