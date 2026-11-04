@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AppModule } from './app.module';
+import { allowLargeInboundEmail } from './common/body-limits';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
@@ -9,6 +10,8 @@ async function bootstrap() {
     // Kept beside the parsed body, so a webhook's signature is checked against the exact bytes sent.
     rawBody: true,
   });
+
+  allowLargeInboundEmail(app);
 
   app.useGlobalPipes(
     new ValidationPipe({
