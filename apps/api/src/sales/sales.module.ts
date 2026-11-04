@@ -14,9 +14,11 @@ import { PartyPaymentsModule } from '../payments/party-payments.module';
 import { GlModule } from '../gl/gl.module';
 
 import { ItemsModule } from '../items/items.module';
+import { EInvoice, EInvoiceSchema } from '../einvoice/schemas/e-invoice.schema';
 @Module({
   imports: [
     MongooseModule.forFeature([
+      { name: EInvoice.name, schema: EInvoiceSchema },
       { name: Customer.name, schema: CustomerSchema },
       { name: SalesInvoice.name, schema: SalesInvoiceSchema },
       { name: CreditNote.name, schema: CreditNoteSchema },

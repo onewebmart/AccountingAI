@@ -9,6 +9,7 @@ import { api, ApiError } from '@/lib/api';
 import { GST_STATES } from '@/lib/gst';
 import { formatRupees } from '@/lib/utils';
 import { AttachmentsSection } from './attachments-section';
+import { EinvoiceSection } from '@/components/einvoice/einvoice-section';
 
 /** GET /sales/invoices/:id or /purchase/bills/:id — the stored record. */
 interface ApiRecord {
@@ -140,6 +141,7 @@ export function DocumentDetailDialog({
                 <ExternalLink size={12} /> View the original upload
               </button>
             )}
+            {kind === 'invoice' && <EinvoiceSection invoiceId={record._id} />}
             <AttachmentsSection entityType={kind === 'invoice' ? 'SalesInvoice' : 'PurchaseBill'} entityId={record._id} />
             <a
               href={`/audit?entityType=${kind === 'invoice' ? 'SalesInvoice' : 'PurchaseBill'}&entityId=${record._id}`}
@@ -172,10 +174,12 @@ interface ApiParty {
   phone: string | null;
   email: string | null;
   address: string | null;
+  city?: string | null;
+  pincode?: string | null;
   notes: string | null;
 }
 
-const PARTY_FIELDS = ['name', 'gstin', 'stateCode', 'phone', 'email', 'address', 'notes'] as const;
+const PARTY_FIELDS = ['name', 'gstin', 'stateCode', 'phone', 'email', 'address', 'city', 'pincode', 'notes'] as const;
 type PartyForm = Record<(typeof PARTY_FIELDS)[number], string>;
 
 /**
@@ -275,6 +279,16 @@ function PartyEditForm({ kind, id, onDone }: { kind: 'customer' | 'vendor'; id: 
       <div>
         <label className={label}>Address</label>
         <textarea className={field} rows={2} value={current.address} onChange={set('address')} />
+      </div>
+      <div className="grid grid-cols-[1fr_8rem] gap-3">
+        <div>
+          <label className={label}>City</label>
+          <input className={field} value={current.city} onChange={set('city')} />
+        </div>
+        <div>
+          <label className={label}>Pincode</label>
+          <input className={`${field} font-mono`} inputMode="numeric" maxLength={6} value={current.pincode} onChange={set('pincode')} />
+        </div>
       </div>
       <div>
         <label className={label}>Notes</label>

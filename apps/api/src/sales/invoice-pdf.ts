@@ -22,6 +22,8 @@ export interface InvoicePdfData {
   footer: string | null;
   /** Shown across the top while the invoice is not yet posted. */
   draft: boolean;
+  /** Registered with the IRP: its IRN, acknowledgement and the signed QR, as a grid of dark modules. */
+  einvoice?: { irn: string; ackNo: string; ackDate: string; qr: boolean[][]; test: boolean } | null;
 }
 
 const STATES: Record<string, string> = {
@@ -216,6 +218,24 @@ export function renderInvoicePdf(d: InvoicePdfData): Buffer {
     ry -= 12;
   }
   y = Math.min(sy, ry) - 10;
+
+  // E-invoice: the IRN and acknowledgement, and the signed QR the IRP returned.
+  if (d.einvoice) {
+    const e = d.einvoice;
+    const qrSize = 104;
+    const cell = qrSize / Math.max(1, e.qr.length);
+    const top = y;
+    e.qr.forEach((row, r) => row.forEach((dark, c) => dark && page.box(right - qrSize + c * cell, top - (r + 1) * cell, cell, cell, 0)));
+    let ey = top - 12;
+    page.text(MARGIN, ey, e.test ? 'E-INVOICE (TEST - NOT REGISTERED WITH THE IRP)' : 'E-INVOICE', 7.5, true);
+    ey -= 12;
+    page.text(MARGIN, ey, `IRN ${e.irn.slice(0, 32)}`, 8);
+    ey -= 10;
+    page.text(MARGIN + 18, ey, e.irn.slice(32), 8);
+    ey -= 12;
+    page.text(MARGIN, ey, `Ack no. ${e.ackNo}   Ack date ${e.ackDate}`, 8);
+    y = Math.min(ey, top - qrSize) - 12;
+  }
 
   // Bill to.
   const buyerLines = [...wrap(d.buyer.address ?? '', 8.5, 300), d.buyer.gstin ? `GSTIN ${d.buyer.gstin}` : 'Unregistered', `State: ${stateName(d.buyer.stateCode)}`].filter(Boolean);

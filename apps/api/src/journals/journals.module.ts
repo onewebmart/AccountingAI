@@ -12,6 +12,7 @@ import { DebitNote, DebitNoteSchema } from '../purchase/schemas/debit-note.schem
 import { PartyPayment, PartyPaymentSchema } from '../payments/schemas/party-payment.schema';
 import { TdsDeposit, TdsDepositSchema } from '../tds/schemas/tds-deposit.schema';
 
+import { EInvoice, EInvoiceSchema } from '../einvoice/schemas/e-invoice.schema';
 @Module({
   imports: [
     GlModule,
@@ -25,10 +26,11 @@ import { TdsDeposit, TdsDepositSchema } from '../tds/schemas/tds-deposit.schema'
       { name: TdsDeposit.name, schema: TdsDepositSchema },
       // A reversed receipt or payment across several documents, or an applied advance.
       { name: PartyPayment.name, schema: PartyPaymentSchema },
+      { name: EInvoice.name, schema: EInvoiceSchema },
     ]),
   ],
   controllers: [JournalsController],
   providers: [JournalsService, JournalReversalService],
-  exports: [JournalsService],
+  exports: [JournalsService, JournalReversalService],
 })
 export class JournalsModule {}

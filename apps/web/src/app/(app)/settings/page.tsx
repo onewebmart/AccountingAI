@@ -37,6 +37,8 @@ interface OrgSettings {
   gstin?: string | null;
   pan?: string | null;
   address?: string | null;
+  city?: string | null;
+  pincode?: string | null;
   phone?: string | null;
   email?: string | null;
   invoiceNotes?: string | null;
@@ -110,6 +112,8 @@ function GeneralTab() {
     timezone: '',
     financialYearStartMonth: '',
     address: '',
+    city: '',
+    pincode: '',
     phone: '',
     email: '',
     invoiceNotes: '',
@@ -122,6 +126,8 @@ function GeneralTab() {
       timezone: remoteSettings.timezone ?? 'Asia/Kolkata',
       financialYearStartMonth: String(remoteSettings.financialYearStartMonth ?? 4),
       address: remoteSettings.address ?? '',
+      city: remoteSettings.city ?? '',
+      pincode: remoteSettings.pincode ?? '',
       phone: remoteSettings.phone ?? '',
       email: remoteSettings.email ?? '',
       invoiceNotes: remoteSettings.invoiceNotes ?? '',
@@ -145,6 +151,9 @@ function GeneralTab() {
         timezone: form.timezone || settings.timezone,
         financialYearStartMonth: Number(form.financialYearStartMonth || settings.financialYearStartMonth || 4),
         address: form.address.trim(),
+        // Left out when blank: a pincode is six digits or nothing.
+        city: form.city.trim() || undefined,
+        pincode: form.pincode.trim() || undefined,
         phone: form.phone.trim(),
         email: form.email.trim(),
         invoiceNotes: form.invoiceNotes.trim(),
@@ -188,6 +197,26 @@ function GeneralTab() {
             onChange={(e) => setForm({ ...form, address: e.target.value })}
             placeholder="Printed on every invoice — a tax invoice must carry it"
             className="w-full rounded-md border border-line-200 bg-surface-card px-3 py-2 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-brand-500"
+          />
+        </div>
+
+        <div>
+          <label className="block text-caption font-medium text-ink-700 mb-1">City</label>
+          <input
+            value={form.city}
+            onChange={(e) => setForm({ ...form, city: e.target.value })}
+            className="w-full rounded-md border border-line-200 bg-surface-card px-3 py-2 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-brand-500"
+          />
+        </div>
+        <div>
+          <label className="block text-caption font-medium text-ink-700 mb-1">Pincode</label>
+          <input
+            inputMode="numeric"
+            maxLength={6}
+            value={form.pincode}
+            onChange={(e) => setForm({ ...form, pincode: e.target.value.replace(/\D/g, '') })}
+            placeholder="Needed for e-invoices and e-way bills"
+            className="w-full rounded-md border border-line-200 bg-surface-card px-3 py-2 font-mono text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-brand-500"
           />
         </div>
 

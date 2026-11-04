@@ -10,6 +10,9 @@ export interface PartyDetailsInput {
   phone?: string | null;
   email?: string | null;
   address?: string | null;
+  city?: string | null;
+  /** Six digits; the e-invoice and e-way bill need it. */
+  pincode?: string | null;
   notes?: string | null;
 }
 
@@ -33,7 +36,12 @@ export function cleanPartyDetails(input: PartyDetailsInput, current: { gstin: st
     if (problem) throw new BadRequestException(`GSTIN ${gstin} ${problem}`);
     out.gstin = gstin;
   }
-  for (const key of ['phone', 'email', 'address', 'notes'] as const) {
+  if (input.pincode !== undefined) {
+    const pin = input.pincode?.replace(/\s/g, '') || null;
+    if (pin && !/^[1-9]\d{5}$/.test(pin)) throw new BadRequestException('A pincode is six digits and does not start with 0.');
+    out.pincode = pin;
+  }
+  for (const key of ['phone', 'email', 'address', 'city', 'notes'] as const) {
     const v = text(input[key]);
     if (v !== undefined) out[key] = v;
   }

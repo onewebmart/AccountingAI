@@ -110,6 +110,15 @@ export class CreateCustomerDto {
   @IsString()
   address?: string;
 
+  @IsOptional()
+  @IsString()
+  @Length(0, 100)
+  city?: string;
+
+  @IsOptional()
+  @Matches(/^[1-9]\d{5}$/, { message: 'A pincode is six digits and does not start with 0.' })
+  pincode?: string;
+
   /** GST state code, for a customer without a GSTIN. */
   @IsOptional()
   @Matches(/^\d{2}$/, { message: 'stateCode must be a two-digit GST state code, like 27' })
@@ -162,6 +171,15 @@ export class UpdateCustomerDto {
   @IsOptional()
   @IsString()
   address?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @Length(0, 100)
+  city?: string | null;
+
+  @IsOptional()
+  @Matches(/^[1-9]\d{5}$/, { message: 'A pincode is six digits and does not start with 0.' })
+  pincode?: string | null;
 
   @IsOptional()
   @IsString()

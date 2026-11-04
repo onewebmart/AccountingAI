@@ -59,6 +59,9 @@ export default () => ({
     },
   },
 
+  /** The GST Suvidha Provider for e-invoices and e-way bills: only 'mock' so far. */
+  gsp: { provider: process.env.GSP_PROVIDER ?? 'mock' },
+
   inbound: {
     emailDomain: process.env.INBOUND_EMAIL_DOMAIN ?? '',
     emailSecret: process.env.INBOUND_EMAIL_SECRET ?? '',

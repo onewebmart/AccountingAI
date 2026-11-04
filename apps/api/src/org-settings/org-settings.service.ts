@@ -22,6 +22,8 @@ export class UpdateSettingsDto {
   @IsOptional() @IsString() gstin?: string;
   @IsOptional() @IsString() pan?: string;
   @IsOptional() @IsString() @Length(0, 500) address?: string;
+  @IsOptional() @IsString() @Length(0, 100) city?: string;
+  @IsOptional() @Matches(/^[1-9]\d{5}$/, { message: 'A pincode is six digits and does not start with 0.' }) pincode?: string;
   @IsOptional() @IsString() @Length(0, 40) phone?: string;
   @IsOptional() @IsString() @Length(0, 200) email?: string;
   @IsOptional() @IsString() @Length(0, 1000) invoiceNotes?: string;
@@ -41,7 +43,7 @@ export class UpdateSettingsDto {
 
 /** Exactly the fields above — anything else in a request body is ignored. */
 const UPDATABLE_FIELDS = [
-  'displayName', 'gstin', 'pan', 'address', 'phone', 'email', 'invoiceNotes', 'stateCode', 'timezone', 'currencyCode',
+  'displayName', 'gstin', 'pan', 'address', 'city', 'pincode', 'phone', 'email', 'invoiceNotes', 'stateCode', 'timezone', 'currencyCode',
   'financialYearStartMonth', 'gstFilingFrequency', 'tallyCompanyName', 'razorpayKeyId',
   'awsBucketName', 'brandingLogoUrl', 'brandingAccentColor', 'customDomain', 'clientPortalEnabled',
 ] as const;

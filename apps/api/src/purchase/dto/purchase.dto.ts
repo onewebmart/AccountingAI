@@ -8,6 +8,7 @@ import {
   IsOptional,
   IsString,
   Length,
+  Matches,
   Max,
   Min,
   ValidateNested,
@@ -139,6 +140,15 @@ export class UpdateVendorDto {
   @IsOptional()
   @IsString()
   address?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @Length(0, 100)
+  city?: string | null;
+
+  @IsOptional()
+  @Matches(/^[1-9]\d{5}$/, { message: 'A pincode is six digits and does not start with 0.' })
+  pincode?: string | null;
 
   @IsOptional()
   @IsString()

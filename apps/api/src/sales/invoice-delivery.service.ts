@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { Optional, BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { InvoiceStatus } from '@ai-accounting/shared';
@@ -26,6 +26,8 @@ const rupees = (paise: number) => `Rs. ${(paise / 100).toLocaleString('en-IN', {
  * An invoice as the customer sees it: a PDF, and that PDF by email. "Send
  * invoice" used to change a status and nothing reached the customer.
  */
+import * as qrcode from 'qrcode';
+import { EInvoice, EInvoiceDocument } from '../einvoice/schemas/e-invoice.schema';
 @Injectable()
 export class InvoiceDeliveryService {
   constructor(
@@ -34,6 +36,8 @@ export class InvoiceDeliveryService {
     @InjectModel(OrgSettings.name) private settingsModel: Model<OrgSettingsDocument>,
     private mailer: MailerService,
     private audit: AuditService,
+    // Optional so specs that build this by hand need not register it.
+    @Optional() @InjectModel(EInvoice.name) private einvoiceModel?: Model<EInvoiceDocument>,
   ) {}
 
   async pdf(orgId: string, id: string): Promise<{ filename: string; content: Buffer }> {
@@ -101,6 +105,16 @@ export class InvoiceDeliveryService {
     return { emailedTo: to, cc, messageId };
   }
 
+  /** The registered e-invoice, its QR read into modules for the PDF. */
+  private async einvoiceFor(orgId: string, invoiceId: Types.ObjectId): Promise<InvoicePdfData['einvoice']> {
+    const e = this.einvoiceModel ? await this.einvoiceModel.findOne({ orgId, invoiceId, status: 'active' }).lean().exec() : null;
+    if (!e?.irn || !e.signedQrCode || !e.ackNo) return null;
+    const { modules } = qrcode.create(e.signedQrCode, { errorCorrectionLevel: 'L' });
+    const qr = Array.from({ length: modules.size }, (_, r) => Array.from({ length: modules.size }, (_, c) => !!modules.get(r, c)));
+    const at = e.ackDate ? new Date(new Date(e.ackDate).getTime() + 330 * 60_000).toISOString().replace('T', ' ').slice(0, 19) : '';
+    return { irn: e.irn, ackNo: e.ackNo, ackDate: at, qr, test: e.isTest };
+  }
+
   private async load(orgId: string, id: string) {
     if (!Types.ObjectId.isValid(id)) throw new NotFoundException('Invoice not found');
     const invoice = await this.invoiceModel.findOne({ _id: id, orgId }).lean().exec();
@@ -137,6 +151,7 @@ export class InvoiceDeliveryService {
       notes: invoice.notes ?? null,
       footer: settings?.invoiceNotes ?? null,
       draft: invoice.status === InvoiceStatus.DRAFT,
+      einvoice: await this.einvoiceFor(orgId, invoice._id),
     };
     return { invoice, customer, data };
   }

@@ -13,6 +13,8 @@ export class Vendor {
   @Prop({ type: String, default: null }) phone: string | null;
   @Prop({ type: String, default: null }) email: string | null;
   @Prop({ type: String, default: null }) address: string | null;
+  @Prop({ type: String, default: null }) city: string | null;
+  @Prop({ type: String, default: null }) pincode: string | null;
   @Prop({ type: String, default: null }) notes: string | null;
 
   /** From the GSTIN when there is one; needed on every TDS return line. */

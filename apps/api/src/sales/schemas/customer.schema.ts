@@ -12,6 +12,8 @@ export class Customer {
   @Prop({ type: String, default: null }) phone: string | null;
   @Prop({ type: String, default: null }) email: string | null;
   @Prop({ type: String, default: null }) address: string | null;
+  @Prop({ type: String, default: null }) city: string | null;
+  @Prop({ type: String, default: null }) pincode: string | null;
   /**
    * GST state code of the customer, which is the place of supply on GSTR-1.
    * Taken from the GSTIN when there is one; an unregistered customer needs it

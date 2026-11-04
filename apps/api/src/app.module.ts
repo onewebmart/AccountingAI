@@ -36,6 +36,7 @@ import { PortalModule } from './portal/portal.module';
 import { AttachmentsModule } from './attachments/attachments.module';
 import { InboundModule } from './inbound/inbound.module';
 import { ItemsModule } from './items/items.module';
+import { EinvoiceModule } from './einvoice/einvoice.module';
 
 @Module({
   imports: [
@@ -85,6 +86,7 @@ import { ItemsModule } from './items/items.module';
     AttachmentsModule,
     InboundModule,
     ItemsModule,
+    EinvoiceModule,
     CrmModule,
     WorkspaceModule,
   ],

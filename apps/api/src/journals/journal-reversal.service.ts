@@ -39,6 +39,7 @@ interface SettledDocument {
  *     invoice or bill it settled or adjusted — just that one;
  *   - a bank line confirmed against the voucher goes back to unmatched.
  */
+import { EInvoice, EInvoiceDocument } from '../einvoice/schemas/e-invoice.schema';
 @Injectable()
 export class JournalReversalService {
   constructor(
@@ -52,6 +53,7 @@ export class JournalReversalService {
     @InjectModel(TdsDeposit.name) private depositModel: Model<TdsDepositDocument>,
     // Optional so specs that build this by hand need not register it.
     @Optional() @InjectModel(PartyPayment.name) private paymentModel?: Model<PartyPaymentDocument>,
+    @Optional() @InjectModel(EInvoice.name) private einvoiceModel?: Model<EInvoiceDocument>,
   ) {}
 
   async reverse(journalId: string, orgId: string, actorId: string): Promise<JournalDocument> {
@@ -246,6 +248,16 @@ export class JournalReversalService {
       journalId,
       $or: [{ amountPaidPaise: { $gt: 0 } }, { adjustedPaise: { $gt: 0 } }, { status: 'paid' }],
     };
+    // A sale registered with the IRP stays registered until its IRN is
+    // cancelled there; reversing it here alone would leave the two apart.
+    if (this.einvoiceModel) {
+      const sale = await withOrg(orgId, () => this.invoiceModel.findOne({ journalId }, { _id: 1, invoiceNumber: 1 }).session(session).lean().exec());
+      if (sale && (await withOrg(orgId, () => this.einvoiceModel!.exists({ invoiceId: sale._id, status: { $in: ['active', 'pending'] } }).session(session).exec()))) {
+        throw new BadRequestException(
+          `Invoice ${sale.invoiceNumber ?? sale._id} has a live e-invoice. Cancel the IRN from the invoice (within 24 hours of making it), which reverses the sale; after that, raise a credit note.`,
+        );
+      }
+    }
     const invoice = await withOrg(orgId, () => this.invoiceModel.findOne(paidAtAll).session(session).exec());
     if (invoice) {
       throw new BadRequestException(

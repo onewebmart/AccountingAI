@@ -20,6 +20,8 @@ export interface CreateCustomerInput {
   phone?: string | null;
   email?: string | null;
   address?: string | null;
+  city?: string | null;
+  pincode?: string | null;
   /** GST state code; ignored when the GSTIN gives it. */
   stateCode?: string | null;
   notes?: string | null;
@@ -47,6 +49,8 @@ export class CustomersService {
       phone: input.phone ?? null,
       email: input.email ?? null,
       address: input.address ?? null,
+      city: input.city?.trim() || null,
+      pincode: input.pincode ? cleanPartyDetails({ pincode: input.pincode }, { gstin: null }).pincode ?? null : null,
       // The GSTIN names the state it was issued in, so it wins over a picked one.
       stateCode: gstin ? gstin.slice(0, 2) : input.stateCode ?? null,
       notes: input.notes ?? null,
