@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { Fragment, useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { api } from '@/lib/api';
@@ -15,6 +15,7 @@ import {
   ChevronRight,
   X, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
+import { SentInPanel, formatPhone } from '@/components/inbox/sent-in-panel';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -35,6 +36,8 @@ interface InboxDoc {
   duplicateOf?: string;
   /** Why the pipeline gave up, when it did. */
   failureReason?: string;
+  /** Sent in by email or WhatsApp rather than uploaded, and by whom. */
+  source?: { channel: 'upload' | 'email' | 'whatsapp'; from: string | null };
 }
 
 // ── API response shape ────────────────────────────────────────────────────────
@@ -65,6 +68,7 @@ interface ApiDocument {
   duplicateOfName?: string;
   /** Why the pipeline gave up, when it did. */
   failureReason?: string;
+  source?: { channel: 'upload' | 'email' | 'whatsapp'; from: string | null };
 }
 
 // ── Status mapping ────────────────────────────────────────────────────────────
@@ -103,6 +107,7 @@ function mapApiDoc(doc: ApiDocument): InboxDoc {
     status: mapApiStatus(doc.status),
     duplicateOf: doc.duplicateOfName ?? doc.duplicateOf,
     failureReason: doc.failureReason,
+    source: doc.source,
   };
 }
 
@@ -377,6 +382,9 @@ export default function InboxPage() {
       {/* Dropzone */}
       <Dropzone onDrop={handleDrop} />
 
+      {/* Sent in by email or WhatsApp */}
+      <SentInPanel />
+
       {/* Error state */}
       {isError && <QueryError error={error} onRetry={() => void refetch()} />}
 
@@ -429,9 +437,8 @@ export default function InboxPage() {
             </thead>
             <tbody>
               {filtered.map((doc) => (
-                <>
+                <Fragment key={doc.id}>
                   <tr
-                    key={doc.id}
                     className={`border-b border-line-100 last:border-0 transition-colors hover:bg-honey-50 ${
                       doc.status === 'duplicate' ? 'bg-error-bg/10' : ''
                     } ${doc.status === 'failed' ? 'opacity-60' : ''}`}
@@ -441,6 +448,12 @@ export default function InboxPage() {
                         <FileText size={14} className="text-ink-400 shrink-0" />
                         <span className="font-mono text-caption text-ink-900 truncate">{doc.fileName}</span>
                       </span>
+                      {doc.source && doc.source.channel !== 'upload' && (
+                        <span className="mt-0.5 block truncate pl-[22px] text-[0.7rem] text-ink-500">
+                          via {doc.source.channel === 'email' ? 'email' : 'WhatsApp'}
+                          {doc.source.from && ` · ${doc.source.channel === 'whatsapp' ? formatPhone(doc.source.from) : doc.source.from}`}
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-caption text-ink-600 whitespace-nowrap">
                       {TYPE_LABELS[doc.type]}
@@ -513,7 +526,7 @@ export default function InboxPage() {
                       </td>
                     </tr>
                   )}
-                </>
+                </Fragment>
               ))}
             </tbody>
           </table>

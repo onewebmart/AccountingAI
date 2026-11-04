@@ -55,6 +55,14 @@ export class OrgSettings {
   @Prop({ type: String, default: null }) brandingAccentColor: string | null;
   @Prop({ type: String, default: null }) customDomain: string | null;
   @Prop({ type: Boolean, default: false }) clientPortalEnabled: boolean;
+
+  /** The code in this org's address for bills sent by email: bills-<code>@<inbound domain>. */
+  @Prop({ type: String, default: null, index: true, sparse: true }) inboxToken: string | null;
+  /** Phone numbers (E.164 digits) whose WhatsApp messages bring bills in for this org. */
+  @Prop({ type: [String], default: [], index: true }) whatsappSenders: string[];
+  /** A short code that links a phone when it sends "LINK <code>"; single-use, expires in minutes. */
+  @Prop({ type: String, default: null, index: true, sparse: true }) whatsappLinkCode: string | null;
+  @Prop({ type: Date, default: null }) whatsappLinkCodeExpiresAt: Date | null;
 }
 
 export const OrgSettingsSchema = SchemaFactory.createForClass(OrgSettings);

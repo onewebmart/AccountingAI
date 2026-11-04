@@ -34,6 +34,7 @@ import { AuditTrailModule } from './audit/audit-trail.module';
 import { PartyPaymentsModule } from './payments/party-payments.module';
 import { PortalModule } from './portal/portal.module';
 import { AttachmentsModule } from './attachments/attachments.module';
+import { InboundModule } from './inbound/inbound.module';
 
 @Module({
   imports: [
@@ -81,6 +82,7 @@ import { AttachmentsModule } from './attachments/attachments.module';
     PartyPaymentsModule,
     PortalModule,
     AttachmentsModule,
+    InboundModule,
     CrmModule,
     WorkspaceModule,
   ],

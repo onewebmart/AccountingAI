@@ -39,6 +39,23 @@ export default () => ({
     webhookSecret: process.env.RAZORPAY_WEBHOOK_SECRET ?? '',
   },
 
+  /**
+   * Bills sent in. Email: mail to bills-<code>@INBOUND_EMAIL_DOMAIN reaches
+   * our webhook from the mail provider, which proves itself with
+   * INBOUND_EMAIL_SECRET. WhatsApp: Meta's Cloud API webhook, verified with
+   * the app secret; media fetched with the access token.
+   */
+  inbound: {
+    emailDomain: process.env.INBOUND_EMAIL_DOMAIN ?? '',
+    emailSecret: process.env.INBOUND_EMAIL_SECRET ?? '',
+    whatsappVerifyToken: process.env.WHATSAPP_VERIFY_TOKEN ?? '',
+    whatsappAppSecret: process.env.WHATSAPP_APP_SECRET ?? '',
+    whatsappAccessToken: process.env.WHATSAPP_ACCESS_TOKEN ?? '',
+    whatsappGraphVersion: process.env.WHATSAPP_GRAPH_VERSION ?? 'v21.0',
+    /** Shown to people linking a phone: the number they send "LINK <code>" to. */
+    whatsappBusinessNumber: process.env.WHATSAPP_BUSINESS_NUMBER ?? '',
+  },
+
   email: {
     host: process.env.SMTP_HOST ?? '',
     port: parseInt(process.env.SMTP_PORT ?? '587', 10),
