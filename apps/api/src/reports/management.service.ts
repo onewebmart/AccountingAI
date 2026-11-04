@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Optional } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { AccountType, BillStatus, InvoiceStatus, JournalStatus } from '@ai-accounting/shared';
@@ -15,11 +15,13 @@ import { Vendor, VendorDocument } from '../purchase/schemas/vendor.schema';
 import { Item, ItemDocument } from '../items/schemas/item.schema';
 import { todayIst } from '../automation/schedule';
 import { Budget, BudgetDocument } from './schemas/budget.schema';
+import { Project, ProjectDocument } from '../projects/schemas/project.schema';
+import { TimeEntry, TimeEntryDocument } from '../projects/schemas/time-entry.schema';
 import {
   AccountMeta, DocFact, GstMonth, LineFact, MONTH, MonthNet, OpenDoc, PaidFact,
   ageingByParty, budgetVsActual, byItem, byMonth, byParty, comparison, fyMonths, gstSummary, monthEnd, monthsBetween, plMonthly, plTotals, rangeLabel, shiftMonth,
 } from './management';
-import { ReportTable } from './report-table';
+import { ReportRow, ReportTable } from './report-table';
 
 const DONE_INVOICE = [InvoiceStatus.POSTED, InvoiceStatus.PAID];
 const DONE_BILL = [BillStatus.POSTED, BillStatus.PAID];
@@ -54,6 +56,8 @@ export class ManagementReportsService {
     @InjectModel(Item.name) private itemModel: Model<ItemDocument>,
     @InjectModel(Budget.name) private budgetModel: Model<BudgetDocument>,
     private audit: AuditService,
+    @Optional() @InjectModel(Project.name) private projectModel?: Model<ProjectDocument>,
+    @Optional() @InjectModel(TimeEntry.name) private timeModel?: Model<TimeEntryDocument>,
   ) {}
 
   /** A month range; by default this financial year to the current month. */
@@ -299,5 +303,78 @@ export class ManagementReportsService {
     const [accounts, saved, nets] = await Promise.all([this.accounts(orgId), this.budgetModel.find({ orgId, financialYear }).lean().exec(), this.monthNets(orgId, { from: year.from, to: end })]);
     const budget = new Map(saved.map((b) => [String(b.accountId), b.monthsPaise.slice(0, months.length).reduce((s, v) => s + v, 0)]));
     return budgetVsActual(budget, plTotals(nets, accounts), accounts, `${financialYear}, ${rangeLabel(year.from, end)}`);
+  }
+
+  // ── Projects ──────────────────────────────────────────────────────────
+
+  /**
+   * Each project's income and costs from the journal lines that carry it,
+   * the hours logged, and billable time not yet invoiced at its rates. A
+   * range limits the books and the hours; unbilled time is as it stands.
+   */
+  async projectFigures(orgId: string, r: Range | null = null) {
+    const out = new Map<string, { incomePaise: number; costPaise: number; hours: number; unbilledHours: number; unbilledPaise: number }>();
+    const row = (id: string) => out.get(id) ?? out.set(id, { incomePaise: 0, costPaise: 0, hours: 0, unbilledHours: 0, unbilledPaise: 0 }).get(id)!;
+    const accounts = await this.accounts(orgId);
+    const inRange = r ? { date: { $gte: `${r.from}-01`, $lte: monthEnd(r.to) } } : {};
+    const lines = await this.journalModel
+      .aggregate<{ _id: { p: Types.ObjectId; a: Types.ObjectId }; net: number }>([
+        { $match: { orgId, status: JournalStatus.POSTED, isClosingEntry: { $ne: true }, lines: { $elemMatch: { projectId: { $ne: null } } }, ...inRange } },
+        { $unwind: '$lines' },
+        { $match: { 'lines.projectId': { $ne: null } } },
+        { $group: { _id: { p: '$lines.projectId', a: '$lines.accountId' }, net: { $sum: { $subtract: ['$lines.debitPaise', '$lines.creditPaise'] } } } },
+      ])
+      .exec();
+    for (const l of lines) {
+      const a = accounts.get(String(l._id.a));
+      if (!a) continue;
+      if (a.type === AccountType.INCOME) row(String(l._id.p)).incomePaise -= l.net;
+      else if (a.type === AccountType.EXPENSE) row(String(l._id.p)).costPaise += l.net;
+    }
+    if (this.timeModel && this.projectModel) {
+      const rates = new Map((await this.projectModel.find({ orgId }, { ratePaise: 1 }).lean().exec()).map((p) => [String(p._id), p.ratePaise]));
+      const time = await this.timeModel.find({ orgId }, { projectId: 1, date: 1, hours: 1, billable: 1, status: 1, ratePaise: 1 }).lean().exec();
+      for (const t of time) {
+        const f = row(String(t.projectId));
+        if (!r || (t.date >= `${r.from}-01` && t.date <= monthEnd(r.to))) f.hours = Math.round((f.hours + t.hours) * 100) / 100;
+        if (t.billable && t.status === 'unbilled') {
+          f.unbilledHours = Math.round((f.unbilledHours + t.hours) * 100) / 100;
+          f.unbilledPaise += Math.round(t.hours * (t.ratePaise ?? rates.get(String(t.projectId)) ?? 0));
+        }
+      }
+    }
+    return out;
+  }
+
+  async projectPnl(orgId: string, r: Range): Promise<ReportTable> {
+    const [figures, projects] = await Promise.all([this.projectFigures(orgId, r), this.projectModel ? this.projectModel.find({ orgId }).lean().exec() : Promise.resolve([])]);
+    const customers = await this.customerModel.find({ orgId, _id: { $in: projects.map((p) => p.customerId).filter(Boolean) } }, { name: 1 }).lean().exec();
+    const customerName = new Map(customers.map((c) => [String(c._id), c.name]));
+    const rows: ReportRow[] = projects
+      .map((p) => ({ p, f: figures.get(String(p._id)) }))
+      .filter(({ f }) => f && (f.incomePaise || f.costPaise || f.hours || f.unbilledPaise))
+      .sort((a, b) => b.f!.incomePaise - a.f!.incomePaise || a.p.name.localeCompare(b.p.name))
+      .map(({ p, f }) => {
+        const profit = f!.incomePaise - f!.costPaise;
+        return { cells: [p.name, p.customerId ? customerName.get(String(p.customerId)) ?? '' : 'Internal', f!.incomePaise, f!.costPaise, profit, f!.incomePaise ? Math.round((profit / f!.incomePaise) * 1000) / 10 : null, f!.hours, f!.unbilledPaise] };
+      });
+    const t = rows.reduce((a, row) => [a[0] + Number(row.cells[2]), a[1] + Number(row.cells[3]), a[2] + Number(row.cells[6]), a[3] + Number(row.cells[7])], [0, 0, 0, 0]);
+    return {
+      key: 'project_pnl',
+      title: 'Profit by project',
+      subtitle: rangeLabel(r.from, r.to),
+      columns: [
+        { key: 'project', label: 'Project', kind: 'text' },
+        { key: 'customer', label: 'Customer', kind: 'text' },
+        { key: 'income', label: 'Income', kind: 'money' },
+        { key: 'cost', label: 'Costs', kind: 'money' },
+        { key: 'profit', label: 'Profit', kind: 'money' },
+        { key: 'margin', label: 'Margin %', kind: 'number' },
+        { key: 'hours', label: 'Hours', kind: 'number' },
+        { key: 'unbilled', label: 'Unbilled time', kind: 'money' },
+      ],
+      rows: [...rows, { cells: ['Total', null, t[0], t[1], t[0] - t[1], t[0] ? Math.round(((t[0] - t[1]) / t[0]) * 1000) / 10 : null, Math.round(t[2] * 100) / 100, t[3]], style: 'grand' }],
+      notes: ['Income and costs from posted lines tagged with the project. Unbilled time is billable time not yet invoiced, at its rates, as it stands today.'],
+    };
   }
 }

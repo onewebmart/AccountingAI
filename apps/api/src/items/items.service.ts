@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
@@ -11,6 +11,7 @@ import { PurchaseBill, PurchaseBillDocument } from '../purchase/schemas/purchase
 import { AiSuggestion, AiSuggestionDocument } from '../ai-suggestions/schemas/ai-suggestion.schema';
 import { UsageMeterService } from '../ocr/usage-meter.service';
 import { Item, ItemDocument } from './schemas/item.schema';
+import { Project, ProjectDocument } from '../projects/schemas/project.schema';
 import { HsnGuess, ITEM_GST_RATES, ItemKind, UQC_CODES, hsnProblem, nameKey, ruleGuess } from './hsn';
 import { HSN_MODEL, HsnModel, readHsnAnswer } from './hsn-model';
 
@@ -44,9 +45,10 @@ export interface LineIn {
   taxRatePct?: number;
   itemId?: string | null;
   uqc?: string | null;
+  projectId?: string | null;
 }
 
-export type ResolvedLine = Omit<LineIn, 'itemId'> & { itemId: Types.ObjectId | null; uqc: string | null; accountId: Types.ObjectId | null };
+export type ResolvedLine = Omit<LineIn, 'itemId' | 'projectId'> & { itemId: Types.ObjectId | null; uqc: string | null; accountId: Types.ObjectId | null; projectId: Types.ObjectId | null };
 
 export interface HsnSuggestionView {
   id: string | null;
@@ -74,6 +76,7 @@ export class ItemsService {
     @Inject(HSN_MODEL) private model: HsnModel,
     private usageMeter: UsageMeterService,
     private audit: AuditService,
+    @Optional() @InjectModel(Project.name) private projectModel?: Model<ProjectDocument>,
   ) {}
 
   async list(orgId: string, opts: { q?: string; includeArchived?: boolean } = {}) {
@@ -141,7 +144,10 @@ export class ItemsService {
     for (const id of ids) if (!Types.ObjectId.isValid(id)) throw new BadRequestException(`No such item: ${id}`);
     const items = ids.length ? await this.itemModel.find({ orgId, _id: { $in: ids } }).lean().exec() : [];
     const byId = new Map(items.map((i) => [String(i._id), i]));
-    return lines.map((l) => {
+    const projects = await this.projectsOf(orgId, lines);
+    return lines.map((raw) => {
+      const projectId = raw.projectId ? projects.get(raw.projectId)! : null;
+      const l = { ...raw, projectId };
       if (!l.itemId) return { ...l, itemId: null, uqc: l.uqc ?? null, accountId: null };
       const item = byId.get(l.itemId);
       if (!item) throw new BadRequestException(`No such item: ${l.itemId}`);
@@ -155,6 +161,16 @@ export class ItemsService {
         accountId: (side === 'sale' ? item.incomeAccountId : item.expenseAccountId) ?? null,
       };
     });
+  }
+
+  /** The projects lines name, each checked to be this org's. */
+  private async projectsOf(orgId: string, lines: LineIn[]): Promise<Map<string, Types.ObjectId>> {
+    const ids = [...new Set(lines.map((l) => l.projectId).filter((id): id is string => !!id))];
+    if (!ids.length) return new Map();
+    if (ids.some((id) => !Types.ObjectId.isValid(id))) throw new BadRequestException('No such project.');
+    const found = this.projectModel ? await this.projectModel.find({ orgId, _id: { $in: ids } }, { _id: 1 }).lean().exec() : ids.map((id) => ({ _id: new Types.ObjectId(id) }));
+    if (found.length !== ids.length) throw new BadRequestException('No such project.');
+    return new Map(found.map((p) => [String(p._id), p._id as Types.ObjectId]));
   }
 
   /**

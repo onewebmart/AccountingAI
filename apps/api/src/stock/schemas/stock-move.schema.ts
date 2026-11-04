@@ -26,7 +26,7 @@ export class StockMove {
   @Prop({
     type: Number,
     required: true,
-    validate: { validator: (v: number) => v !== 0 && Number.isFinite(v) && Math.round(v * 1000) === v * 1000, message: 'A quantity is not nothing, to three decimals at most.' },
+    validate: { validator: (v: number) => v !== 0 && Number.isFinite(v) && Math.abs(Math.round(v * 1000) - v * 1000) < 1e-6, message: 'A quantity is not nothing, to three decimals at most.' },
   })
   qty: number;
   /** Cost per unit for stock in; null takes the running average (a return, a count found more). */

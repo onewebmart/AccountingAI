@@ -73,11 +73,12 @@ export interface CreateInvoiceInput {
     itemId?: Types.ObjectId | null;
     uqc?: string | null;
     accountId?: Types.ObjectId | null;
+    projectId?: Types.ObjectId | null;
   }>;
   notes?: string | null;
   /** Set when a recurring template drafts this invoice. */
   recurringTemplateId?: string | null;
-  source?: { kind: 'quote' | 'sales_order'; id: string; lines?: Array<{ orderLine: number; qty: number }> } | null;
+  source?: { kind: 'quote' | 'sales_order' | 'project'; id: string; lines?: Array<{ orderLine: number; qty: number }> } | null;
 }
 
 function getFY(dateStr: string): string {
@@ -271,6 +272,7 @@ export class SalesInvoicesService {
         description: names.get(p.accountId) ?? revenue.name,
         debitPaise: 0,
         creditPaise: p.amountPaise,
+        projectId: p.projectId,
       })),
     ];
     // One line per tax head, as the return expects.

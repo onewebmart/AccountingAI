@@ -77,12 +77,19 @@ describe('splitting by account', () => {
       { amountPaise: 1, accountId: null },
       { amountPaise: 1, accountId: 'consulting' },
     ], 'sales');
-    expect(parts).toEqual([{ accountId: 'consulting', amountPaise: 66667 }, { accountId: 'sales', amountPaise: 33334 }]);
+    expect(parts).toEqual([{ accountId: 'consulting', projectId: null, amountPaise: 66667 }, { accountId: 'sales', projectId: null, amountPaise: 33334 }]);
     expect(parts.reduce((s, p) => s + p.amountPaise, 0)).toBe(100001);
   });
 
   it('is one line to the default when no line has an account', () => {
-    expect(splitByAccount(5000, [{ amountPaise: 3000 }, { amountPaise: 2000, accountId: null }], 'sales')).toEqual([{ accountId: 'sales', amountPaise: 5000 }]);
-    expect(splitByAccount(5000, [], 'sales')).toEqual([{ accountId: 'sales', amountPaise: 5000 }]);
+    expect(splitByAccount(5000, [{ amountPaise: 3000 }, { amountPaise: 2000, accountId: null }], 'sales')).toEqual([{ accountId: 'sales', projectId: null, amountPaise: 5000 }]);
+    expect(splitByAccount(5000, [], 'sales')).toEqual([{ accountId: 'sales', projectId: null, amountPaise: 5000 }]);
+  });
+
+  it('keeps lines on different projects apart, on the same account', () => {
+    expect(splitByAccount(10000, [{ amountPaise: 6000, projectId: 'web' }, { amountPaise: 3000 }, { amountPaise: 1000, projectId: 'web' }], 'sales')).toEqual([
+      { accountId: 'sales', projectId: 'web', amountPaise: 7000 },
+      { accountId: 'sales', projectId: null, amountPaise: 3000 },
+    ]);
   });
 });

@@ -42,6 +42,7 @@ import { OrdersModule } from './orders/orders.module';
 import { ApprovalsModule } from './approvals/approvals.module';
 import { ExpensesModule } from './expenses/expenses.module';
 import { StockModule } from './stock/stock.module';
+import { ProjectsModule } from './projects/projects.module';
 
 @Module({
   imports: [
@@ -97,6 +98,7 @@ import { StockModule } from './stock/stock.module';
     ApprovalsModule,
     ExpensesModule,
     StockModule,
+    ProjectsModule,
     CrmModule,
     WorkspaceModule,
   ],

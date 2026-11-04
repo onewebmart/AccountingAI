@@ -113,8 +113,8 @@ export class CreditNotesService {
       );
 
       const shares = allocate(amounts.taxableValue, mains.map((m) => m.weight));
-      const lines: Array<{ accountId: string; description: string; debitPaise: number; creditPaise: number }> = mains
-        .map((m, i) => ({ accountId: m._id, description: m.name, debitPaise: shares[i], creditPaise: 0 }))
+      const lines: Array<{ accountId: string; description: string; debitPaise: number; creditPaise: number; projectId?: string | null }> = mains
+        .map((m, i) => ({ accountId: m._id, description: m.name, debitPaise: shares[i], creditPaise: 0, projectId: m.projectId }))
         .filter((l, i) => l.debitPaise > 0 || i === 0);
       for (const [head, key] of TAX_KEYS) {
         if (amounts[head] > 0) {
@@ -257,20 +257,22 @@ export class CreditNotesService {
     fallback: { _id: Types.ObjectId; name: string },
     orgId: string,
     session: ClientSession,
-  ): Promise<Array<{ _id: string; name: string; weight: number }>> {
+  ): Promise<Array<{ _id: string; name: string; weight: number; projectId: string | null }>> {
     const journal = journalId
       ? await withOrg(orgId, () => this.journalModel.findById(journalId).session(session).lean().exec())
       : null;
-    // Every account the original's value went to (one per item account), so
-    // the note comes back off each in the same proportion.
-    const byAccount = new Map<string, { _id: string; name: string; weight: number }>();
+    // Every account (and project) the original's value went to, so the note
+    // comes back off each in the same proportion.
+    const byAccount = new Map<string, { _id: string; name: string; weight: number; projectId: string | null }>();
     for (const l of journal?.lines ?? []) {
       if (l.creditPaise <= 0 || exclude.has(String(l.accountId))) continue;
       const id = String(l.accountId);
-      const entry = byAccount.get(id) ?? { _id: id, name: l.description || fallback.name, weight: 0 };
+      const projectId = l.projectId ? String(l.projectId) : null;
+      const key = `${id}|${projectId ?? ''}`;
+      const entry = byAccount.get(key) ?? { _id: id, name: l.description || fallback.name, weight: 0, projectId };
       entry.weight += l.creditPaise;
-      byAccount.set(id, entry);
+      byAccount.set(key, entry);
     }
-    return byAccount.size ? [...byAccount.values()] : [{ _id: String(fallback._id), name: fallback.name, weight: 1 }];
+    return byAccount.size ? [...byAccount.values()] : [{ _id: String(fallback._id), name: fallback.name, weight: 1, projectId: null }];
   }
 }

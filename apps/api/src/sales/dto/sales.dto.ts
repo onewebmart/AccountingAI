@@ -87,6 +87,11 @@ export class LineItemDto {
   @IsOptional()
   @IsIn(UQC_CODES)
   uqc?: string;
+
+  /** The project the line's income or cost belongs to. */
+  @IsOptional()
+  @IsMongoId()
+  projectId?: string;
 }
 
 export class CreateCustomerDto {

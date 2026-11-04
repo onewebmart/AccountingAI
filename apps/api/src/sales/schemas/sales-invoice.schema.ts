@@ -39,6 +39,8 @@ class InvoiceLineItem {
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'LedgerAccount', default: null }) accountId: Types.ObjectId | null;
   /** Marked by a person as not a stock item (packing, a one-off), so it stops asking to be linked. */
   @Prop({ type: Boolean, default: false }) notStock: boolean;
+  /** The project this line's income or cost belongs to; its journal line carries it. */
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Project', default: null }) projectId: Types.ObjectId | null;
 }
 
 @Schema({ collection: 'sales_invoices', timestamps: true })
@@ -144,7 +146,7 @@ export class SalesInvoice {
 
   /** Made from a quote or a sales order; for an order, how much of each of its lines this invoice bills. */
   @Prop({ type: Object, default: null })
-  source: { kind: 'quote' | 'sales_order'; id: string; lines?: Array<{ orderLine: number; qty: number }> } | null;
+  source: { kind: 'quote' | 'sales_order' | 'project'; id: string; lines?: Array<{ orderLine: number; qty: number }> } | null;
 
 }
 

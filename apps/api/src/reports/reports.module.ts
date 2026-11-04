@@ -18,6 +18,8 @@ import { Vendor, VendorSchema } from '../purchase/schemas/vendor.schema';
 import { Item, ItemSchema } from '../items/schemas/item.schema';
 import { OrgSettings, OrgSettingsSchema } from '../org-settings/schemas/org-settings.schema';
 import { Budget, BudgetSchema } from './schemas/budget.schema';
+import { Project, ProjectSchema } from '../projects/schemas/project.schema';
+import { TimeEntry, TimeEntrySchema } from '../projects/schemas/time-entry.schema';
 import { ReportSchedule, ReportScheduleSchema } from './schemas/report-schedule.schema';
 import { ReportsService } from './reports.service';
 import { ReportsController } from './reports.controller';
@@ -58,6 +60,8 @@ export class ReportAiProcessor extends WorkerHost {
       { name: Budget.name, schema: BudgetSchema },
       { name: ReportSchedule.name, schema: ReportScheduleSchema },
       { name: AiSuggestion.name, schema: AiSuggestionSchema },
+      { name: Project.name, schema: ProjectSchema },
+      { name: TimeEntry.name, schema: TimeEntrySchema },
     ]),
     BullModule.registerQueue({ name: REPORT_AI_QUEUE }),
     GlModule, // AuditService

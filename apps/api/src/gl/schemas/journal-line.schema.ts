@@ -16,6 +16,10 @@ export class JournalLine {
 
   @Prop({ required: true, default: 0, validate: { validator: Number.isInteger, message: 'creditPaise must be an integer' } })
   creditPaise: number;
+
+  /** The project this line's income or cost belongs to. Set when the journal is posted, never after. */
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Project', default: null })
+  projectId?: MongooseSchema.Types.ObjectId | null;
 }
 
 export const JournalLineSchema = SchemaFactory.createForClass(JournalLine);

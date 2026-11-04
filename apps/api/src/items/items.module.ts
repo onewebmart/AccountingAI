@@ -1,3 +1,4 @@
+import { Project, ProjectSchema } from '../projects/schemas/project.schema';
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { BullModule } from '@nestjs/bullmq';
@@ -17,6 +18,7 @@ import { GeminiHsnModel, HSN_MODEL } from './hsn-model';
   imports: [
     MongooseModule.forFeature([
       { name: Item.name, schema: ItemSchema },
+      { name: Project.name, schema: ProjectSchema },
       { name: AiSuggestion.name, schema: AiSuggestionSchema },
       // Read for the codes this org already used on its lines.
       { name: SalesInvoice.name, schema: SalesInvoiceSchema },

@@ -39,6 +39,8 @@ class BillLineItem {
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'LedgerAccount', default: null }) accountId: Types.ObjectId | null;
   /** Marked by a person as not a stock item (packing, a one-off), so it stops asking to be linked. */
   @Prop({ type: Boolean, default: false }) notStock: boolean;
+  /** The project this line's income or cost belongs to; its journal line carries it. */
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Project', default: null }) projectId: Types.ObjectId | null;
 }
 
 /** TDS deducted from this bill — booked when the bill is, as the law expects. */

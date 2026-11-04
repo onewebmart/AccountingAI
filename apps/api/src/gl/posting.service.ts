@@ -25,6 +25,8 @@ export interface PostJournalInput {
     description?: string;
     debitPaise: number;
     creditPaise: number;
+    /** A project dimension, fixed at posting like the rest of the line. */
+    projectId?: string | null;
   }>;
 }
 
@@ -185,6 +187,7 @@ export class PostingService {
           description: l.description ?? '',
           debitPaise: l.debitPaise,
           creditPaise: l.creditPaise,
+          projectId: l.projectId && Types.ObjectId.isValid(l.projectId) ? new Types.ObjectId(l.projectId) : null,
         })),
       });
       await doc.validate();
@@ -262,6 +265,8 @@ export class PostingService {
             // Swap debit ↔ credit to create the contra entry
             debitPaise: l.creditPaise,
             creditPaise: l.debitPaise,
+            // A reversal comes off the same project it went to.
+            projectId: l.projectId ? l.projectId.toString() : null,
           })),
         },
         session,

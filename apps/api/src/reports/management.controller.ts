@@ -51,7 +51,7 @@ class AskDto {
 }
 
 class ScheduleDto {
-  @IsIn(['pl_monthly', 'comparison', 'expenses', 'budget_vs_actual', 'sales_by_customer', 'sales_by_item', 'sales_by_month', 'purchases_by_vendor', 'purchases_by_item', 'purchases_by_month', 'receivables', 'payables', 'gst_summary', 'trial_balance', 'balance_sheet'])
+  @IsIn(['pl_monthly', 'comparison', 'expenses', 'budget_vs_actual', 'sales_by_customer', 'sales_by_item', 'sales_by_month', 'purchases_by_vendor', 'purchases_by_item', 'purchases_by_month', 'receivables', 'payables', 'gst_summary', 'trial_balance', 'balance_sheet', 'project_pnl'])
   report: string;
   @IsOptional() @IsIn(['last_month', 'this_month', 'last_quarter', 'this_fy', 'last_fy']) period?: 'last_month' | 'this_month' | 'last_quarter' | 'this_fy' | 'last_fy';
   @IsIn(['monthly', 'weekly']) frequency: 'monthly' | 'weekly';

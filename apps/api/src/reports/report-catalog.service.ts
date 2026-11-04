@@ -13,7 +13,7 @@ export const REPORT_KEYS = [
   'pl_monthly', 'comparison', 'expenses', 'budget_vs_actual',
   'sales_by_customer', 'sales_by_item', 'sales_by_month',
   'purchases_by_vendor', 'purchases_by_item', 'purchases_by_month',
-  'receivables', 'payables', 'gst_summary', 'trial_balance', 'balance_sheet',
+  'receivables', 'payables', 'gst_summary', 'trial_balance', 'balance_sheet', 'project_pnl',
 ] as const;
 export type ReportKey = (typeof REPORT_KEYS)[number];
 
@@ -34,6 +34,7 @@ export const CATALOG: Record<ReportKey, { title: string; params: 'range' | 'toda
   gst_summary: { title: 'GST summary', params: 'range', group: 'Tax' },
   trial_balance: { title: 'Trial balance', params: 'year', group: 'Books' },
   balance_sheet: { title: 'Balance sheet', params: 'today', group: 'Books' },
+  project_pnl: { title: 'Profit by project', params: 'range', group: 'Profit' },
 };
 
 export interface ReportParams {
@@ -95,6 +96,7 @@ export class ReportCatalogService {
       case 'gst_summary': return m.gst(orgId, r());
       case 'trial_balance': return this.trialBalance(orgId, fy());
       case 'balance_sheet': return this.balanceSheet(orgId, fy());
+      case 'project_pnl': return m.projectPnl(orgId, r());
     }
   }
 
