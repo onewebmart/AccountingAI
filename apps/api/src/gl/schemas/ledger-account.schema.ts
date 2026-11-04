@@ -48,6 +48,10 @@ export enum SystemAccountKey {
   ASSET_DISPOSAL_GAIN = 'ASSET_DISPOSAL_GAIN',
   ASSET_DISPOSAL_LOSS = 'ASSET_DISPOSAL_LOSS',
   EMPLOYEE_PAYABLE = 'EMPLOYEE_PAYABLE',
+  /** Goods on hand at cost, booked at each period end (periodic inventory). */
+  INVENTORY = 'INVENTORY',
+  /** The P&L side of the closing-stock entry: opening less closing stock. */
+  CHANGE_IN_INVENTORY = 'CHANGE_IN_INVENTORY',
 }
 
 @Schema({ timestamps: true, collection: 'ledger_accounts' })

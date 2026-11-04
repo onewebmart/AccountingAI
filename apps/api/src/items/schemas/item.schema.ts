@@ -20,9 +20,9 @@ class HsnSource {
 }
 
 /**
- * Something the business sells or buys. No stock is kept yet: an item fills
- * a line's HSN/SAC, unit, rate and account, and the GSTR-1 HSN summary
- * groups by it.
+ * Something the business sells or buys. An item fills a line's HSN/SAC,
+ * unit, rate and account; goods are counted in stock from the lines linked
+ * to them (see stock/).
  */
 @Schema({ collection: 'items', timestamps: true })
 export class Item {
@@ -43,6 +43,11 @@ export class Item {
   /** Where its purchases are debited; the Purchases account when not set. */
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'LedgerAccount', default: null }) expenseAccountId: Types.ObjectId | null;
   @Prop({ type: String, default: null }) description: string | null;
+  /** Goods are counted in stock unless this is off (a consumable nobody counts). */
+  @Prop({ type: Boolean, default: true }) trackStock: boolean;
+  /** Buy more at or under this many; none set, the sales rate decides. */
+  @Prop({ type: Number, default: null, min: 0 }) reorderLevel: number | null;
+  @Prop({ type: Number, default: null, min: 0 }) reorderQty: number | null;
   @Prop({ type: Boolean, default: true, index: true }) isActive: boolean;
 }
 

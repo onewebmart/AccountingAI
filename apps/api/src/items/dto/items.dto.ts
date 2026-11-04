@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsIn, IsInt, IsMongoId, IsNumber, IsOptional, IsString, Length, Max, Min, ValidateNested } from 'class-validator';
+import { IsBoolean, IsIn, IsInt, IsMongoId, IsNumber, IsOptional, IsString, Length, Max, Min, ValidateNested } from 'class-validator';
 import { ITEM_GST_RATES, UQC_CODES } from '../hsn';
 
 export class HsnSourceDto {
@@ -73,6 +73,20 @@ export class UpdateItemDto {
   @ValidateNested()
   @Type(() => HsnSourceDto)
   hsnSource?: HsnSourceDto | null;
+
+  @IsOptional()
+  @IsBoolean()
+  trackStock?: boolean;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  reorderLevel?: number | null;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  reorderQty?: number | null;
 }
 
 export class CreateItemDto extends UpdateItemDto {

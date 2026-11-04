@@ -107,6 +107,7 @@ const DEFAULT_COA: SeedNode[] = [
       },
       { code: '1410', name: 'Advances to Vendors', type: AccountType.ASSETS, systemKey: SystemAccountKey.VENDOR_ADVANCES },
       { code: '1420', name: 'Prepaid Expenses', type: AccountType.ASSETS, systemKey: SystemAccountKey.PREPAID_EXPENSES },
+      { code: '1430', name: 'Stock in Hand', type: AccountType.ASSETS, systemKey: SystemAccountKey.INVENTORY },
     ],
   },
   {
@@ -209,6 +210,7 @@ const DEFAULT_COA: SeedNode[] = [
         systemKey: SystemAccountKey.PURCHASE_EXPENSE,
       },
       { code: '5200', name: 'Freight & Carriage', type: AccountType.EXPENSE },
+      { code: '5300', name: 'Changes in Inventories', type: AccountType.EXPENSE, systemKey: SystemAccountKey.CHANGE_IN_INVENTORY },
     ],
   },
   {

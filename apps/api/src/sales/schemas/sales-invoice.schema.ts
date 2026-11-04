@@ -37,6 +37,8 @@ class InvoiceLineItem {
   @Prop({ type: String, default: null }) uqc: string | null;
   /** Where this line's value posts, from the item; the default account when null. */
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'LedgerAccount', default: null }) accountId: Types.ObjectId | null;
+  /** Marked by a person as not a stock item (packing, a one-off), so it stops asking to be linked. */
+  @Prop({ type: Boolean, default: false }) notStock: boolean;
 }
 
 @Schema({ collection: 'sales_invoices', timestamps: true })

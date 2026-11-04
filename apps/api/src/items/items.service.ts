@@ -28,6 +28,9 @@ export interface ItemInput {
   incomeAccountId?: string | null;
   expenseAccountId?: string | null;
   description?: string | null;
+  trackStock?: boolean;
+  reorderLevel?: number | null;
+  reorderQty?: number | null;
   /** Set when the person took a suggestion; otherwise a typed code is the person's own. */
   hsnSource?: { by: 'history' | 'rule' | 'model'; reason?: string | null; confidence?: number | null } | null;
 }
@@ -282,6 +285,9 @@ export class ItemsService {
       incomeAccountId,
       expenseAccountId,
       description: input.description?.trim() || null,
+      trackStock: kind === 'goods' && input.trackStock !== false,
+      reorderLevel: kind === 'goods' && input.reorderLevel != null && input.reorderLevel >= 0 ? input.reorderLevel : null,
+      reorderQty: kind === 'goods' && input.reorderQty != null && input.reorderQty > 0 ? input.reorderQty : null,
     };
   }
 
@@ -308,6 +314,9 @@ export class ItemsService {
       incomeAccountId: item.incomeAccountId ? String(item.incomeAccountId) : null,
       expenseAccountId: item.expenseAccountId ? String(item.expenseAccountId) : null,
       description: item.description,
+      trackStock: item.trackStock,
+      reorderLevel: item.reorderLevel,
+      reorderQty: item.reorderQty,
       hsnSource: item.hsnSource && item.hsnSource.by !== 'person' ? { by: item.hsnSource.by, reason: item.hsnSource.reason, confidence: item.hsnSource.confidence } : null,
     };
   }

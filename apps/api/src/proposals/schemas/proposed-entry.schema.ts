@@ -107,7 +107,7 @@ export class ProposedEntry {
    */
   @Prop({ type: Object, default: null })
   adjustment: {
-    kind: 'recurring_journal' | 'accrual' | 'prepaid' | 'depreciation' | 'capitalise' | 'disposal' | 'reclass';
+    kind: 'recurring_journal' | 'accrual' | 'prepaid' | 'depreciation' | 'capitalise' | 'disposal' | 'reclass' | 'closing_stock' | 'opening_stock';
     refId: string | null;
     period: string | null;
     reason: string;

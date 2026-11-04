@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { ClientSession, Model, Types } from 'mongoose';
 import { BillStatus, InvoiceStatus } from '@ai-accounting/shared';
@@ -6,6 +6,7 @@ import { Vendor, VendorDocument } from '../purchase/schemas/vendor.schema';
 import { PurchaseBill, PurchaseBillDocument } from '../purchase/schemas/purchase-bill.schema';
 import { Customer, CustomerDocument } from '../sales/schemas/customer.schema';
 import { SalesInvoice, SalesInvoiceDocument } from '../sales/schemas/sales-invoice.schema';
+import { ExtractedDocument, ExtractedDocumentDocument } from '../extraction/schemas/extracted-document.schema';
 import { ProposedEntryDocument } from './schemas/proposed-entry.schema';
 import { withOrg } from '../database/tenant.plugin';
 
@@ -51,7 +52,21 @@ export class SubledgerSyncService {
     @InjectModel(PurchaseBill.name) private billModel: Model<PurchaseBillDocument>,
     @InjectModel(Customer.name) private customerModel: Model<CustomerDocument>,
     @InjectModel(SalesInvoice.name) private invoiceModel: Model<SalesInvoiceDocument>,
+    @Optional() @InjectModel(ExtractedDocument.name) private extractedModel?: Model<ExtractedDocumentDocument>,
   ) {}
+
+  /**
+   * The lines read off the document, kept on the bill or invoice with no
+   * item yet, so stock can link them later. Only what was read: the journal
+   * is already posted from the proposal's totals and these never post.
+   */
+  private async scannedLines(proposal: ProposedEntryDocument, session?: ClientSession) {
+    if (!this.extractedModel || !proposal.extractedDocumentId) return [];
+    const extracted = await this.extractedModel.findOne({ _id: proposal.extractedDocumentId, orgId: proposal.orgId }, { lineItems: 1 }).session(session ?? null).lean().exec();
+    return (extracted?.lineItems ?? [])
+      .filter((l) => l.description?.trim() && Number.isInteger(l.amountPaise) && Number.isInteger(l.ratePaise))
+      .map((l) => ({ description: l.description.trim(), hsnSac: l.hsnSac ?? null, qty: l.qty > 0 ? l.qty : 1, ratePaise: l.ratePaise, amountPaise: l.amountPaise, taxRatePct: l.taxRatePct ?? 0, itemId: null, uqc: null, accountId: null }));
+  }
 
   async syncApprovedProposal(
     proposal: ProposedEntryDocument,
@@ -109,7 +124,7 @@ export class SubledgerSyncService {
         cess: proposal.amountsPaise.cess,
         total: proposal.amountsPaise.total,
       },
-      lineItems: [],
+      lineItems: await this.scannedLines(proposal, session),
       isReverseCharge: proposal.isReverseCharge ?? false,
       tds: tds ? { ...tds, depositId: null } : null,
       financialYear: proposal.financialYear,
@@ -164,7 +179,7 @@ export class SubledgerSyncService {
         cess: proposal.amountsPaise.cess,
         total: proposal.amountsPaise.total,
       },
-      lineItems: [],
+      lineItems: await this.scannedLines(proposal, session),
       financialYear: proposal.financialYear,
       journalId,
       // Marks this row as read off an upload rather than typed in, and links
