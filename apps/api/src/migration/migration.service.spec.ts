@@ -10,6 +10,7 @@
  *  ✓ Books that do not balance are refused, unless the difference goes to Suspense by choice
  *  ✓ An account nobody has placed is refused until someone says what it is
  */
+import { Gstr2bLine, Gstr2bLineSchema } from '../gst/schemas/gstr2b-line.schema';
 import 'reflect-metadata';
 import mongoose, { Model, Types } from 'mongoose';
 import { Test, TestingModule } from '@nestjs/testing';
@@ -74,6 +75,7 @@ beforeAll(async () => {
         { name: TdsDeposit.name, schema: TdsDepositSchema },
         { name: BankStatementLine.name, schema: BankStatementLineSchema },
         { name: OrgSettings.name, schema: OrgSettingsSchema },
+        { name: Gstr2bLine.name, schema: Gstr2bLineSchema },
       ]),
     ],
     providers: [

@@ -9,6 +9,7 @@
  *  ✓ A vendor's GSTIN changes without rewriting GSTR-3B or the purchase register
  *  ✓ A bad GSTIN or state is refused; a GSTIN sets the state
  */
+import { Gstr2bLine, Gstr2bLineSchema } from '../gst/schemas/gstr2b-line.schema';
 import 'reflect-metadata';
 import mongoose, { Model, Types } from 'mongoose';
 import { Test, TestingModule } from '@nestjs/testing';
@@ -61,6 +62,7 @@ beforeAll(async () => {
         { name: Vendor.name, schema: VendorSchema },
         { name: DebitNote.name, schema: DebitNoteSchema },
         { name: OrgSettings.name, schema: OrgSettingsSchema },
+        { name: Gstr2bLine.name, schema: Gstr2bLineSchema },
       ]),
     ],
     providers: [CustomersService, VendorsService, AuditService, GstReturnsService],
