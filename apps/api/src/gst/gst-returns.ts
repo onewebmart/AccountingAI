@@ -594,6 +594,12 @@ export interface Gstr3b {
   /** 4(A)(3) and 4(A)(5): credit on reverse-charge and on all other purchases. */
   itcReverseCharge: TaxHeads;
   itcOther: TaxHeads;
+  /** 4(B)(2) Credit reversed: rule 37, on bills unpaid 180 days after their date. */
+  itcReversed: TaxHeads;
+  /** Within 4(A)(5): credit claimed again on those bills, paid since. */
+  itcReclaimed: TaxHeads;
+  /** 'twoB': credit only for what this month's 2B carries; 'date': no 2B imported, every bill by its date. */
+  itcBasis: 'twoB' | 'date';
   /** 4(C) Net ITC available. */
   itcNet: TaxHeads;
   /** 5 Exempt, nil and non-GST inward supplies. */
@@ -608,6 +614,17 @@ export function buildGstr3b(input: {
   bills: PurchaseIn[];
   /** Debit notes this month, each with the bill it reduces. */
   debitNotes: Array<{ id: string; amounts: Amounts; bill: PurchaseIn }>;
+  /**
+   * Credit as the ITC rules decide it (itc.ts): claimed from 2B, reversed and
+   * reclaimed under rule 37. Left out, every bill of the month is claimed.
+   */
+  itc?: {
+    basis: 'twoB' | 'date';
+    claimed: TaxHeads;
+    reversed: TaxHeads;
+    reclaimed: TaxHeads;
+    notes: Issue[];
+  };
 }): Gstr3b {
   const { gstr1, orgState } = input;
   const issues: Issue[] = gstr1.issues.filter((i) => i.level === 'block');
@@ -666,6 +683,14 @@ export function buildGstr3b(input: {
     }
     itcOther = addHeads(itcOther, t);
   }
+  // The rules decide the credit when they are given: the bills above still
+  // set reverse charge and exempt supplies, and say who has no GSTIN.
+  const itcReversed = input.itc ? { ...input.itc.reversed, txval: 0 } : { ...ZERO_HEADS };
+  const itcReclaimed = input.itc ? { ...input.itc.reclaimed, txval: 0 } : { ...ZERO_HEADS };
+  if (input.itc) {
+    itcOther = addHeads(input.itc.claimed, itcReclaimed);
+    issues.push(...input.itc.notes);
+  }
   for (const note of input.debitNotes) {
     const t = heads(note.amounts);
     if (note.bill.isReverseCharge) inwardReverseCharge = addHeads(inwardReverseCharge, t, -1);
@@ -674,7 +699,7 @@ export function buildGstr3b(input: {
 
   // Reverse-charge tax paid this month is credit this month.
   const itcReverseCharge = { ...inwardReverseCharge, txval: 0 };
-  const itcNet = { ...addHeads(itcReverseCharge, itcOther), txval: 0 };
+  const itcNet = { ...addHeads(addHeads(itcReverseCharge, itcOther), itcReversed, -1), txval: 0 };
   const zeroIfNegative = (h: Heads): Heads => ({
     igst: Math.max(0, h.igst),
     cgst: Math.max(0, h.cgst),
@@ -691,6 +716,9 @@ export function buildGstr3b(input: {
     interStateUnregistered: [...byPos.values()].filter((r) => r.txval !== 0).sort((a, b) => a.pos.localeCompare(b.pos)),
     itcReverseCharge,
     itcOther: { ...itcOther, txval: 0 },
+    itcReversed,
+    itcReclaimed,
+    itcBasis: input.itc?.basis ?? 'date',
     itcNet,
     inwardExempt,
     setOff: setOff(
@@ -812,7 +840,8 @@ export function gstr3bPortalJson(r: Gstr3b): Record<string, unknown> {
       ],
       itc_rev: [
         { ty: 'RUL', ...none },
-        { ty: 'OTH', ...none },
+        // Rule 37 reversals go under "Others".
+        { ty: 'OTH', ...tax(r.itcReversed) },
       ],
       itc_net: tax(r.itcNet),
       itc_inelg: [

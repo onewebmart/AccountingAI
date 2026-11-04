@@ -172,6 +172,7 @@ export interface ItcSummary {
 /** Rounding tolerance for 2B vs book amount matching (₹5 = 500 paise). */
 const RECON_TOLERANCE_PAISE = 500;
 
+import { normaliseGstin, normaliseInvoiceNumber } from './itc';
 @Injectable()
 export class GstService {
   constructor(
@@ -347,7 +348,8 @@ export class GstService {
     const registerByKey = new Map<string, PurchaseRegisterEntry>();
     for (const entry of registerEntries) {
       if (entry.supplierGstin && entry.invoiceNumber) {
-        const key = `${entry.supplierGstin}::${entry.invoiceNumber}`;
+        // Case, punctuation and leading zeros differ between how a bill is typed and how the vendor filed it.
+        const key = `${normaliseGstin(entry.supplierGstin)}::${normaliseInvoiceNumber(entry.invoiceNumber)}`;
         registerByKey.set(key, entry);
       }
     }
@@ -377,7 +379,7 @@ export class GstService {
         continue;
       }
 
-      const key = `${line.supplierGstin}::${line.invoiceNumber}`;
+      const key = `${normaliseGstin(line.supplierGstin)}::${normaliseInvoiceNumber(line.invoiceNumber)}`;
       const entry = registerByKey.get(key);
 
       if (!entry) {

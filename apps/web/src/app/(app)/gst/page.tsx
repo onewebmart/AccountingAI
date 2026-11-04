@@ -12,6 +12,7 @@ import {
   Plus,
 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { Rule37Watchlist, TwoBExplanations } from '@/components/gst/itc-panels';
 import { toCsv, paiseToCsvAmount, downloadCsvFile } from '@/lib/csv';
 import { GstReturnsPanel } from '@/components/gst/gst-returns-panel';
 
@@ -539,6 +540,8 @@ export default function GstPage() {
       {/* ── 2A/2B Reconciliation ── */}
       {tab === 'recon' && (
         <div className="space-y-4">
+          <TwoBExplanations period={period} />
+          <Rule37Watchlist />
           {lines2bQuery.isLoading ? (
             <TableSkeleton cols={8} />
           ) : !has2B ? (

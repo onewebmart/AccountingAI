@@ -20,6 +20,7 @@ import { Permission } from '@ai-accounting/shared';
 import { GstService, ImportGstr2bLineDto } from './gst.service';
 import { Gstr2bImportService } from './gstr2b-import.service';
 import { GstReturnsService } from './gst-returns.service';
+import { todayIst } from '../automation/schedule';
 
 interface AuthRequest {
   user: { orgId: string; sub: string };
@@ -58,6 +59,18 @@ export class GstController {
   @Get('returns/gstr3b/json')
   gstr3bJson(@Request() req: AuthRequest, @Query('period') period: string) {
     return this.returns.gstr3bJson(req.user.orgId, period);
+  }
+
+  /** Each mismatch between GSTR-2B and the books, explained, with the message for the vendor. */
+  @Get('2b/explanations')
+  explain2b(@Request() req: AuthRequest, @Query('period') period: string) {
+    return this.returns.explain2b(req.user.orgId, period);
+  }
+
+  /** Bills to pay before their 180 days end, or lose the credit until paid (rule 37). */
+  @Get('itc/rule37')
+  rule37(@Request() req: AuthRequest, @Query('asOf') asOf?: string) {
+    return this.returns.rule37Watchlist(req.user.orgId, asOf || todayIst());
   }
 
   @Get('purchase-register')

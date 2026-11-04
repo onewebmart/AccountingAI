@@ -59,6 +59,8 @@ interface Gstr1 {
 
 type Head = 'igst' | 'cgst' | 'sgst' | 'cess';
 
+const gstOf = (h: Heads) => h.iamt + h.camt + h.samt + h.csamt;
+
 interface Gstr3b {
   period: string;
   gstin: string | null;
@@ -68,6 +70,9 @@ interface Gstr3b {
   interStateUnregistered: Array<{ pos: string; txval: number; iamt: number }>;
   itcReverseCharge: Heads;
   itcOther: Heads;
+  itcReversed: Heads;
+  itcReclaimed: Heads;
+  itcBasis: 'twoB' | 'date';
   itcNet: Heads;
   inwardExempt: { inter: number; intra: number };
   setOff: {
@@ -375,12 +380,21 @@ function Gstr3bView({ r }: { r: Gstr3b }) {
         </Section>
       )}
 
-      <Section title="4 Eligible input tax credit" hint="From your posted bills, net of debit notes. Compare with GSTR-2B before claiming.">
+      <Section
+        title="4 Eligible input tax credit"
+        hint={
+          r.itcBasis === 'twoB'
+            ? 'Only bills your vendors reported in this month’s GSTR-2B, at the lower of the two amounts, net of debit notes.'
+            : 'No GSTR-2B imported for this month: every posted bill is counted. Import the 2B to claim only what vendors reported.'
+        }
+      >
         <table className="w-full">
           <HeadsHeader first="Details" />
           <tbody>
             <HeadsRow label="(A)(3) Inward supplies on reverse charge" heads={r.itcReverseCharge} />
             <HeadsRow label="(A)(5) All other ITC" heads={r.itcOther} />
+            {gstOf(r.itcReclaimed) > 0 && <HeadsRow label="   of which reclaimed on bills paid after 180 days" heads={r.itcReclaimed} />}
+            {gstOf(r.itcReversed) > 0 && <HeadsRow label="(B)(2) Reversed: bills unpaid after 180 days" heads={r.itcReversed} />}
             <HeadsRow label="(C) Net ITC available" heads={r.itcNet} />
           </tbody>
         </table>

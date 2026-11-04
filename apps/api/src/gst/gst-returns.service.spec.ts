@@ -16,6 +16,7 @@ import { MongooseModule, getModelToken } from '@nestjs/mongoose';
 import { BillStatus, InvoiceStatus } from '@ai-accounting/shared';
 import configuration from '../config/configuration';
 import { testMongoUri } from '../test-utils/mongo';
+import { Gstr2bLine, Gstr2bLineSchema } from './schemas/gstr2b-line.schema';
 import { GstReturnsService } from './gst-returns.service';
 import { gstr3bPortalJson } from './gst-returns';
 import { SalesInvoice, SalesInvoiceSchema } from '../sales/schemas/sales-invoice.schema';
@@ -36,6 +37,7 @@ let vendors: Model<unknown>;
 let debitNotes: Model<unknown>;
 let settings: Model<unknown>;
 
+let gstr2b: Model<Gstr2bLine>;
 beforeAll(async () => {
   moduleRef = await Test.createTestingModule({
     imports: [
@@ -49,6 +51,7 @@ beforeAll(async () => {
         { name: Vendor.name, schema: VendorSchema },
         { name: DebitNote.name, schema: DebitNoteSchema },
         { name: OrgSettings.name, schema: OrgSettingsSchema },
+        { name: Gstr2bLine.name, schema: Gstr2bLineSchema },
       ]),
     ],
     providers: [GstReturnsService],
@@ -62,6 +65,7 @@ beforeAll(async () => {
   vendors = moduleRef.get(getModelToken(Vendor.name));
   debitNotes = moduleRef.get(getModelToken(DebitNote.name));
   settings = moduleRef.get(getModelToken(OrgSettings.name));
+  gstr2b = moduleRef.get(getModelToken(Gstr2bLine.name));
 }, 60_000);
 
 afterAll(async () => {
@@ -173,5 +177,41 @@ describe('GSTR-3B', () => {
     const json = gstr3bPortalJson(r) as { ret_period: string; sup_details: { isup_rev: { camt: number } } };
     expect(json.ret_period).toBe('092026');
     expect(json.sup_details.isup_rev.camt).toBe(18);
+  });
+
+  it('claims only what the 2B carries, and reverses credit on bills unpaid after 180 days', async () => {
+    const { orgId, bill } = await seedOrg();
+    const gstin = '27AAACS1234A1Z1';
+    const line = (period: string, invoiceNumber: string, amounts: ReturnType<typeof tax>) =>
+      gstr2b.create({
+        orgId, period, supplierGstin: gstin, supplierName: 'Sigma Supplies', invoiceNumber, invoiceDate: `${period}-05`,
+        taxableValuePaise: amounts.taxableValue, cgstPaise: amounts.cgst, sgstPaise: amounts.sgst, igstPaise: 0, cessPaise: 0, itcEligiblePaise: amounts.cgst + amounts.sgst,
+      });
+    // October: two bills, the vendor reports one, typed differently.
+    await bill('SG/0041', '2026-10-04', tax(50000, { cgst: 4500, sgst: 4500 }));
+    await bill('SG/42', '2026-10-09', tax(20000, { cgst: 1800, sgst: 1800 }));
+    await line('2026-10', 'sg-41', tax(50000, { cgst: 4500, sgst: 4500 }));
+    // An April bill, claimed in April's 2B and still unpaid: 180 days end on 7 October, reversed in November.
+    await bill('SG/7', '2026-04-10', tax(100000, { cgst: 9000, sgst: 9000 }));
+    await line('2026-04', 'SG/7', tax(100000, { cgst: 9000, sgst: 9000 }));
+
+    const oct = await returns.gstr3b(orgId, '2026-10');
+    expect(oct.itcBasis).toBe('twoB');
+    expect(oct.itcOther.camt).toBe(4500);
+    expect(oct.issues.map((i) => i.message).join(' ')).toMatch(/1 bill is not in your 2B for 2026-10/);
+
+    // November: SG/42 reported late is claimed now; SG/7's credit is reversed.
+    await line('2026-11', 'SG/42', tax(20000, { cgst: 1800, sgst: 1800 }));
+    const nov = await returns.gstr3b(orgId, '2026-11');
+    expect(nov.itcOther.camt).toBe(1800);
+    expect(nov.itcReversed.camt).toBe(9000);
+    expect(nov.itcNet.camt).toBe(1800 - 9000);
+    const json = gstr3bPortalJson(nov) as { itc_elg: { itc_rev: Array<{ ty: string; camt: number }> } };
+    expect(json.itc_elg.itc_rev.find((r) => r.ty === 'OTH')?.camt).toBe(90);
+
+    const explained = await returns.explain2b(orgId, '2026-10');
+    expect(explained.items.map((e) => e.kind).sort()).toEqual(['not_in_2b', 'number_typed_differently']);
+    const watch = await returns.rule37Watchlist(orgId, '2026-10-01');
+    expect(watch.map((w) => [w.number, w.daysLeft])).toEqual([['SG/7', 6]]);
   });
 });
