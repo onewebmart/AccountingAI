@@ -13,6 +13,7 @@ import { AssistantService } from './assistant.service';
 import { MonthEndSweepService } from './month-end-sweep.service';
 import { MonthEndController } from './month-end.controller';
 import { BulkUpdateService } from './bulk-update.service';
+import { Item, ItemSchema } from '../items/schemas/item.schema';
 
 /** Recurring journals' drafting, accruals and prepaids, the asset register, and the month-end assistant. */
 @Module({
@@ -23,6 +24,7 @@ import { BulkUpdateService } from './bulk-update.service';
       { name: ProposedEntry.name, schema: ProposedEntrySchema },
       { name: PurchaseBill.name, schema: PurchaseBillSchema },
       { name: Vendor.name, schema: VendorSchema },
+      { name: Item.name, schema: ItemSchema }, // read only: stock lines are not assets to capitalise
     ]),
     GlModule, // PostingService, AccountsService, AuditService, the chart and journals
   ],

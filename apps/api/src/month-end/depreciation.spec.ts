@@ -89,6 +89,8 @@ describe('the assistant', () => {
     const laptopBill = bill({ billId: 'lap', date: '2026-11-08', vendorName: 'Infotech', accountName: 'Office & Stationery', lines: [{ description: 'Dell laptop', hsnSac: '84713010', amountPaise: 7500000 }, { description: 'Mouse', hsnSac: '847160', amountPaise: 50000 }] });
     expect(capitalCandidates('2026-11', [laptopBill]).map((c) => [c.description, c.category])).toEqual([['Dell laptop', 'computers']]);
     expect(capitalCandidates('2026-11', [{ ...laptopBill, accountType: 'ASSETS' }])).toEqual([]);
+    // A dealer's laptops are stock to sell, not an asset to keep.
+    expect(capitalCandidates('2026-11', [{ ...laptopBill, lines: laptopBill.lines.map((l) => ({ ...l, stock: true })) }])).toEqual([]);
   });
 });
 

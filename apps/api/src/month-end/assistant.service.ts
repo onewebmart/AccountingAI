@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { AccountType, BillStatus } from '@ai-accounting/shared';
@@ -13,6 +13,7 @@ import { AssetsService } from './assets.service';
 import { SchedulesService, schedulePeriods } from './schedules.service';
 import { AdjustmentSchedule, AdjustmentScheduleDocument } from './schemas/adjustment-schedule.schema';
 import { BillFact, annualCosts, capitalCandidates, missingRecurringBills } from './assistant';
+import { Item, ItemDocument } from '../items/schemas/item.schema';
 
 /** The assistant's guesses go to the queue below full confidence: a person checks them. */
 const GUESS_CONFIDENCE = 0.7;
@@ -41,6 +42,8 @@ export class AssistantService {
     private assets: AssetsService,
     private schedules: SchedulesService,
     private accounts: AccountsService,
+    // Read only: which bill lines are stock bought to sell.
+    @Optional() @InjectModel(Item.name) private itemModel?: Model<ItemDocument>,
   ) {}
 
   async suggestions(orgId: string, period: string) {
@@ -153,10 +156,15 @@ export class AssistantService {
       .find({ orgId, status: { $in: [BillStatus.POSTED, BillStatus.PAID] }, isOpeningBalance: { $ne: true }, billDate: { $gte: `${fromPeriod}-01`, $lte: `${toPeriod}-31` } })
       .lean()
       .exec();
-    const [vendors, journals] = await Promise.all([
+    const itemIds = [...new Set(bills.flatMap((b) => (b.lineItems ?? []).flatMap((l) => (l.itemId ? [String(l.itemId)] : []))))];
+    const [vendors, journals, stocked] = await Promise.all([
       this.vendorModel.find({ orgId, _id: { $in: bills.map((b) => b.vendorId) } }, { name: 1 }).lean().exec(),
       this.journalModel.find({ orgId, _id: { $in: bills.map((b) => b.journalId).filter(Boolean) } }, { lines: 1 }).lean().exec(),
+      itemIds.length && this.itemModel
+        ? this.itemModel.find({ orgId, _id: { $in: itemIds.map((id) => new Types.ObjectId(id)) }, kind: 'goods', trackStock: true }, { _id: 1 }).lean().exec()
+        : Promise.resolve([]),
     ]);
+    const inStock = new Set(stocked.map((i) => String(i._id)));
     const accountIds = [...new Set(journals.flatMap((j) => j.lines.filter((l) => l.debitPaise > 0).map((l) => String(l.accountId))))];
     const accounts = await this.accountModel.find({ orgId, _id: { $in: accountIds.map((id) => new Types.ObjectId(id)) } }, { name: 1, type: 1, systemKey: 1 }).lean().exec();
     const accountById = new Map(accounts.map((a) => [String(a._id), a]));
@@ -179,7 +187,7 @@ export class AssistantService {
         accountId: account ? String(account._id) : null,
         accountName: account?.name ?? null,
         accountType: account ? (account.type === AccountType.EXPENSE ? 'EXPENSE' : account.type === AccountType.ASSETS ? 'ASSETS' : 'OTHER') : null,
-        lines: (b.lineItems ?? []).map((l) => ({ description: l.description, hsnSac: l.hsnSac, amountPaise: l.amountPaise })),
+        lines: (b.lineItems ?? []).map((l) => ({ description: l.description, hsnSac: l.hsnSac, amountPaise: l.amountPaise, stock: !!l.itemId && inStock.has(String(l.itemId)) })),
         isReverseCharge: b.isReverseCharge ?? false,
       };
     });

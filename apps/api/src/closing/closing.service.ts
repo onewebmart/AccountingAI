@@ -106,8 +106,8 @@ export class ClosingService {
     ]);
     const items: ChecklistItem[] = [
       { key: 'proposals', label: 'Documents waiting for review', count: proposals, href: '/review' },
-      { key: 'invoices', label: 'Sales invoices not yet posted', count: invoices, href: '/sales' },
-      { key: 'bills', label: 'Purchase bills not yet posted', count: bills, href: '/purchase' },
+      { key: 'invoices', label: 'Sales invoices not yet posted', count: invoices, href: '/sales/invoices' },
+      { key: 'bills', label: 'Purchase bills not yet posted', count: bills, href: '/purchases/bills' },
       { key: 'bank-unmatched', label: 'Bank lines not in the books', count: unmatched, href: '/banking' },
       { key: 'bank-unconfirmed', label: 'Bank matches waiting to be confirmed', count: unconfirmed, href: '/banking' },
     ];

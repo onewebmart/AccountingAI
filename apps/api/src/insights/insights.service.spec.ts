@@ -264,6 +264,12 @@ describe('overdue AP', () => {
     expect(overdue.headline).toMatch(/2 bills past the due date/);
   });
 
+  it('says lakh only from ₹1,00,000, and counts it right', async () => {
+    await createOverdueBill(ORG_A, '2025-03-01', 22346400); // ₹2,23,464
+    const big = (await svc.getInsights(ORG_A, FY, TODAY)).find((i) => i.type === InsightType.OVERDUE_AP)!;
+    expect(big.explanation).toContain('₹2.23 L');
+  });
+
   it('does NOT emit overdue_ap when all bills are within due date', async () => {
     await createOverdueBill(ORG_A, '2025-04-10', 100000); // due 10 Apr, today is 25 Mar — not yet overdue
 

@@ -17,7 +17,8 @@ export interface BillFact {
   accountId: string | null;
   accountName: string | null;
   accountType: 'EXPENSE' | 'ASSETS' | 'OTHER' | null;
-  lines: Array<{ description: string; hsnSac: string | null; amountPaise: number }>;
+  /** stock: the line's item is counted in stock, so it was bought to sell, not to keep. */
+  lines: Array<{ description: string; hsnSac: string | null; amountPaise: number; stock?: boolean }>;
   isReverseCharge: boolean;
 }
 
@@ -126,7 +127,8 @@ export function capitalCandidates(period: string, bills: BillFact[]): Capitalise
     for (const l of b.lines) {
       const hsn = (l.hsnSac ?? '').replace(/\s/g, '');
       const match = ASSET_HSN.find((h) => hsn.startsWith(h.prefix));
-      if (!match || l.amountPaise < CAPITALISE_MIN_PAISE) continue;
+      // Stock bought to sell (a laptop a dealer resells, toner a stationer stocks) is not an asset kept for years.
+      if (!match || l.stock || l.amountPaise < CAPITALISE_MIN_PAISE) continue;
       out.push({
         billId: b.billId,
         vendorName: b.vendorName,

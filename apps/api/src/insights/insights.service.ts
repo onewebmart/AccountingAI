@@ -55,10 +55,13 @@ function daysBetween(from: string, to: string): number {
   return Math.ceil((new Date(to).getTime() - new Date(from).getTime()) / 86_400_000);
 }
 
+/** A lakh is ₹1,00,000: 1,00,00,000 paise. */
+const LAKH_PAISE = 1_00_00_000;
+
 function fmtPaise(paise: number): string {
   const abs = Math.abs(paise);
-  if (abs >= 10_000_00) {
-    return `₹${(abs / 10_000_00).toFixed(2)} L`;
+  if (abs >= LAKH_PAISE) {
+    return `₹${(abs / LAKH_PAISE).toFixed(2)} L`;
   }
   return `₹${new Intl.NumberFormat('en-IN').format(Math.round(abs / 100))}`;
 }
@@ -132,7 +135,7 @@ export class InsightsService {
         explanation: `${fmtPaise(overdueTotalPaise)} in bills are past their usual payment date.`,
         amountPaise: overdueTotalPaise,
         actionLabel: 'View bills',
-        actionHref: '/purchase',
+        actionHref: '/purchases/bills',
       });
     }
 
