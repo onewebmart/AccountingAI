@@ -25,13 +25,14 @@ export default function ChallansPage() {
   return (
     <div className="space-y-5">
       <PageHeader
+        guide="challans"
         title="Delivery challans"
         subtitle="Goods that leave without a tax invoice: for supply invoiced later, job work, or on approval. A challan never posts."
         actions={<Button asChild><Link href="/sales/challans/new"><Plus size={14} /> New challan</Link></Button>}
       />
 
       {!challans.isLoading && !challans.isError && all.length === 0 ? (
-        <EmptyState title="No challans yet" body="Issue one when goods move before, or without, an invoice." action={<Button asChild><Link href="/sales/challans/new"><Plus size={14} /> New challan</Link></Button>} />
+        <EmptyState guide="challans" title="No challans yet" body="Issue one when goods move before, or without, an invoice." action={<Button asChild><Link href="/sales/challans/new"><Plus size={14} /> New challan</Link></Button>} />
       ) : (
         <div>
           <ListToolbar search={search} onSearch={setSearch} placeholder="Search number, customer, vehicle or item" filters={{ value: filter, onChange: setFilter, options: [['all', 'All'], ['issued', 'Issued'], ['returned', 'Returned'], ['cancelled', 'Cancelled']] }} />

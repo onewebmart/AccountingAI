@@ -10,16 +10,18 @@ import { notify } from '@/components/page/notifier';
 import { api } from '@/lib/api';
 import { formatPaise } from '@/lib/gst';
 import { parseRupees } from '@/lib/money';
+import { cn } from '@/lib/utils';
 import { errorText, shortDate, todayIst, useInvoices, useLedgerRefresh, type InvoiceRecord } from '@/components/sales/sales-data';
+import { SalesDocumentForm } from '@/components/sales/doc-form';
 
 const HEADS = ['cgst', 'sgst', 'igst', 'cess'] as const;
 
 /**
- * A credit note against a posted invoice: the taxable value to take off,
+ * A credit note by value: the taxable value to take off a posted invoice,
  * with tax following in the invoice's own proportions. It posts when it is
  * raised. The preview mirrors the server's split; the server decides.
  */
-function NewCreditNoteForm() {
+function ByValueForm() {
   const router = useRouter();
   const params = useSearchParams();
   const refresh = useLedgerRefresh();
@@ -94,8 +96,8 @@ function NewCreditNoteForm() {
           <dl className="mt-4 grid gap-x-6 gap-y-2 text-body sm:grid-cols-4">
             <div><dt className="text-caption text-ink-500">Customer</dt><dd>{row?.customerName ?? inv.partyAtIssue?.name ?? '—'}</dd></div>
             <div><dt className="text-caption text-ink-500">Date</dt><dd>{shortDate(inv.invoiceDate)}</dd></div>
-            <div><dt className="text-caption text-ink-500">Total</dt><dd className="font-mono">{formatPaise(a.total)}</dd></div>
-            <div><dt className="text-caption text-ink-500">Still owed</dt><dd className="font-mono">{formatPaise(Math.max(0, owed))}</dd></div>
+            <div><dt className="text-caption text-ink-500">Total</dt><dd className="font-mono tabular-nums">{formatPaise(a.total)}</dd></div>
+            <div><dt className="text-caption text-ink-500">Still owed</dt><dd className="font-mono tabular-nums">{formatPaise(Math.max(0, owed))}</dd></div>
           </dl>
         )}
         {inv && !usable && <p className="mt-3 text-caption text-error-fg">This invoice is {inv.status}: post it before raising a credit note.</p>}
@@ -119,13 +121,13 @@ function NewCreditNoteForm() {
               tax[i] > 0 ? (
                 <div key={h} className="flex justify-between py-0.5 text-body">
                   <dt className="uppercase text-ink-600">{h}</dt>
-                  <dd className="font-mono">{formatPaise(tax[i])}</dd>
+                  <dd className="font-mono tabular-nums">{formatPaise(tax[i])}</dd>
                 </div>
               ) : null,
             )}
             <div className="mt-1 flex justify-between border-t border-line-200 pt-1 font-semibold">
               <dt>Credit note total</dt>
-              <dd className="font-mono">{formatPaise(totalPaise)}</dd>
+              <dd className="font-mono tabular-nums">{formatPaise(totalPaise)}</dd>
             </div>
             {totalPaise > a.total ? (
               <p className="mt-1 text-caption text-error-fg">More than the {formatPaise(a.total)} the invoice was for.</p>
@@ -143,12 +145,43 @@ function NewCreditNoteForm() {
   );
 }
 
+type Mode = 'lines' | 'value';
+
+/** Itemised by default: what is credited, line by line. Or just a taxable value off the invoice. */
+function NewCreditNote() {
+  const params = useSearchParams();
+  const [mode, setMode] = useState<Mode>(params.get('mode') === 'value' ? 'value' : 'lines');
+  return (
+    <div className="space-y-5">
+      <div className="inline-flex overflow-hidden rounded-md border border-line-200 bg-surface-card" role="tablist" aria-label="How to credit">
+        {([['lines', 'Line by line'], ['value', 'Taxable value only']] as const).map(([m, label]) => (
+          <button
+            key={m}
+            type="button"
+            role="tab"
+            aria-selected={mode === m}
+            onClick={() => setMode(m)}
+            className={cn('px-4 py-2 text-caption font-medium', mode === m ? 'bg-ink-900 text-white' : 'text-ink-600 hover:bg-surface-sink')}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {mode === 'lines' ? <SalesDocumentForm kind="credit_note" /> : <ByValueForm />}
+    </div>
+  );
+}
+
 export default function NewCreditNotePage() {
   return (
     <div>
-      <PageHeader title="New credit note" back={{ href: '/sales/credit-notes', label: 'Credit notes' }} />
+      <PageHeader
+        title="New credit note"
+        subtitle="Goods returned, a price corrected, a discount after the sale: against one of the customer's posted invoices. It posts when you raise it."
+        back={{ href: '/sales/credit-notes', label: 'Credit notes' }}
+      />
       <Suspense fallback={<p className="text-caption text-ink-400">Loading…</p>}>
-        <NewCreditNoteForm />
+        <NewCreditNote />
       </Suspense>
     </div>
   );

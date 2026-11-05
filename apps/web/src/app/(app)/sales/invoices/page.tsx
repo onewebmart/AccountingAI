@@ -42,6 +42,7 @@ export default function InvoicesPage() {
     <div className="space-y-5">
       <PageHeader
         title="Invoices"
+        guide="invoices"
         subtitle="What you have billed, and what is still owed. A draft reaches the ledger when you post it."
         actions={
           <>
@@ -60,6 +61,7 @@ export default function InvoicesPage() {
 
       {!invoices.isLoading && !invoices.isError && all.length === 0 ? (
         <EmptyState
+          guide="invoices"
           title="Create your first invoice"
           body="Pick the customer, add the lines, and save it as a draft. Post it when it is right."
           action={<Button asChild><Link href="/sales/invoices/new"><Plus size={14} /> New invoice</Link></Button>}

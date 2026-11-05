@@ -104,6 +104,7 @@ export default function QuotesPage() {
   return (
     <div className="space-y-5">
       <PageHeader
+        guide="quotes"
         title="Quotes"
         subtitle="What you offered. None of it posts: an accepted quote becomes a sales order or a draft invoice."
         actions={<Button asChild><Link href="/sales/quotes/new"><Plus size={14} /> New quote</Link></Button>}
@@ -133,7 +134,7 @@ export default function QuotesPage() {
       )}
 
       {!quotes.isLoading && !quotes.isError && all.length === 0 ? (
-        <EmptyState title="No quotes yet" body="Make one by hand, or paste a customer's message above." action={<Button asChild><Link href="/sales/quotes/new"><Plus size={14} /> New quote</Link></Button>} />
+        <EmptyState guide="quotes" title="No quotes yet" body="Make one by hand, or paste a customer's message above." action={<Button asChild><Link href="/sales/quotes/new"><Plus size={14} /> New quote</Link></Button>} />
       ) : (
         <div>
           <ListToolbar search={search} onSearch={setSearch} placeholder="Search number or customer" filters={{ value: filter, onChange: setFilter, options: FILTERS }} />

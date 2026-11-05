@@ -33,13 +33,14 @@ export default function SalesOrdersPage() {
   return (
     <div className="space-y-5">
       <PageHeader
+        guide="salesOrders"
         title="Sales orders"
         subtitle="What customers ordered. Invoice an order whole or in parts; nothing posts until the invoice is posted."
         actions={<Button asChild><Link href="/sales/orders/new"><Plus size={14} /> New sales order</Link></Button>}
       />
 
       {!orders.isLoading && !orders.isError && all.length === 0 ? (
-        <EmptyState title="No sales orders yet" body="Accept a quote and make it an order, or enter one the customer sent." action={<Button asChild><Link href="/sales/orders/new"><Plus size={14} /> New sales order</Link></Button>} />
+        <EmptyState guide="salesOrders" title="No sales orders yet" body="Accept a quote and make it an order, or enter one the customer sent." action={<Button asChild><Link href="/sales/orders/new"><Plus size={14} /> New sales order</Link></Button>} />
       ) : (
         <div>
           <ListToolbar search={search} onSearch={setSearch} placeholder="Search number, customer or their PO" filters={{ value: filter, onChange: setFilter, options: [['open', 'Open'], ['closed', 'Closed'], ['cancelled', 'Cancelled'], ['all', 'All']] }} />

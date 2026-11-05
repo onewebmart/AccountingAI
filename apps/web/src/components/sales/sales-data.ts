@@ -80,8 +80,16 @@ export interface InvoiceRecord {
     itemId: string | null;
     uqc: string | null;
     projectId: string | null;
+    discountPaise?: number;
   }>;
   journalId: string | null;
+  discount?: DocDiscount | null;
+  adjustment?: DocAdjustment | null;
+  referenceNumber?: string | null;
+  subject?: string | null;
+  salespersonName?: string | null;
+  termsAndConditions?: string | null;
+  paymentTermsDays?: number | null;
   amountPaidPaise?: number;
   payments?: Array<{ _id: string; journalId: string; amountPaise: number; tdsPaise?: number; paidOn: string }>;
   adjustedPaise?: number;
@@ -129,11 +137,35 @@ export interface DocLine {
   ratePaise: number;
   amountPaise: number;
   taxRatePct: number;
+  /** This line's share of the document's discount, before tax. */
+  discountPaise?: number;
   invoicedQty?: number;
   deliveredQty?: number;
 }
 
-export interface QuoteRow {
+/** A discount before tax, as stored: the percent asked for (null for an amount) and what it came to. */
+export interface DocDiscount {
+  percent: number | null;
+  amountPaise: number;
+}
+
+/** Added after tax, not taxed: signed paise. */
+export interface DocAdjustment {
+  label: string;
+  paise: number;
+}
+
+/** What a sales document may carry besides its lines. */
+export interface DocWords {
+  referenceNumber?: string | null;
+  subject?: string | null;
+  salespersonName?: string | null;
+  termsAndConditions?: string | null;
+  discount?: DocDiscount | null;
+  adjustment?: DocAdjustment | null;
+}
+
+export interface QuoteRow extends DocWords {
   _id: string;
   number: string;
   customerName: string;
@@ -148,9 +180,10 @@ export interface QuoteRow {
   sentTo?: string | null;
   drafted: { source: string; unread: string[]; message?: string } | null;
   convertedTo: { kind: 'sales_order' | 'invoice'; id: string } | null;
+  projectId?: string | null;
 }
 
-export interface OrderRow {
+export interface OrderRow extends DocWords {
   _id: string;
   number: string;
   customerName: string;
@@ -164,15 +197,17 @@ export interface OrderRow {
   notes?: string | null;
   quoteId?: string | null;
   fullyInvoiced: boolean;
+  deliveryMethod?: string | null;
+  paymentTermsDays?: number | null;
 }
 
-export interface ChallanRow {
+export interface ChallanRow extends DocWords {
   _id: string;
   number: string;
   customerName: string;
   customerId: string;
   date: string;
-  reason: 'supply' | 'job_work' | 'approval' | 'other';
+  reason: 'supply' | 'liquid_gas' | 'job_work' | 'approval' | 'other';
   status: 'issued' | 'returned' | 'cancelled';
   vehicleNo?: string | null;
   notes?: string | null;
@@ -182,8 +217,9 @@ export interface ChallanRow {
 
 export const CHALLAN_REASON: Record<ChallanRow['reason'], string> = {
   supply: 'Supply, invoiced later',
+  liquid_gas: 'Supply of liquid gas',
   job_work: 'Job work',
-  approval: 'On approval',
+  approval: 'Supply on approval',
   other: 'Other',
 };
 

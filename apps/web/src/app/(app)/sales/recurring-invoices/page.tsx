@@ -11,7 +11,7 @@ import { api } from '@/lib/api';
 import { formatPaise } from '@/lib/gst';
 import { errorText, shortDate } from '@/components/sales/sales-data';
 
-type Frequency = 'monthly' | 'quarterly' | 'yearly';
+type Frequency = 'weekly' | 'fortnightly' | 'monthly' | 'bimonthly' | 'quarterly' | 'half_yearly' | 'yearly';
 
 interface Template {
   _id: string;
@@ -28,6 +28,10 @@ interface Template {
   draftedCount: number;
   lastDraftedOn: string | null;
   lastError: string | null;
+  startDate?: string;
+  subject?: string | null;
+  referenceNumber?: string | null;
+  salespersonName?: string | null;
 }
 
 interface ReminderSettings {
@@ -51,7 +55,17 @@ interface Reminder {
   createdAt: string;
 }
 
-const FREQUENCY: Record<Frequency, string> = { monthly: 'Every month', quarterly: 'Every quarter', yearly: 'Every year' };
+const FREQUENCY: Record<Frequency, string> = {
+  weekly: 'Every week',
+  fortnightly: 'Every 2 weeks',
+  monthly: 'Every month',
+  bimonthly: 'Every 2 months',
+  quarterly: 'Every quarter',
+  half_yearly: 'Every 6 months',
+  yearly: 'Every year',
+};
+/** Weekly ones repeat on a weekday, not a day of the month. */
+const weekday = (date: string | null | undefined) => (date ? new Date(`${date}T00:00:00Z`).toLocaleDateString('en-IN', { weekday: 'long', timeZone: 'UTC' }) : '');
 const RUNG: Record<string, string> = {
   before_due: '3 days before due',
   on_due: 'On the due date',
@@ -210,6 +224,7 @@ export default function RecurringInvoicesPage() {
   return (
     <div className="space-y-5">
       <PageHeader
+        guide="recurringInvoices"
         title="Recurring invoices"
         subtitle={<>Retainers, rent and subscriptions, drafted each morning at 6:30 for you to check and post on <Link href="/sales/invoices" className="underline">Invoices</Link>. Nothing posts on its own.</>}
         actions={
@@ -224,6 +239,7 @@ export default function RecurringInvoicesPage() {
 
       {!templates.isLoading && !templates.isError && rows.length === 0 ? (
         <EmptyState
+          guide="recurringInvoices"
           title="Nothing repeats yet"
           body="Add a retainer or a subscription, and it drafts itself each period."
           action={<Button asChild><Link href="/sales/recurring-invoices/new"><Plus size={14} /> New recurring invoice</Link></Button>}
@@ -252,11 +268,12 @@ export default function RecurringInvoicesPage() {
                   <tr key={t._id} className={`border-b border-line-100 align-top last:border-0 ${t.status === 'ended' ? 'opacity-60' : ''}`}>
                     <td className={td}>
                       <p className="font-medium">{t.name}</p>
-                      <p className="text-caption text-ink-500">{t.draftedCount} drafted{t.lastDraftedOn ? `, last on ${shortDate(t.lastDraftedOn)}` : ''}</p>
+                      {t.subject && <p className="text-caption text-ink-600">{t.subject}</p>}
+                      <p className="text-caption text-ink-500">{t.draftedCount} drafted{t.lastDraftedOn ? `, last on ${shortDate(t.lastDraftedOn)}` : ''}{t.referenceNumber ? ` · order ${t.referenceNumber}` : ''}</p>
                     </td>
                     <td className={td}>{t.partyName ?? '—'}</td>
                     <td className={`${td} whitespace-nowrap text-caption`}>
-                      {FREQUENCY[t.frequency]}, {dayLabel(t.dayOfMonth)}
+                      {FREQUENCY[t.frequency] ?? t.frequency}, {t.frequency === 'weekly' || t.frequency === 'fortnightly' ? `on ${weekday(t.nextRunDate ?? t.startDate)}` : dayLabel(t.dayOfMonth)}
                       <br />
                       <span className="text-ink-500">due in {t.dueInDays} days{t.endDate ? ` · until ${shortDate(t.endDate)}` : ''}</span>
                     </td>

@@ -15,6 +15,7 @@ import { api, downloadFile } from '@/lib/api';
 import { formatPaise } from '@/lib/gst';
 import { errorText, fileSafe, formatMinor, shortDate, stateName, useLedgerRefresh, type CustomerRecord, type InvoiceRecord } from '@/components/sales/sales-data';
 import { InvoiceStatusChip } from '@/components/sales/status';
+import { NotesAndTerms, wordRows } from '@/components/sales/doc-view';
 
 interface Reminder {
   _id: string;
@@ -220,7 +221,9 @@ export default function InvoicePage() {
             ['Place of supply', stateName(party?.stateCode ?? party?.gstin?.slice(0, 2)) ?? '—'],
             ['Invoice date', shortDate(inv.invoiceDate)],
             ['Due', shortDate(inv.dueDate)],
+            ...(inv.paymentTermsDays != null ? ([['Terms', inv.paymentTermsDays === 0 ? 'Due on receipt' : `Net ${inv.paymentTermsDays}`]] as Array<[string, React.ReactNode]>) : []),
             ['Financial year', inv.financialYear ?? '—'],
+            ...wordRows(inv, 'Order number'),
             [
               'Made from',
               inv.source?.kind === 'quote' ? <Link className="hover:underline" href={`/sales/quotes/${inv.source.id}`}>A quote</Link>
@@ -279,6 +282,7 @@ export default function InvoicePage() {
                     {anyProject && <td className={`${td} text-caption`}>{projectName(l.projectId) ?? '—'}</td>}
                     <td className={tdMoney}>
                       {formatPaise(l.amountPaise)}
+                      {(l.discountPaise ?? 0) > 0 && <span className="block text-caption text-ink-500">less {formatPaise(l.discountPaise ?? 0)}</span>}
                       {f && f.linesMinor[i] != null && <span className="block text-caption text-ink-500">{formatMinor(f.linesMinor[i], f.currency, f.digits)}</span>}
                     </td>
                   </tr>
@@ -291,11 +295,25 @@ export default function InvoicePage() {
 
       <div className="grid gap-5 lg:grid-cols-2">
         <Section title="Amounts">
+          {inv.discount && inv.discount.amountPaise > 0 && (
+            <>
+              <Line label="Sub total"><span className="font-mono tabular-nums">{formatPaise(inv.lineItems.reduce((s, l) => s + l.amountPaise, 0))}</span></Line>
+              <Line label={inv.discount.percent ? `Discount (${inv.discount.percent}%)` : 'Discount'}><span className="font-mono tabular-nums">− {formatPaise(inv.discount.amountPaise)}</span></Line>
+            </>
+          )}
           <Line label="Taxable value"><span className="font-mono">{formatPaise(a.taxableValue)}</span></Line>
           {a.cgst > 0 && <Line label="CGST"><span className="font-mono">{formatPaise(a.cgst)}</span></Line>}
           {a.sgst > 0 && <Line label="SGST"><span className="font-mono">{formatPaise(a.sgst)}</span></Line>}
           {a.igst > 0 && <Line label="IGST"><span className="font-mono">{formatPaise(a.igst)}</span></Line>}
           {a.cess > 0 && <Line label="Cess"><span className="font-mono">{formatPaise(a.cess)}</span></Line>}
+          {(() => {
+            const adj = a.total - (a.taxableValue + a.cgst + a.sgst + a.igst + a.cess);
+            return adj !== 0 ? (
+              <Line label={<>{inv.adjustment?.label || 'Adjustment'} <span className="text-caption text-ink-400">(to Round Off)</span></>}>
+                <span className="font-mono tabular-nums">{adj < 0 ? `− ${formatPaise(-adj)}` : formatPaise(adj)}</span>
+              </Line>
+            ) : null;
+          })()}
           <Line label="Total" strong><span className="font-mono">{formatPaise(a.total)}</span></Line>
           {f && <Line label={`In ${f.currency}`}><span className="font-mono">{formatMinor(f.totalMinor, f.currency, f.digits)}</span></Line>}
           {inv.status !== 'draft' && (
@@ -337,11 +355,7 @@ export default function InvoicePage() {
 
       <Reminders invoiceId={id} canSend={(inv.status === 'posted' || inv.status === 'sent') && owed > 0 && !inv.foreign} />
 
-      {inv.notes && (
-        <Section title="Notes">
-          <p className="whitespace-pre-line text-body text-ink-700">{inv.notes}</p>
-        </Section>
-      )}
+      <NotesAndTerms notes={inv.notes} terms={inv.termsAndConditions} />
 
       <Section>
         <AttachmentsSection entityType="SalesInvoice" entityId={id} />

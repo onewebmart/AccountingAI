@@ -13,7 +13,8 @@ import { api } from '@/lib/api';
 import { formatPaise } from '@/lib/gst';
 import { errorText, openPdf, shortDate, useOrder, type OrderRow } from '@/components/sales/sales-data';
 import { DocStatusChip } from '@/components/sales/status';
-import { AmountsList } from '@/components/sales/doc-view';
+import { AmountsList, NotesAndTerms, wordRows } from '@/components/sales/doc-view';
+import { AttachmentsSection } from '@/components/shell/attachments-section';
 
 const left = (l: OrderRow['lines'][number]) => Math.max(0, l.qty - (l.invoicedQty ?? 0));
 
@@ -28,7 +29,11 @@ function InvoicePart({ order }: { order: OrderRow }) {
   const picks = qtys.map((q, i) => ({ orderLine: i, qty: Number(q || 0) }));
   const bad = picks.find((p) => !(p.qty >= 0) || p.qty > left(order.lines[p.orderLine]));
   const chosen = picks.filter((p) => p.qty > 0);
-  const before = chosen.reduce((s, p) => s + Math.round(p.qty * order.lines[p.orderLine].ratePaise), 0);
+  // Before tax, after each line's share of the order's discount, as the invoice will carry it.
+  const before = chosen.reduce((s, p) => {
+    const l = order.lines[p.orderLine];
+    return s + Math.round(p.qty * l.ratePaise) - Math.round(((l.discountPaise ?? 0) * p.qty) / l.qty);
+  }, 0);
 
   const make = useMutation({
     mutationFn: () => api.post<{ _id: string }>(`/orders/sales-orders/${order._id}/invoice`, { lines: chosen }),
@@ -149,9 +154,12 @@ export default function SalesOrderPage() {
           items={[
             ['Customer', <Link key="c" href={`/sales/customers/${o.customerId}`} className="hover:underline">{o.customerName}</Link>],
             ['Date', shortDate(o.date)],
-            ['Expected by', shortDate(o.expectedBy)],
-            ["Customer's PO", o.customerPoNumber ? <span key="po" className="font-mono">{o.customerPoNumber}</span> : '—'],
+            ['Expected shipment', shortDate(o.expectedBy)],
+            ["Reference (customer's PO)", o.customerPoNumber ? <span key="po" className="font-mono">{o.customerPoNumber}</span> : '—'],
             ['From quote', o.quoteId ? <Link key="q" href={`/sales/quotes/${o.quoteId}`} className="hover:underline">Open the quote</Link> : '—'],
+            ...(o.paymentTermsDays != null ? [['Payment terms', o.paymentTermsDays === 0 ? 'Due on receipt' : `Net ${o.paymentTermsDays}`] as [string, React.ReactNode]] : []),
+            ...(o.deliveryMethod ? [['Delivery method', o.deliveryMethod] as [string, React.ReactNode]] : []),
+            ...wordRows(o),
           ]}
         />
       </Section>
@@ -179,25 +187,28 @@ export default function SalesOrderPage() {
                   <td className={tdMoney}>{l.qty}</td>
                   <td className={`${tdMoney} ${(l.invoicedQty ?? 0) >= l.qty ? 'text-success-fg' : ''}`}>{l.invoicedQty ?? 0}</td>
                   <td className={`${tdMoney} ${(l.deliveredQty ?? 0) >= l.qty ? 'text-success-fg' : ''}`}>{l.deliveredQty ?? 0}</td>
-                  <td className={tdMoney}>{formatPaise(l.amountPaise)}</td>
+                  <td className={tdMoney}>
+                    {formatPaise(l.amountPaise)}
+                    {(l.discountPaise ?? 0) > 0 && <span className="block text-caption text-ink-500">less {formatPaise(l.discountPaise ?? 0)}</span>}
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </TableCard>
         <div className="mt-4">
-          <AmountsList amounts={o.amountsPaise} />
+          <AmountsList amounts={o.amountsPaise} discount={o.discount} adjustment={o.adjustment} subTotalPaise={o.lines.reduce((s, l) => s + l.amountPaise, 0)} />
         </div>
       </Section>
 
       {open && !o.fullyInvoiced && <InvoicePart key={o.lines.map((l) => l.invoicedQty ?? 0).join('-')} order={o} />}
       {o.fullyInvoiced && <p className="text-body text-success-fg">Every line is invoiced.</p>}
 
-      {o.notes && (
-        <Section title="Notes">
-          <p className="whitespace-pre-line text-body text-ink-700">{o.notes}</p>
-        </Section>
-      )}
+      <NotesAndTerms notes={o.notes} terms={o.termsAndConditions} />
+
+      <Section>
+        <AttachmentsSection entityType="SalesOrder" entityId={id} />
+      </Section>
 
       <Link href={`/audit?entityType=SalesOrder&entityId=${id}`} className="inline-block text-caption font-medium text-ink-600 hover:text-ink-900 hover:underline">
         History of this order

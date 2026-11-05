@@ -11,7 +11,7 @@ import { notify } from '@/components/page/notifier';
 import { api } from '@/lib/api';
 import { CHALLAN_REASON, errorText, openPdf, shortDate, useChallan } from '@/components/sales/sales-data';
 import { DocStatusChip } from '@/components/sales/status';
-import { DocLinesTable } from '@/components/sales/doc-view';
+import { DocLinesTable, NotesAndTerms, wordRows } from '@/components/sales/doc-view';
 
 /** One delivery challan: what left, why, and whether it came back. */
 export default function ChallanPage() {
@@ -69,9 +69,10 @@ export default function ChallanPage() {
           items={[
             ['Customer', <Link key="c" href={`/sales/customers/${c.customerId}`} className="hover:underline">{c.customerName}</Link>],
             ['Date', shortDate(c.date)],
-            ['Why the goods move', CHALLAN_REASON[c.reason]],
+            ['Challan type', CHALLAN_REASON[c.reason] ?? c.reason],
             ['Vehicle', c.vehicleNo ? <span key="v" className="font-mono">{c.vehicleNo}</span> : '—'],
             ['Against order', c.salesOrderId ? <Link key="o" href={`/sales/orders/${c.salesOrderId}`} className="hover:underline">Open the order</Link> : '—'],
+            ...wordRows(c),
           ]}
         />
       </Section>
@@ -80,11 +81,7 @@ export default function ChallanPage() {
         <DocLinesTable lines={c.lines.map((l) => l.line)} />
       </Section>
 
-      {c.notes && (
-        <Section title="Notes">
-          <p className="whitespace-pre-line text-body text-ink-700">{c.notes}</p>
-        </Section>
-      )}
+      <NotesAndTerms notes={c.notes} terms={c.termsAndConditions} />
 
       <Link href={`/audit?entityType=DeliveryChallan&entityId=${id}`} className="inline-block text-caption font-medium text-ink-600 hover:text-ink-900 hover:underline">
         History of this challan

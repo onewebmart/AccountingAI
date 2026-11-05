@@ -12,7 +12,8 @@ import { api } from '@/lib/api';
 import { formatPaise } from '@/lib/gst';
 import { errorText, openPdf, shortDate, useQuote } from '@/components/sales/sales-data';
 import { DocStatusChip } from '@/components/sales/status';
-import { AmountsList, DocLinesTable } from '@/components/sales/doc-view';
+import { AmountsList, DocLinesTable, NotesAndTerms, wordRows } from '@/components/sales/doc-view';
+import { AttachmentsSection } from '@/components/shell/attachments-section';
 
 type Action = 'send' | 'accept' | 'decline' | 'convert/sales_order' | 'convert/invoice';
 
@@ -104,6 +105,7 @@ export default function QuotePage() {
             ['Date', shortDate(q.date)],
             ['Valid until', <span key="v" className={q.expired ? 'text-error-fg' : undefined}>{shortDate(q.validUntil)}{q.expired ? ' (expired)' : ''}</span>],
             ['Sent to', q.sentTo ?? '—'],
+            ...wordRows(q),
           ]}
         />
       </Section>
@@ -111,15 +113,15 @@ export default function QuotePage() {
       <Section title="Lines">
         <DocLinesTable lines={q.lines} />
         <div className="mt-4">
-          <AmountsList amounts={q.amountsPaise} />
+          <AmountsList amounts={q.amountsPaise} discount={q.discount} adjustment={q.adjustment} subTotalPaise={q.lines.reduce((s, l) => s + l.amountPaise, 0)} />
         </div>
       </Section>
 
-      {q.notes && (
-        <Section title="Notes">
-          <p className="whitespace-pre-line text-body text-ink-700">{q.notes}</p>
-        </Section>
-      )}
+      <NotesAndTerms notes={q.notes} terms={q.termsAndConditions} />
+
+      <Section>
+        <AttachmentsSection entityType="Quote" entityId={id} />
+      </Section>
 
       <Link href={`/audit?entityType=Quote&entityId=${id}`} className="inline-block text-caption font-medium text-ink-600 hover:text-ink-900 hover:underline">
         History of this quote
