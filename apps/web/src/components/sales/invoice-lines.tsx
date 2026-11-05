@@ -168,6 +168,7 @@ export function InvoiceLinesEditor({
                   <ItemSelect
                     className={cell}
                     value={l.itemId}
+                    side="sale"
                     onPick={async (item) => {
                       if (!item) return set(l.key, { itemId: '' });
                       const filled: Partial<InvoiceLine> = {

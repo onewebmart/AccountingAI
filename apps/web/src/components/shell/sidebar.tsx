@@ -42,6 +42,8 @@ interface NavEntry {
   href?: string;
   /** …or a group of them, opened and closed from its heading. */
   items?: NavLink[];
+  /** Other pages reached from a single page, which light it up too: /stock from Items. */
+  also?: string[];
   /** Practice entries appear only once the org has a firm. */
   practice?: boolean;
 }
@@ -57,14 +59,8 @@ const NAV: NavEntry[] = [
   { label: 'Inbox', icon: <Inbox size={18} />, href: '/inbox' },
   { label: 'Review', icon: <CheckSquare size={18} />, href: '/review' },
   { label: 'Approvals', icon: <UserCheck size={18} />, href: '/approvals' },
-  {
-    label: 'Items',
-    icon: <Package size={18} />,
-    items: [
-      { href: '/items', label: 'Items' },
-      { href: '/stock', label: 'Stock' },
-    ],
-  },
+  // Stock is a tab on the Items page.
+  { label: 'Items', icon: <Package size={18} />, href: '/items', also: ['/stock'] },
   {
     label: 'Sales',
     icon: <TrendingUp size={18} />,
@@ -179,11 +175,18 @@ const PRACTICE_SETUP: NavEntry = { label: 'Set up practice', icon: <Briefcase si
 
 const OPEN_KEY = 'aibooks.sidebar.open';
 
-/** The one item a path belongs to: the longest href it starts with. */
-function activeHrefFor(pathname: string, hrefs: string[]): string | null {
+/**
+ * The one item a path belongs to: the longest href it starts with. An entry's
+ * `also` paths count as its own (/stock lights up Items).
+ */
+function activeHrefFor(pathname: string, hrefs: string[], aliases: Array<[string, string]> = []): string | null {
   let best: string | null = null;
-  for (const h of hrefs) {
-    if ((pathname === h || pathname.startsWith(`${h}/`)) && (!best || h.length > best.length)) best = h;
+  let bestLength = 0;
+  for (const [prefix, h] of [...hrefs.map((h): [string, string] => [h, h]), ...aliases]) {
+    if ((pathname === prefix || pathname.startsWith(`${prefix}/`)) && prefix.length > bestLength) {
+      best = h;
+      bestLength = prefix.length;
+    }
   }
   return best;
 }
@@ -205,7 +208,8 @@ export function Sidebar({ inboxCount = 0, reviewCount = 0, firmName, role }: Sid
     [isPlatformAdmin, firmName],
   );
   const allHrefs = useMemo(() => entries.flatMap((e) => (e.href ? [e.href] : (e.items ?? []).map((i) => i.href))), [entries]);
-  const active = activeHrefFor(pathname, allHrefs);
+  const aliases = useMemo(() => entries.flatMap((e) => (e.href ? (e.also ?? []).map((p): [string, string] => [p, e.href!]) : [])), [entries]);
+  const active = activeHrefFor(pathname, allHrefs, aliases);
   const activeGroup = entries.find((e) => e.items?.some((i) => i.href === active))?.label ?? null;
 
   // Groups the person opened stay open between visits; the one in use always is.

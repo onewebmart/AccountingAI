@@ -76,7 +76,7 @@ export function PurchaseOrdersTab({ onToast }: { onToast: (m: string) => void })
             </select>
             <input type="date" className={field} value={expectedBy} onChange={(e) => setExpectedBy(e.target.value)} title="Needed by" />
           </div>
-          <LineEditor lines={newLines} onChange={setNewLines} customerId="" />
+          <LineEditor lines={newLines} onChange={setNewLines} customerId="" side="purchase" />
           {create.isError && <p className="text-caption text-error-fg">{message(create.error)}</p>}
           <Button disabled={!vendorId || create.isPending} onClick={() => create.mutate()}>{create.isPending ? 'Saving…' : 'Raise purchase order'}</Button>
         </section>

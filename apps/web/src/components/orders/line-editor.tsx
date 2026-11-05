@@ -4,7 +4,7 @@ import { Plus, X } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatPaise } from '@/lib/gst';
 import { parseRupees } from '@/lib/money';
-import { ItemSelect } from '@/components/items/item-picker';
+import { ItemSelect, type ItemSide } from '@/components/items/item-picker';
 
 export interface EditLine {
   itemId: string;
@@ -33,8 +33,12 @@ export function toApiLines(lines: EditLine[]) {
 const RATES = [0, 3, 5, 12, 18, 28, 40];
 const cell = 'w-full rounded-md border border-line-200 bg-white px-2 py-1.5 text-caption text-ink-900';
 
-/** Lines of a quote, order or challan. Picking an item fills it; the customer's last price fills the rate. */
-export function LineEditor({ lines, onChange, customerId }: { lines: EditLine[]; onChange: (lines: EditLine[]) => void; customerId: string }) {
+/**
+ * Lines of a quote, order or challan. Picking an item fills it; the
+ * customer's last price fills the rate. On the purchase side it offers bought
+ * items and fills their purchase description and cost price.
+ */
+export function LineEditor({ lines, onChange, customerId, side = 'sale' }: { lines: EditLine[]; onChange: (lines: EditLine[]) => void; customerId: string; side?: ItemSide }) {
   const set = (i: number, patch: Partial<EditLine>) => onChange(lines.map((l, n) => (n === i ? { ...l, ...patch } : l)));
   const total = lines.reduce((s, l) => s + Math.round(Number(l.qty || 0) * (parseRupees(l.rate || '0') ?? 0)), 0);
   return (
@@ -45,9 +49,12 @@ export function LineEditor({ lines, onChange, customerId }: { lines: EditLine[];
             <ItemSelect
               className={cell}
               value={l.itemId}
+              side={side}
               onPick={async (item) => {
                 if (!item) return set(i, { itemId: '' });
-                set(i, { itemId: item._id, description: item.name, hsnSac: item.hsnSac ?? '', taxRatePct: item.gstRatePct ?? l.taxRatePct, rate: item.salePricePaise != null ? String(item.salePricePaise / 100) : l.rate });
+                const description = side === 'purchase' ? item.purchaseDescription || item.name : item.name;
+                const price = side === 'purchase' ? item.purchasePricePaise : item.salePricePaise;
+                set(i, { itemId: item._id, description, hsnSac: item.hsnSac ?? '', taxRatePct: item.gstRatePct ?? l.taxRatePct, rate: price != null ? String(price / 100) : l.rate });
                 if (customerId) {
                   const price = await api.get<{ ratePaise: number } | null>(`/orders/price?customerId=${customerId}&itemId=${item._id}`).catch(() => null);
                   if (price) set(i, { itemId: item._id, description: item.name, hsnSac: item.hsnSac ?? '', taxRatePct: item.gstRatePct ?? l.taxRatePct, rate: String(price.ratePaise / 100) });

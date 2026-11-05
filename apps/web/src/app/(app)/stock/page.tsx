@@ -9,7 +9,9 @@ import { api, ApiError } from '@/lib/api';
 import { formatPaise } from '@/lib/gst';
 import { parseRupees } from '@/lib/money';
 import { useItems } from '@/components/items/item-picker';
+import { ItemsTabs } from '@/components/items/items-tabs';
 import { ClosingStockCard } from '@/components/stock/closing-stock-card';
+import { GuideButton } from '@/components/guide/module-guide';
 
 type Tab = 'summary' | 'lines' | 'moves' | 'entries';
 
@@ -363,9 +365,13 @@ export default function StockPage() {
   ];
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-h1 font-display text-ink-900">Stock</h1>
-        <p className="text-body text-ink-500">Goods in from bills, out on invoices, valued at weighted-average cost. The books take it once a month, through the closing-stock entry.</p>
+      <ItemsTabs />
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-h1 font-display text-ink-900">Stock</h1>
+          <p className="text-body text-ink-500">Goods in from bills, out on invoices, valued at weighted-average cost. The books take it once a month, through the closing-stock entry.</p>
+        </div>
+        <GuideButton guide="stock" />
       </div>
       <div className="flex flex-wrap gap-1 border-b border-line-200">
         {TABS.map((t) => (
