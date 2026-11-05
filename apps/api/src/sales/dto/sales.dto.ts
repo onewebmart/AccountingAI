@@ -1,10 +1,13 @@
 import { Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
+  ArrayMinSize,
   IsArray,
   IsIn,
   IsInt,
   IsISO8601,
   IsMongoId,
+  IsNumber,
   IsOptional,
   IsString,
   Length,
@@ -224,6 +227,79 @@ export class CreateSalesInvoiceDto {
   @IsOptional()
   @IsString()
   notes?: string | null;
+}
+
+/**
+ * One line of an invoice typed line by line: what was sold, how many, at
+ * what rate before tax and at which GST slab. The server works out the
+ * amounts and the tax heads; the browser's figures are only a preview.
+ */
+export class InvoiceLineDto {
+  @IsString()
+  @Length(1, 500)
+  description: string;
+
+  @IsOptional()
+  @IsMongoId()
+  itemId?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @Length(0, 8)
+  hsnSac?: string | null;
+
+  @IsOptional()
+  @IsIn(UQC_CODES)
+  uqc?: string | null;
+
+  /** Up to three decimals: 2.5 kg. */
+  @IsNumber({}, { message: 'qty must be a number' })
+  @Min(0)
+  qty: number;
+
+  @IsInt({ message: 'ratePaise must be an integer number of paise' })
+  @Min(0)
+  ratePaise: number;
+
+  @IsInt({ message: 'taxRatePct must be a GST slab, like 18' })
+  @Min(0)
+  taxRatePct: number;
+
+  /** The project the line's income belongs to. */
+  @IsOptional()
+  @IsMongoId()
+  projectId?: string | null;
+}
+
+/** POST /sales/invoices/from-lines — a draft invoice priced on the server from its lines. */
+export class CreateInvoiceFromLinesDto {
+  @IsMongoId({ message: 'customerId is required — pick an existing customer' })
+  customerId: string;
+
+  /** Blank: numbered automatically when it is posted. */
+  @IsOptional()
+  @IsString()
+  @Length(0, 16, { message: 'An invoice number is 16 characters at most' })
+  invoiceNumber?: string | null;
+
+  @IsISO8601({}, { message: 'invoiceDate must be a date like 2026-08-25' })
+  invoiceDate: string;
+
+  @IsOptional()
+  @IsISO8601({}, { message: 'dueDate must be a date like 2026-09-09' })
+  dueDate?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @Length(0, 2000)
+  notes?: string | null;
+
+  @IsArray()
+  @ArrayMinSize(1, { message: 'Add at least one line.' })
+  @ArrayMaxSize(200)
+  @ValidateNested({ each: true })
+  @Type(() => InvoiceLineDto)
+  lines: InvoiceLineDto[];
 }
 
 /** Optional body for recording a payment: when, and how much (default: all of it). */

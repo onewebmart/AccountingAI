@@ -16,7 +16,8 @@ import { PermissionGuard } from '../auth/guards/permission.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CustomersService } from './customers.service';
 import { SalesInvoicesService } from './sales-invoices.service';
-import { CreateCustomerDto, CreateSalesInvoiceDto, PayInvoiceDto, CreateCreditNoteDto, UpdateCustomerDto, EmailInvoiceDto } from './dto/sales.dto';
+import { CreateCustomerDto, CreateSalesInvoiceDto, PayInvoiceDto, CreateCreditNoteDto, UpdateCustomerDto, EmailInvoiceDto, CreateInvoiceFromLinesDto } from './dto/sales.dto';
+import { InvoiceFromLinesService } from './invoice-from-lines.service';
 import { CreditNotesService } from './credit-notes.service';
 import { InvoiceDeliveryService } from './invoice-delivery.service';
 import { Response } from 'express';
@@ -35,6 +36,7 @@ export class SalesController {
     private readonly creditNotesService: CreditNotesService,
     private readonly delivery: InvoiceDeliveryService,
     private readonly items: ItemsService,
+    private readonly fromLines: InvoiceFromLinesService,
   ) {}
 
   // ── Customers ────────────────────────────────────────────────────────────
@@ -63,6 +65,13 @@ export class SalesController {
     return this.customersService.update(id, req.user.orgId, req.user.sub, body);
   }
 
+  /** Where a sale to this customer is supplied: IGST across states, CGST and SGST within one. */
+  @Get('customers/:id/supply')
+  @RequirePermission(Permission.MANAGE_SALES)
+  customerSupply(@Request() req: AuthRequest, @Param('id') id: string) {
+    return this.fromLines.placeOfSupply(req.user.orgId, id);
+  }
+
   @Get('customers/:id/receivable')
   @RequirePermission(Permission.MANAGE_SALES)
   customerReceivable(@Request() req: AuthRequest, @Param('id') id: string) {
@@ -88,6 +97,13 @@ export class SalesController {
   async createInvoice(@Request() req: AuthRequest, @Body() body: CreateSalesInvoiceDto) {
     const lineItems = await this.items.resolveLines(req.user.orgId, body.lineItems, 'sale');
     return this.invoicesService.create({ ...body, lineItems, orgId: req.user.orgId, actorId: req.user.sub });
+  }
+
+  /** A draft invoice from its lines: amounts and tax heads worked out here, for the customer's state. */
+  @Post('invoices/from-lines')
+  @RequirePermission(Permission.MANAGE_SALES)
+  createInvoiceFromLines(@Request() req: AuthRequest, @Body() body: CreateInvoiceFromLinesDto) {
+    return this.fromLines.create(req.user.orgId, req.user.sub, body);
   }
 
   @Get('invoices/:id')

@@ -9,6 +9,7 @@ import { SalesInvoicesService } from './sales-invoices.service';
 import { SalesController } from './sales.controller';
 import { MailModule } from '../mail/mail.module';
 import { InvoiceDeliveryService } from './invoice-delivery.service';
+import { InvoiceFromLinesService } from './invoice-from-lines.service';
 import { OrgSettings, OrgSettingsSchema } from '../org-settings/schemas/org-settings.schema';
 import { PartyPaymentsModule } from '../payments/party-payments.module';
 import { GlModule } from '../gl/gl.module';
@@ -31,7 +32,7 @@ import { EInvoice, EInvoiceSchema } from '../einvoice/schemas/e-invoice.schema';
     MailModule, // emails the invoice PDF
   ],
   controllers: [SalesController],
-  providers: [CustomersService, SalesInvoicesService, CreditNotesService, InvoiceDeliveryService],
+  providers: [CustomersService, SalesInvoicesService, CreditNotesService, InvoiceDeliveryService, InvoiceFromLinesService],
   exports: [CustomersService, SalesInvoicesService, CreditNotesService, InvoiceDeliveryService],
 })
 export class SalesModule {}
