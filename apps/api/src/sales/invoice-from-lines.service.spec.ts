@@ -164,6 +164,15 @@ describe('an invoice from its lines', () => {
     expect(await invoiceList.list(o.orgId, undefined, 'not-an-id')).toEqual([]);
   });
 
+  it('posts with its number and the customer by name in the voucher', async () => {
+    const o = await org();
+    const draft = await fromLines.create(o.orgId, ACTOR, { customerId: o.local, invoiceDate: '2026-11-05', lines: lines(o.project, o.item) });
+    const posted = await invoiceList.post(String(draft._id), o.orgId, ACTOR);
+    expect(posted.invoiceNumber).toBe('INV/2026-27/0001');
+    const journal = await moduleRef.get(getModelToken(Journal.name)).findById(posted.journalId).lean().exec();
+    expect(journal?.narration).toBe('Sales invoice INV/2026-27/0001 — Rao Traders');
+  });
+
   it('refuses a bad line and saves nothing', async () => {
     const o = await org();
     const good = lines(o.project, o.item);

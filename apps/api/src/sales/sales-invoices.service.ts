@@ -300,6 +300,9 @@ export class SalesInvoicesService {
       }
     }
 
+    // The voucher names the customer, so the day book and ledgers read as words, not ids.
+    const customerName = (await withOrg(orgId, () => this.customerModel.findOne({ _id: invoice.customerId }).select('name').lean().exec()))?.name ?? 'customer';
+
     const updated = await this.postingService.inTransaction(async (session) => {
       // Claim the transition before posting, in the same transaction, so a
       // second click finds nothing to claim instead of posting the sale twice.
@@ -314,13 +317,22 @@ export class SalesInvoicesService {
       );
       if (!claimed) throw new BadRequestException('Invoice has already been posted');
 
+      // An invoice typed without a number, or made from a recurring template,
+      // takes the next serial for its year. The series is its own, not the
+      // SALES voucher numbers, which scanned invoices also use, so it has no
+      // gaps. A reversed and re-posted invoice keeps the number it had. Taken
+      // before the voucher, in the same transaction, so the voucher can name it.
+      const invoiceNumber =
+        invoice.invoiceNumber ??
+        `INV/${fy}/${String(await this.postingService.nextDocumentNumber(orgId, 'INVOICE_SERIAL', fy, session)).padStart(4, '0')}`;
+
       const journal = await this.postingService.post(
         {
           orgId,
           voucherType: VoucherType.SALES,
           financialYear: fy,
           date: invoice.invoiceDate,
-          narration: `Sales invoice ${invoice.invoiceNumber ?? invoice._id.toString()} — customer ${invoice.customerId}`,
+          narration: `Sales invoice ${invoiceNumber} — ${customerName}`,
           postedBy: actorId,
           lines,
         },
@@ -339,14 +351,6 @@ export class SalesInvoicesService {
         },
         session,
       );
-
-      // An invoice typed without a number, or made from a recurring template,
-      // takes the next serial for its year. The series is its own, not the
-      // SALES voucher numbers, which scanned invoices also use, so it has no
-      // gaps. A reversed and re-posted invoice keeps the number it had.
-      const invoiceNumber =
-        invoice.invoiceNumber ??
-        `INV/${fy}/${String(await this.postingService.nextDocumentNumber(orgId, 'INVOICE_SERIAL', fy, session)).padStart(4, '0')}`;
 
       return this.invoiceModel
         .findByIdAndUpdate(id, { $set: { journalId: journal._id, invoiceNumber } }, { new: true, session })

@@ -358,6 +358,9 @@ export class PurchaseBillsService {
       lines.push({ accountId: rcm._id.toString(), description: rcm.name, debitPaise: 0, creditPaise: taxPaise });
     }
 
+    // The voucher names the vendor, so the day book and ledgers read as words, not ids.
+    const vendorName = (await withOrg(orgId, () => this.vendorModel.findOne({ _id: bill.vendorId }).select('name').lean().exec()))?.name ?? 'vendor';
+
     const updated = await this.postingService.inTransaction(async (session) => {
       // Claim the transition before posting, in the same transaction, so a
       // second click finds nothing to claim instead of posting the bill twice.
@@ -378,7 +381,7 @@ export class PurchaseBillsService {
           voucherType: VoucherType.PURCHASE,
           financialYear: fy,
           date: bill.billDate,
-          narration: `Purchase bill ${bill.billNumber ?? bill._id.toString()} — vendor ${bill.vendorId}`,
+          narration: `Purchase bill ${bill.billNumber ?? 'without a number'} — ${vendorName}`,
           postedBy: actorId,
           lines,
         },
