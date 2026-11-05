@@ -96,7 +96,7 @@ export class PostingService {
    */
   async nextDocumentNumber(
     orgId: string,
-    series: 'INVOICE_SERIAL' | 'QUOTE' | 'SALES_ORDER' | 'CHALLAN' | 'PURCHASE_ORDER' | 'GRN' | 'EXPENSE_CLAIM' | 'EXPENSE',
+    series: 'INVOICE_SERIAL' | 'QUOTE' | 'SALES_ORDER' | 'CHALLAN' | 'PURCHASE_ORDER' | 'GRN' | 'EXPENSE_CLAIM' | 'EXPENSE' | 'PARTY_RECEIPT' | 'PARTY_PAYMENT',
     financialYear: string,
     session?: ClientSession,
   ): Promise<number> {

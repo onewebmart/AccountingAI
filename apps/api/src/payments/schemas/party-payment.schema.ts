@@ -6,6 +6,10 @@ export type PartyPaymentDocument = HydratedDocument<PartyPayment>;
 
 const integerPaise = { validator: Number.isInteger, message: 'Money must be integer paise (Invariant 1)' };
 
+/** How the money moved, as the person recording it says. */
+export const PAYMENT_MODES = ['cash', 'bank_transfer', 'cheque', 'upi', 'card', 'other'] as const;
+export type PaymentMode = (typeof PAYMENT_MODES)[number];
+
 /** Part of a receipt or payment applied to one invoice or bill. */
 @Schema({ _id: false })
 export class PaymentAllocation {
@@ -35,16 +39,37 @@ export class PartyPayment {
   @Prop({ required: true, index: true }) orgId: string;
   /** receipt: money in from a customer. payment: money out to a vendor. */
   @Prop({ type: String, enum: ['receipt', 'payment'], required: true }) kind: 'receipt' | 'payment';
+  /**
+   * RCT/2026-27/0001 (receipts) or PMT/2026-27/0001 (payments): gapless per
+   * org and financial year, taken in the posting's transaction. Null on the
+   * credit a note leaves, and on payments recorded before numbering began.
+   */
+  @Prop({ type: String, default: null }) number: string | null;
   @Prop({ type: MongooseSchema.Types.ObjectId, required: true, index: true }) partyId: Types.ObjectId;
   @Prop({ type: String, required: true }) partyName: string;
   /** YYYY-MM-DD, the day the money moved. */
   @Prop({ type: String, required: true }) date: string;
-  /** What moved through the bank or cash. */
+  /** What the party paid, or was paid. Bank charges come out of it (receipt) or on top of it (payment). */
   @Prop({ type: Number, required: true, min: 0, validate: integerPaise }) amountPaise: number;
   /** TDS the customer deducted, across the invoices (receipts only). */
   @Prop({ type: Number, default: 0, min: 0, validate: integerPaise }) tdsPaise: number;
   /** gateway: paid online; it reaches the bank when the gateway settles. */
   @Prop({ type: String, enum: ['bank', 'cash', 'gateway'], default: 'bank' }) via: 'bank' | 'cash' | 'gateway';
+  /** Cash, bank transfer, cheque, UPI, card or other; null when not said. */
+  @Prop({ type: String, enum: [...PAYMENT_MODES, null], default: null }) mode: PaymentMode | null;
+  /**
+   * The bank or cash ledger the money went into (receipt) or left from
+   * (payment): the one chosen, or the system Bank or Cash account from `via`.
+   */
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'LedgerAccount', default: null }) depositAccountId: Types.ObjectId | null;
+  @Prop({ type: String, default: null }) depositAccountName: string | null;
+  /**
+   * What the bank kept, booked to Bank Charges: taken out of a receipt (the
+   * customer is credited with the whole amount), added to a payment.
+   */
+  @Prop({ type: Number, default: 0, min: 0, validate: integerPaise }) bankChargesPaise: number;
+  /** Internal notes; not shown to the party. */
+  @Prop({ type: String, default: null }) notes: string | null;
   /**
    * money: a receipt or payment. credit_note / debit_note: a note that took
    * back more than was still owed; the excess is the party's credit, held
@@ -67,4 +92,6 @@ export class PartyPayment {
 export const PartyPaymentSchema = SchemaFactory.createForClass(PartyPayment);
 PartyPaymentSchema.index({ orgId: 1, kind: 1, partyId: 1, status: 1 });
 PartyPaymentSchema.index({ orgId: 1, 'allocations.journalId': 1 });
+// A number is used once per org; older payments and note credits have none.
+PartyPaymentSchema.index({ orgId: 1, number: 1 }, { unique: true, partialFilterExpression: { number: { $type: 'string' } } });
 PartyPaymentSchema.plugin(tenantIsolationPlugin);

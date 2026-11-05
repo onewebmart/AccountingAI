@@ -6,6 +6,7 @@ import { RequirePermission } from '../auth/decorators';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionGuard } from '../auth/guards/permission.guard';
 import { PartyPaymentsService, PaymentKind } from './party-payments.service';
+import { PAYMENT_MODES, PaymentMode } from './schemas/party-payment.schema';
 
 interface AuthRequest {
   user: { orgId: string; sub: string; role: UserRole };
@@ -42,6 +43,25 @@ class RecordPaymentDto {
   @IsOptional()
   @IsIn(['bank', 'cash', 'gateway'])
   via?: 'bank' | 'cash' | 'gateway';
+
+  @IsOptional()
+  @IsIn([...PAYMENT_MODES], { message: `mode must be one of ${PAYMENT_MODES.join(', ')}` })
+  mode?: PaymentMode;
+
+  /** The bank or cash ledger it went into or left from. Checked against the org's money accounts. */
+  @IsOptional()
+  @IsMongoId({ message: 'Choose the bank or cash account.' })
+  depositAccountId?: string;
+
+  @IsOptional()
+  @IsInt({ message: 'bankChargesPaise must be whole paise' })
+  @Min(0)
+  bankChargesPaise?: number;
+
+  @IsOptional()
+  @IsString()
+  @Length(0, 2000)
+  notes?: string;
 
   @IsOptional()
   @IsString()

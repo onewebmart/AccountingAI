@@ -10,13 +10,19 @@
  *  ✓ A credit note on a paid invoice is the customer's credit; refunded, and reversed in order
  *  ✓ A note on a part-paid invoice takes off what is owed, the rest as credit
  *  ✓ A debit note on a paid bill is the vendor's credit, refunded to us
+ *  ✓ A receipt into a chosen bank ledger, less bank charges: numbered RCT/<fy>/0001,
+ *    with mode, account, charges and notes stored, listed and audited
+ *  ✓ A payment from cash with bank charges on top, numbered PMT/<fy>/0001
+ *  ✓ Refused: a ledger that is not money, charges above the receipt, bad paise,
+ *    no Bank Charges account, charges on a gateway receipt
+ *  ✓ A posting that fails leaves no gap in the series
  */
 import 'reflect-metadata';
 import mongoose, { Model, Types } from 'mongoose';
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigModule } from '@nestjs/config';
 import { MongooseModule, getModelToken } from '@nestjs/mongoose';
-import { BillStatus, InvoiceStatus } from '@ai-accounting/shared';
+import { AccountType, BillStatus, InvoiceStatus } from '@ai-accounting/shared';
 import configuration from '../config/configuration';
 import { testMongoUri } from '../test-utils/mongo';
 import { PartyPaymentsService } from './party-payments.service';
@@ -41,6 +47,7 @@ import { CreditNote, CreditNoteSchema } from '../sales/schemas/credit-note.schem
 import { DebitNote, DebitNoteSchema } from '../purchase/schemas/debit-note.schema';
 import { TdsDeposit, TdsDepositSchema } from '../tds/schemas/tds-deposit.schema';
 import { BankStatementLine, BankStatementLineSchema } from '../banking/schemas/bank-statement-line.schema';
+import { PeriodLock, PeriodLockSchema } from '../gl/schemas/period-lock.schema';
 
 const ACTOR = new Types.ObjectId().toString();
 const amounts = (taxable: number) => ({ taxableValue: taxable, cgst: 0, sgst: 0, igst: 0, cess: 0, total: taxable });
@@ -50,7 +57,7 @@ let payments: PartyPaymentsService;
 let reversal: JournalReversalService;
 let invoicesSvc: SalesInvoicesService;
 let billsSvc: PurchaseBillsService;
-let journals: Model<{ voucherType: string; lines: Array<{ description: string; debitPaise: number; creditPaise: number }> }>;
+let journals: Model<{ voucherType: string; narration: string; lines: Array<{ description: string; debitPaise: number; creditPaise: number }> }>;
 let invoices: Model<{ status: string; amountPaidPaise: number; payments: unknown[] }>;
 let bills: Model<{ status: string; amountPaidPaise: number }>;
 
@@ -73,6 +80,7 @@ beforeAll(async () => {
         { name: DebitNote.name, schema: DebitNoteSchema },
         { name: TdsDeposit.name, schema: TdsDepositSchema },
         { name: BankStatementLine.name, schema: BankStatementLineSchema },
+        { name: PeriodLock.name, schema: PeriodLockSchema },
       ]),
     ],
     providers: [PartyPaymentsService, PostingService, AccountsService, AuditService, JournalReversalService, SalesInvoicesService, PurchaseBillsService, CreditNotesService, DebitNotesService],
@@ -274,5 +282,118 @@ describe('refunds and note credits', () => {
       ['Bank Accounts', 10000, 0],
       ['Advances to Vendors', 0, 10000],
     ]);
+  });
+});
+
+describe('payment number, mode, deposit account and bank charges', () => {
+  const accountIds = async (orgId: string) => {
+    const all = await moduleRef.get(AccountsService).list(orgId);
+    return (name: string) => String(all.find((a) => a.name === name)!._id);
+  };
+  const auditLogs = () => moduleRef.get<Model<{ orgId: string; entityType: string; entityId: string; action: string; after: Record<string, unknown> }>>(getModelToken(AuditLog.name));
+
+  it('deposits a receipt less bank charges into the chosen bank, numbers it, and keeps how it came', async () => {
+    const { orgId, rao, raoId, invoice } = await seed();
+    const a = await invoice(raoId, 'INV-1', '2026-09-01', 100000);
+    const hdfc = await moduleRef.get(AccountsService).create({ orgId, name: 'HDFC Current A/c', type: AccountType.ASSETS, actorId: ACTOR });
+
+    // ₹1,200 paid: ₹1,000 for INV-1 and ₹200 ahead. The bank kept ₹15, so ₹1,185 arrived.
+    const receipt = await payments.record(orgId, ACTOR, {
+      kind: 'receipt', partyId: rao, date: '2026-10-05', amountPaise: 120000, mode: 'bank_transfer', reference: 'UTR123',
+      depositAccountId: String(hdfc._id), bankChargesPaise: 1500, notes: '  Paid by NEFT  ',
+      allocations: [{ documentId: a, amountPaise: 100000 }],
+    });
+    expect(receipt.toObject()).toMatchObject({
+      number: 'RCT/2026-27/0001', mode: 'bank_transfer', via: 'bank', depositAccountName: 'HDFC Current A/c', bankChargesPaise: 1500,
+      notes: 'Paid by NEFT', amountPaise: 120000, unappliedPaise: 20000, status: 'posted',
+    });
+    expect(String(receipt.depositAccountId)).toBe(String(hdfc._id));
+    expect(await linesOf(receipt.journalId)).toEqual([
+      ['HDFC Current A/c', 118500, 0],
+      ['Bank Charges', 1500, 0],
+      ['Accounts Receivable', 0, 100000],
+      ['Advances from Customers', 0, 20000],
+    ]);
+    expect((await journals.findById(receipt.journalId).lean().exec())!.narration).toBe(
+      'Receipt RCT/2026-27/0001 from Rao Traders — INV-1 · ₹200.00 as advance · ₹15.00 bank charges · ref UTR123',
+    );
+    // The customer is credited with all ₹1,000, not what reached the bank.
+    expect(await invoices.findById(a).lean().exec()).toMatchObject({ status: InvoiceStatus.PAID, amountPaidPaise: 100000 });
+
+    // The next takes the next number; with no account chosen it goes to the system Cash account, as before.
+    const second = await payments.record(orgId, ACTOR, { kind: 'receipt', partyId: rao, date: '2026-10-06', amountPaise: 5000, via: 'cash', allocations: [] });
+    expect(second.toObject()).toMatchObject({ number: 'RCT/2026-27/0002', via: 'cash', depositAccountName: 'Cash in Hand', bankChargesPaise: 0, mode: null, notes: null });
+
+    // Listed and audited with what was entered.
+    const listed = (await payments.list(orgId, 'receipt')).find((p) => String(p._id) === String(receipt._id))!;
+    expect(listed).toMatchObject({ number: 'RCT/2026-27/0001', mode: 'bank_transfer', bankChargesPaise: 1500, notes: 'Paid by NEFT', depositAccountName: 'HDFC Current A/c' });
+    const created = await auditLogs().findOne({ orgId, entityType: 'PartyPayment', entityId: String(receipt._id), action: 'CREATE' }).lean().exec();
+    expect(created!.after).toMatchObject({ number: 'RCT/2026-27/0001', mode: 'bank_transfer', depositAccountId: String(hdfc._id), bankChargesPaise: 1500, notes: 'Paid by NEFT' });
+
+    // Reversing it reverses the charges with it, and the invoice opens again.
+    await reversal.reverse(String(receipt.journalId), orgId, ACTOR);
+    expect(await invoices.findById(a).lean().exec()).toMatchObject({ status: InvoiceStatus.POSTED, amountPaidPaise: 0 });
+  });
+
+  it('pays from the chosen account with bank charges on top, numbered in its own series', async () => {
+    const orgId = new Types.ObjectId().toString();
+    const vendors = moduleRef.get<Model<{ _id: Types.ObjectId }>>(getModelToken(Vendor.name));
+    const [sigma] = await vendors.create([{ orgId, name: 'Sigma Supplies' }]);
+    const b = await billsSvc.create({ orgId, vendorId: String(sigma._id), billNumber: 'PB-1', billDate: '2026-09-01', dueDate: '2026-09-30', amountsPaise: amounts(50000) });
+    await billsSvc.post(String(b._id), orgId, ACTOR);
+    const id = await accountIds(orgId);
+
+    const paid = await payments.record(orgId, ACTOR, {
+      kind: 'payment', partyId: String(sigma._id), date: '2026-10-01', amountPaise: 50000, mode: 'upi', depositAccountId: id('Bank Accounts'), bankChargesPaise: 1000,
+      allocations: [{ documentId: String(b._id), amountPaise: 50000 }],
+    });
+    expect(paid.toObject()).toMatchObject({ number: 'PMT/2026-27/0001', mode: 'upi', via: 'bank', depositAccountName: 'Bank Accounts', bankChargesPaise: 1000, amountPaise: 50000, unappliedPaise: 0 });
+    expect(await linesOf(paid.journalId)).toEqual([
+      ['Accounts Payable', 50000, 0],
+      ['Bank Charges', 1000, 0],
+      ['Bank Accounts', 0, 51000],
+    ]);
+    expect((await bills.findById(b._id).lean().exec())!.status).toBe(BillStatus.PAID);
+
+    // Chosen as the account, Cash in Hand makes it a cash payment.
+    const cash = await payments.record(orgId, ACTOR, { kind: 'payment', partyId: String(sigma._id), date: '2026-10-02', amountPaise: 10000, mode: 'cash', depositAccountId: id('Cash in Hand'), allocations: [] });
+    expect(cash.toObject()).toMatchObject({ number: 'PMT/2026-27/0002', via: 'cash', unappliedPaise: 10000 });
+    expect(await linesOf(cash.journalId)).toEqual([
+      ['Advances to Vendors', 10000, 0],
+      ['Cash in Hand', 0, 10000],
+    ]);
+  });
+
+  it('refuses a ledger that is not money, charges above the receipt, bad paise, and charges with nowhere to go', async () => {
+    const { orgId, rao, raoId, invoice } = await seed();
+    await invoice(raoId, 'INV-1', '2026-09-01', 100000);
+    const other = await seed();
+    await other.invoice(other.raoId, 'X-1', '2026-09-01', 1000);
+    const id = await accountIds(orgId);
+    const base = { kind: 'receipt' as const, partyId: rao, date: '2026-10-05', amountPaise: 10000, allocations: [] };
+
+    await expect(payments.record(orgId, ACTOR, { ...base, depositAccountId: id('Accounts Receivable') })).rejects.toThrow(/Accounts Receivable is not a bank or cash account/);
+    await expect(payments.record(orgId, ACTOR, { ...base, depositAccountId: (await accountIds(other.orgId))('Bank Accounts') })).rejects.toThrow(/^Deposit it to one of your bank or cash accounts/);
+    await expect(payments.record(orgId, ACTOR, { ...base, bankChargesPaise: 10001 })).rejects.toThrow(/₹100.01\) are more than the ₹100.00 received/);
+    await expect(payments.record(orgId, ACTOR, { ...base, bankChargesPaise: 10.5 })).rejects.toThrow(/whole paise/);
+    await expect(payments.record(orgId, ACTOR, { ...base, bankChargesPaise: -1 })).rejects.toThrow(/whole paise/);
+    await expect(payments.record(orgId, ACTOR, { ...base, mode: 'barter' as never })).rejects.toThrow(/payment mode must be one of/);
+    await expect(payments.record(orgId, ACTOR, { ...base, via: 'gateway', bankChargesPaise: 100 })).rejects.toThrow(/payment gateway account/);
+
+    // With Bank Charges renamed there is nowhere for the charges to go: said, not guessed.
+    await moduleRef.get(AccountsService).update(orgId, ACTOR, id('Bank Charges'), { name: 'Bank Fees' });
+    await expect(payments.record(orgId, ACTOR, { ...base, bankChargesPaise: 100 })).rejects.toThrow(/no Bank Charges expense account/);
+    expect(await journals.countDocuments({ orgId, voucherType: 'RECEIPT' })).toBe(0);
+  });
+
+  it('leaves no gap in the series when the posting fails', async () => {
+    const { orgId, rao, raoId, invoice } = await seed();
+    await invoice(raoId, 'INV-1', '2026-09-01', 100000);
+    await moduleRef.get<Model<{ orgId: string }>>(getModelToken(PeriodLock.name)).create({ orgId, lockedThrough: '2026-09-30', history: [] });
+
+    // Dated inside the lock: refused after its number was taken, and the number goes back with it.
+    await expect(payments.record(orgId, ACTOR, { kind: 'receipt', partyId: rao, date: '2026-09-20', amountPaise: 1000, allocations: [] })).rejects.toThrow(/locked through 2026-09-30/);
+    const ok = await payments.record(orgId, ACTOR, { kind: 'receipt', partyId: rao, date: '2026-10-01', amountPaise: 1000, allocations: [] });
+    expect(ok.number).toBe('RCT/2026-27/0001');
   });
 });
