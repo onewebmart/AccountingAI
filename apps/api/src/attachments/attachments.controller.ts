@@ -1,6 +1,6 @@
 import { BadRequestException, Body, Controller, Delete, Get, Param, Post, Query, Request, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { IsMongoId, IsString } from 'class-validator';
+import { IsMongoId, IsOptional, IsString, Length } from 'class-validator';
 import { memoryStorage } from 'multer';
 import { Permission } from '@ai-accounting/shared';
 import { RequirePermission } from '../auth/decorators';
@@ -18,6 +18,23 @@ class AttachDto {
 
   @IsMongoId()
   entityId: string;
+}
+
+class FromDocumentDto {
+  @IsMongoId()
+  documentId: string;
+
+  @IsString()
+  entityType: string;
+
+  @IsMongoId()
+  entityId: string;
+
+  /** How the record reads: "Bill SGP/1342", "Expense EXP/2026-27/0009". */
+  @IsOptional()
+  @IsString()
+  @Length(0, 120)
+  label?: string;
 }
 
 @UseGuards(JwtAuthGuard, PermissionGuard)
@@ -39,6 +56,13 @@ export class AttachmentsController {
   add(@Request() req: AuthRequest, @Body() body: AttachDto, @UploadedFile() file?: Express.Multer.File) {
     if (!file) throw new BadRequestException('No file provided.');
     return this.attachments.add(req.user.orgId, req.user.sub, { ...body, fileName: file.originalname, mimeType: file.mimetype, buffer: file.buffer });
+  }
+
+  /** "Add to": keep the scanned document against the record entered from it, and close its proposal. */
+  @Post('from-document')
+  @RequirePermission(Permission.UPLOAD_DOCUMENT)
+  fromDocument(@Request() req: AuthRequest, @Body() body: FromDocumentDto) {
+    return this.attachments.fromDocument(req.user.orgId, req.user.sub, { ...body, label: body.label ?? '' });
   }
 
   @Get(':id/url')

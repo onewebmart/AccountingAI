@@ -4,7 +4,7 @@ import { tenantIsolationPlugin } from '../../database/tenant.plugin';
 
 export type AttachmentDocument = HydratedDocument<Attachment>;
 
-export const ATTACHABLE = ['SalesInvoice', 'PurchaseBill', 'Journal', 'PartyPayment', 'Customer', 'Vendor', 'ExpenseClaim', 'DirectExpense'] as const;
+export const ATTACHABLE = ['SalesInvoice', 'PurchaseBill', 'Journal', 'PartyPayment', 'Customer', 'Vendor', 'ExpenseClaim', 'DirectExpense', 'PurchaseOrder', 'Quote', 'SalesOrder', 'DebitNote'] as const;
 export type AttachableType = (typeof ATTACHABLE)[number];
 
 /**

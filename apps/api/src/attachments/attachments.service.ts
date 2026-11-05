@@ -1,10 +1,13 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectConnection, InjectModel } from '@nestjs/mongoose';
 import { createHash } from 'crypto';
 import { Connection, Model, Types } from 'mongoose';
 import { AuditService } from '../gl/audit.service';
 import { StorageService } from '../documents/storage.service';
 import { User, UserDocument } from '../tenancy/schemas/user.schema';
+import { Document as UploadedDocument, DocumentDocument } from '../documents/schemas/document.schema';
+import { ProposedEntry, ProposedEntryDocument } from '../proposals/schemas/proposed-entry.schema';
+import { ProposalsService } from '../proposals/proposals.service';
 import { ATTACHABLE, AttachableType, Attachment, AttachmentDocument } from './schemas/attachment.schema';
 
 /** What may be attached: documents and images people actually keep. */
@@ -21,6 +24,10 @@ const MODEL: Record<AttachableType, string> = {
   Vendor: 'Vendor',
   ExpenseClaim: 'ExpenseClaim',
   DirectExpense: 'DirectExpense',
+  PurchaseOrder: 'PurchaseOrder',
+  Quote: 'Quote',
+  SalesOrder: 'SalesOrder',
+  DebitNote: 'DebitNote',
 };
 
 /**
@@ -33,6 +40,9 @@ export class AttachmentsService {
   constructor(
     @InjectModel(Attachment.name) private attachmentModel: Model<AttachmentDocument>,
     @InjectModel(User.name) private userModel: Model<UserDocument>,
+    @InjectModel(UploadedDocument.name) private documentModel: Model<DocumentDocument>,
+    @InjectModel(ProposedEntry.name) private proposalModel: Model<ProposedEntryDocument>,
+    private proposals: ProposalsService,
     @InjectConnection() private connection: Connection,
     private storage: StorageService,
     private audit: AuditService,
@@ -74,6 +84,56 @@ export class AttachmentsService {
     if (!Types.ObjectId.isValid(entityId)) throw new NotFoundException('Record not found');
     const rows = await this.attachmentModel.find({ orgId, entityType: type, entityId: new Types.ObjectId(entityId), removedAt: null }).sort({ createdAt: -1 }).exec();
     return rows.map((r) => this.row(r));
+  }
+
+  /**
+   * "Add to": a record was entered by hand from a scanned document. The file is
+   * kept against the record, the document is marked with what it became, and
+   * its AI proposal is closed, so the same document is never in the books
+   * twice. A document is entered once.
+   */
+  async fromDocument(orgId: string, actorId: string, input: { documentId: string; entityType: string; entityId: string; label: string }) {
+    const entityType = this.type(input.entityType);
+    await this.assertRecord(orgId, entityType, input.entityId);
+    if (!Types.ObjectId.isValid(input.documentId)) throw new NotFoundException('Document not found');
+    const label = input.label?.trim().slice(0, 120) || entityType;
+    const claimed = await this.documentModel
+      .findOneAndUpdate(
+        { _id: input.documentId, orgId, enteredAs: null },
+        { $set: { enteredAs: { entityType, entityId: input.entityId, label, at: new Date(), by: actorId } } },
+        { new: true },
+      )
+      .exec();
+    if (!claimed) {
+      const doc = await this.documentModel.findOne({ _id: input.documentId, orgId }).lean().exec();
+      if (!doc) throw new NotFoundException('Document not found');
+      throw new ConflictException(`This document was already entered as ${doc.enteredAs?.label ?? 'a record'}.`);
+    }
+
+    const attachment = await this.attachmentModel.create({
+      orgId,
+      entityType,
+      entityId: new Types.ObjectId(input.entityId),
+      fileName: claimed.originalName,
+      mimeType: claimed.mimeType,
+      sizeBytes: claimed.sizeBytes,
+      sha256: claimed.sha256,
+      storageKey: claimed.s3Key,
+      uploadedBy: actorId,
+    });
+    await this.audit.record({
+      orgId, entityType, entityId: input.entityId, action: 'ATTACH', performedBy: actorId,
+      after: { attachmentId: attachment._id.toString(), fileName: claimed.originalName, sizeBytes: claimed.sizeBytes, sha256: claimed.sha256, fromDocumentId: input.documentId },
+    });
+    await this.audit.record({
+      orgId, entityType: 'Document', entityId: input.documentId, action: 'ENTERED_AS', performedBy: actorId,
+      after: { entityType, entityId: input.entityId, label },
+    });
+
+    // The AI's version of the same document waits in Review: close it.
+    const pending = await this.proposalModel.findOne({ orgId, documentId: claimed._id, status: 'proposed' }).select('_id').lean().exec();
+    if (pending) await this.proposals.reject({ proposalId: String(pending._id), orgId, actorId, reason: `Entered by hand as ${label}` });
+    return { ...this.row(attachment), proposalClosed: !!pending };
   }
 
   /** The latest files kept against any record, for the documents library: each with its record and who added it. */

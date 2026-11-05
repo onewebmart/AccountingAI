@@ -5,6 +5,7 @@
  *  ✓ Refuses another org's record, an unknown record type, and file types we do not keep
  *  ✓ Lists, links and removes; removal hides it and both are audited on the record
  *  ✓ Lists every live file in the org for the documents library, an expense's receipt included
+ *  ✓ Keeps a scanned document against the record entered from it, once, and closes its proposal
  */
 import 'reflect-metadata';
 import mongoose, { Model, Types } from 'mongoose';
@@ -26,6 +27,9 @@ import { Vendor, VendorSchema } from '../purchase/schemas/vendor.schema';
 import { PartyPayment, PartyPaymentSchema } from '../payments/schemas/party-payment.schema';
 import { DirectExpense, DirectExpenseSchema } from '../direct-expenses/schemas/direct-expense.schema';
 import { User, UserSchema } from '../tenancy/schemas/user.schema';
+import { Document as UploadedDocument, DocumentSchema } from '../documents/schemas/document.schema';
+import { ProposedEntry, ProposedEntrySchema } from '../proposals/schemas/proposed-entry.schema';
+import { ProposalsService } from '../proposals/proposals.service';
 
 const ACTOR = new Types.ObjectId().toString();
 const stored = new Map<string, Buffer>();
@@ -35,6 +39,7 @@ const storage = {
   presignedUrl: jest.fn(async (key: string) => `https://files.example/${key}?sig=1`),
 };
 
+const proposals = { reject: jest.fn(async () => undefined) };
 let moduleRef: TestingModule;
 let attachments: AttachmentsService;
 let audit: Model<{ action: string; entityId: string; after: Record<string, unknown> }>;
@@ -58,9 +63,11 @@ beforeAll(async () => {
         { name: PartyPayment.name, schema: PartyPaymentSchema },
         { name: DirectExpense.name, schema: DirectExpenseSchema },
         { name: User.name, schema: UserSchema },
+        { name: UploadedDocument.name, schema: DocumentSchema },
+        { name: ProposedEntry.name, schema: ProposedEntrySchema },
       ]),
     ],
-    providers: [AttachmentsService, AuditService, { provide: StorageService, useValue: storage }],
+    providers: [AttachmentsService, AuditService, { provide: StorageService, useValue: storage }, { provide: ProposalsService, useValue: proposals }],
   }).compile();
   attachments = moduleRef.get(AttachmentsService);
   audit = moduleRef.get(getModelToken(AuditLog.name));
@@ -124,5 +131,25 @@ describe('attachments', () => {
       expect.objectContaining({ id: receipt.id, fileName: 'Fuel receipt.jpg', entityType: 'DirectExpense', entityId: String(expenseId), uploadedByName: 'Asha Rao' }),
     ]);
     expect(await attachments.listAll(new Types.ObjectId().toString())).toEqual([]);
+  });
+
+  it('keeps a scanned document against the record entered from it, once, and closes its proposal', async () => {
+    const orgId = new Types.ObjectId().toString();
+    const [rao] = await customers.create([{ orgId, name: 'Rao Traders' }]);
+    const docs = moduleRef.get<Model<{ _id: Types.ObjectId; enteredAs?: { entityType: string; label: string } | null }>>(getModelToken(UploadedDocument.name));
+    const [scan] = await docs.create([{ orgId, s3Key: `orgs/${orgId}/documents/abc.pdf`, originalName: 'invoice-01.pdf', mimeType: 'application/pdf', sizeBytes: 887, sha256: 'a'.repeat(64) }]);
+    const proposalId = new Types.ObjectId();
+    await moduleRef.get<Model<unknown>>(getModelToken(ProposedEntry.name)).collection.insertOne({ _id: proposalId, orgId, documentId: scan._id, status: 'proposed' });
+
+    const kept = await attachments.fromDocument(orgId, ACTOR, { documentId: String(scan._id), entityType: 'Customer', entityId: String(rao._id), label: 'Customer Rao Traders' });
+    expect(kept).toMatchObject({ fileName: 'invoice-01.pdf', sizeBytes: 887, proposalClosed: true });
+    expect(proposals.reject).toHaveBeenCalledWith({ proposalId: String(proposalId), orgId, actorId: ACTOR, reason: 'Entered by hand as Customer Rao Traders' });
+    expect((await docs.findById(scan._id).lean().exec())!.enteredAs).toMatchObject({ entityType: 'Customer', label: 'Customer Rao Traders' });
+    // The file is the scan's own, not a copy.
+    expect((await attachments.url(orgId, kept.id)).url).toContain(`orgs/${orgId}/documents/abc.pdf`);
+    expect((await attachments.list(orgId, 'Customer', String(rao._id))).map((a) => a.fileName)).toEqual(['invoice-01.pdf']);
+
+    await expect(attachments.fromDocument(orgId, ACTOR, { documentId: String(scan._id), entityType: 'Customer', entityId: String(rao._id), label: 'again' })).rejects.toThrow(/already entered as Customer Rao Traders/);
+    await expect(attachments.fromDocument(new Types.ObjectId().toString(), ACTOR, { documentId: String(scan._id), entityType: 'Customer', entityId: String(rao._id), label: 'x' })).rejects.toThrow(/Record not found/);
   });
 });

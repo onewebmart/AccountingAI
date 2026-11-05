@@ -69,6 +69,14 @@ export class Document {
 
   @Prop({ type: MongooseSchema.Types.Mixed, default: null })
   importSummary?: Record<string, unknown> | null;
+
+  /**
+   * Entered by hand from this document (Add to → New bill, New expense…)
+   * instead of approving the AI's proposal: the record it became. Set once;
+   * the proposal is closed so the same document is never in the books twice.
+   */
+  @Prop({ type: Object, default: null })
+  enteredAs?: { entityType: string; entityId: string; label: string; at: Date; by: string } | null;
 }
 
 export const DocumentSchema = SchemaFactory.createForClass(Document);
