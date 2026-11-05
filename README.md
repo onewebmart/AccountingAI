@@ -206,14 +206,6 @@ The core platform (tenancy, auth, roles, the ledger and the document-to-proposal
 - Stock in more than one warehouse; credit and debit notes as stock moves (returns are entered as adjustments).
 - Exchange rates are entered by hand; there is no RBI or FBIL feed.
 
-------|-------|-------------|
-| ✅ | 0 | Foundation — monorepo, scaffold, CLAUDE.md, design tokens |
-| ⬜ | 1 | Tenancy & isolation |
-| ⬜ | 2 | Auth & 2FA |
-| ⬜ | 3 | RBAC & permission matrix |
-| ⬜ | 4 | General Ledger backbone |
-| ⬜ | 5–19 | … |
-
 ---
 
 ## Scripts
