@@ -14,12 +14,13 @@ import { api } from '@/lib/api';
 import { formatPaise } from '@/lib/gst';
 import { errorText, shortDate, stateName, useCustomerInvoices, type CustomerRecord } from '@/components/sales/sales-data';
 import { InvoiceStatusChip } from '@/components/sales/status';
+import { ContactPersonsList, profileDetailItems, type PartyProfile } from '@/components/parties/party-profile';
 
 /**
  * A link the customer can open to see their invoices and PDFs, and pay
  * where a payment link is open. No login; it expires, and can be withdrawn.
  */
-function PortalLink({ customerId }: { customerId: string }) {
+function PortalLink({ customerId, enabled }: { customerId: string; enabled: boolean }) {
   const [url, setUrl] = useState<string | null>(null);
   const share = useMutation({
     mutationFn: () => api.post<{ url: string; expiresAt: string }>('/portal-links', { customerId, days: 30 }),
@@ -44,7 +45,7 @@ function PortalLink({ customerId }: { customerId: string }) {
       description="They see their invoices and PDFs for 30 days, and can pay any with a payment link. No login needed."
       actions={
         <>
-          <Button size="sm" variant="secondary" disabled={share.isPending} onClick={() => share.mutate()}>
+          <Button size="sm" variant="secondary" disabled={share.isPending || !enabled} onClick={() => share.mutate()}>
             {share.isPending ? 'Making a link…' : 'Copy portal link'}
           </Button>
           <Button size="sm" variant="ghost" disabled={withdraw.isPending} onClick={() => withdraw.mutate()}>
@@ -53,7 +54,15 @@ function PortalLink({ customerId }: { customerId: string }) {
         </>
       }
     >
-      {url ? <p className="break-all font-mono text-caption text-ink-600">{url}</p> : <p className="text-caption text-ink-400">No link made on this visit.</p>}
+      {!enabled ? (
+        <p className="text-caption text-ink-500">
+          Portal access is turned off for this customer, so no link opens. <Link href={`/sales/customers/${customerId}/edit`} className="font-medium text-ink-700 hover:underline">Turn it on in Edit</Link>.
+        </p>
+      ) : url ? (
+        <p className="break-all font-mono text-caption text-ink-600">{url}</p>
+      ) : (
+        <p className="text-caption text-ink-400">No link made on this visit.</p>
+      )}
     </Section>
   );
 }
@@ -71,7 +80,7 @@ export default function CustomerPage() {
 
   if (customer.isError) return <QueryError error={customer.error} onRetry={() => void customer.refetch()} />;
   if (!customer.data) return <p className="text-caption text-ink-400">Loading…</p>;
-  const c = customer.data;
+  const c = customer.data as CustomerRecord & PartyProfile;
   const theirs = invoices.data ?? [];
   const held = (advances.data ?? []).find((a) => a.partyId === id)?.unappliedPaise ?? 0;
   const overdue = theirs.filter((i) => i.outstandingPaise > 0 && i.dueDate && i.dueDate < new Date().toISOString().slice(0, 10)).reduce((s, i) => s + i.outstandingPaise, 0);
@@ -110,13 +119,18 @@ export default function CustomerPage() {
       <Section title="Details">
         <DetailGrid
           items={[
-            ['State', stateName(c.stateCode ?? c.gstin?.slice(0, 2)) ?? <span className="text-pending-fg">Not set</span>],
-            ['Email', c.email || '—'],
-            ['Phone', c.phone || '—'],
-            ['Address', [c.address, c.city, c.pincode].filter(Boolean).join(', ') || '—'],
-            ['Notes', c.notes || '—'],
+            ['Place of supply', stateName(c.stateCode ?? c.gstin?.slice(0, 2)) ?? <span className="text-pending-fg">Not set</span>],
+            ['PAN', c.pan || c.gstin ? <span className="font-mono">{c.pan ?? c.gstin!.slice(2, 12)}</span> : '—'],
+            ...profileDetailItems(c, 'customer'),
+            ['Remarks', c.notes ? <span className="whitespace-pre-line">{c.notes}</span> : '—'],
           ]}
         />
+        {(c.contactPersons?.length ?? 0) > 0 && (
+          <div className="mt-5 border-t border-line-100 pt-4">
+            <p className="mb-1 text-caption text-ink-500">Contact persons</p>
+            <ContactPersonsList people={c.contactPersons} />
+          </div>
+        )}
       </Section>
 
       <Section title="Invoices" actions={<Link href={`/sales/invoices/new?customerId=${id}`} className="text-caption font-medium text-ink-600 hover:underline">New invoice</Link>}>
@@ -154,7 +168,7 @@ export default function CustomerPage() {
         )}
       </Section>
 
-      <PortalLink customerId={id} />
+      <PortalLink customerId={id} enabled={c.portalEnabled !== false} />
 
       <Section>
         <AttachmentsSection entityType="Customer" entityId={id} />

@@ -29,6 +29,7 @@ export default function VendorsPage() {
   return (
     <div>
       <PageHeader
+        guide="vendors"
         title="Vendors"
         subtitle={vendors.data ? `${all.length} vendor${all.length === 1 ? '' : 's'} · you owe ${formatPaise(owed)} on posted bills` : 'Everyone you buy from, and what you owe each.'}
         actions={
@@ -45,6 +46,7 @@ export default function VendorsPage() {
       />
       {vendors.data && all.length === 0 ? (
         <EmptyState
+          guide="vendors"
           title="No vendors yet"
           body="Add the people you buy from, with their GSTIN and bank details, and bills and payments follow."
           action={<Button asChild><Link href="/purchases/vendors/new">New vendor</Link></Button>}

@@ -11,6 +11,7 @@ import { AttachmentsSection } from '@/components/shell/attachments-section';
 import { api } from '@/lib/api';
 import { formatPaise } from '@/lib/gst';
 import { BillStatusChip, HistoryLink, Line, TDS_SECTIONS, dueInfo, shortDate, useBills, type VendorRecord } from '@/components/purchases/purchase-data';
+import { ContactPersonsList, profileDetailItems, type PartyProfile } from '@/components/parties/party-profile';
 
 /** A vendor: who they are, where they are paid, what you owe them, and their bills. */
 export default function VendorPage() {
@@ -22,7 +23,7 @@ export default function VendorPage() {
   const bills = useBills();
 
   if (vendor.isError) return <QueryError error={vendor.error} onRetry={() => void vendor.refetch()} />;
-  const v = vendor.data;
+  const v = vendor.data as (VendorRecord & PartyProfile) | undefined;
   if (!v) return <p className="text-caption text-ink-400">Loading…</p>;
 
   const theirs = (bills.data ?? []).filter((b) => b.vendorId === id);
@@ -78,16 +79,18 @@ export default function VendorPage() {
         <Section title="Details" className="lg:col-span-2">
           <DetailGrid
             items={[
-              ['Email', v.email],
-              ['Phone', v.phone],
-              ['City', v.city],
-              ['Address', v.address],
-              ['Pincode', v.pincode ? <span className="font-mono">{v.pincode}</span> : null],
               ['PAN', v.pan ? <span className="font-mono">{v.pan}</span> : null],
               ['TDS', v.tdsSection ? `${v.tdsSection}${tds ? ` · ${tds.label}` : ''} · ${(v.tdsRateBps ?? 0) / 100}%` : 'No TDS'],
-              ['Notes', v.notes],
+              ...profileDetailItems(v, 'vendor'),
+              ['Remarks', v.notes ? <span className="whitespace-pre-line">{v.notes}</span> : null],
             ]}
           />
+          {(v.contactPersons?.length ?? 0) > 0 && (
+            <div className="mt-5 border-t border-line-100 pt-4">
+              <p className="mb-1 text-caption text-ink-500">Contact persons</p>
+              <ContactPersonsList people={v.contactPersons} />
+            </div>
+          )}
         </Section>
       </div>
 

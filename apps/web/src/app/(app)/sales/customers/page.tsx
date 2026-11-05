@@ -27,6 +27,7 @@ export default function CustomersPage() {
   return (
     <div>
       <PageHeader
+        guide="customers"
         title="Customers"
         subtitle={all.length ? <>They owe you <span className="font-mono text-ink-900">{formatPaise(owed)}</span> across {all.filter((c) => c.receivablePaise > 0).length} of {all.length} customers.</> : 'Who you sell to, and what each owes.'}
         actions={
@@ -38,6 +39,7 @@ export default function CustomersPage() {
 
       {!customers.isLoading && !customers.isError && all.length === 0 ? (
         <EmptyState
+          guide="customers"
           title="Add your first customer"
           body="A customer's GSTIN or state decides the tax on every invoice to them."
           action={<Button asChild><Link href="/sales/customers/new"><Plus size={14} /> New customer</Link></Button>}
