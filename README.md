@@ -28,17 +28,18 @@ AiBooks keeps double-entry books for an Indian business. It reads the bills, inv
 |---|---|
 | **Capture** | Bills, invoices, receipts and statements by upload, a per-business email address, or WhatsApp. OCR and AI read each one; a person approves it in the review queue. |
 | **Review and approvals** | One queue for everything AI proposes, with the reason for each account and checks for duplicates, wrong GSTINs and blocked credit. Maker-checker approval policies with a risk score. |
-| **Sales** | Customers, GST invoices with PDF and email, e-invoice and e-way bill, receipts across many invoices with AI allocation, advances, refunds, credit notes, Razorpay payment links and a customer portal |
+| **Sales** | Customers, multi-line GST invoices with PDF and email, e-invoice and e-way bill, receipts across many invoices with AI allocation, advances, refunds, credit notes, Razorpay payment links and a customer portal |
 | **Quotes and orders** | Quotes (drafted by AI from a customer's message), sales orders, delivery challans, purchase orders, goods received and the 3-way match |
-| **Purchase** | Vendors with bank details and MSME status, bills, debit notes, payments, and payment runs that put MSME and overdue bills first |
-| **Expense claims** | Employee claims, approved by someone else, posted by an accountant, reimbursed |
+| **Purchases** | Vendors with bank details and MSME status, multi-line bills, expenses paid straight from bank or cash, recurring bills and expenses, debit notes, payments, and payment runs that put MSME and overdue bills first |
+| **Employee claims** | Claims approved by someone else, posted by an accountant, reimbursed |
 | **Items and stock** | Item master with AI HSN/SAC suggestions; stock from bills and invoices at weighted-average cost; bill-line to item linking; reorders; the closing-stock entry |
-| **Projects** | Projects and timesheets, invoices drafted from unbilled time, profit by project |
+| **Time tracking** | Projects and a timesheet, invoices drafted from unbilled time, profit by project |
 | **Foreign currency** | Export invoices under LUT and foreign bills, payments with the realised exchange gain or loss, month-end revaluation |
 | **Banking** | Statement import, AI reconciliation, Account Aggregator bank feeds, transfers |
 | **GST and TDS** | GSTR-1 and GSTR-3B with filing through a GSP, GSTR-2B reconciliation with each mismatch explained, ITC rules, GSTR-9, Form 26Q, Form 26AS matching |
-| **Month-end and close** | A month-end assistant, accruals and prepaids, the fixed-asset register and depreciation, period locks, year-end close |
+| **Accountant** | Manual journals, bulk update (posted lines moved by one reclassification you approve), the chart of accounts, currency adjustments, budgets; the month-end assistant, accruals and prepaids, the fixed-asset register and depreciation; transaction locking and year-end close |
 | **Reports** | The statutory reports, management reports and comparisons, budgets, PDF and CSV, scheduled email, the monthly narrative, and "Ask your books" |
+| **Documents** | Every upload and every file attached to a record, in one searchable library |
 | **CA firms** | Clients, the compliance calendar, document checklists, tasks, leads, fee billing, a support agent, white-label portal |
 
 Some outside connections run in test mode until configured: the GSP, outgoing WhatsApp and SMS, and the bank feed. See [Build phases](#build-phases) for what is not done yet.
@@ -76,7 +77,7 @@ flowchart TB
   subgraph web["Web: Next.js 14, apps/web"]
     direction LR
     w1["Review queue,<br/>inbox"]:::app
-    w2["Sales, purchase, orders,<br/>stock, projects"]:::app
+    w2["Sales, purchases, expenses,<br/>items, time tracking"]:::app
     w3["Banking, currencies, GST,<br/>TDS, month-end, close"]:::app
     w4["Reports, budgets,<br/>Ask your books"]:::app
     w1 ~~~ w2 ~~~ w3 ~~~ w4
@@ -86,7 +87,7 @@ flowchart TB
     direction LR
     capture["Capture: documents,<br/>OCR, AI extraction"]:::app
     proposals[("proposed_entries<br/>AI writes here only")]:::store
-    domain["Sales, purchase, orders, stock,<br/>projects, currencies, banking,<br/>GST, TDS, month-end"]:::app
+    domain["Sales, purchases, expenses,<br/>orders, stock, projects, currencies,<br/>banking, GST, TDS, month-end"]:::app
     posting["PostingService<br/>the only ledger writer,<br/>on a person's approval"]:::ledger
     reports["Reports, PDFs, narrative,<br/>Ask your books: read only"]:::app
     capture --> proposals --> posting
@@ -259,7 +260,7 @@ pnpm lint           # lint
 pnpm format         # Prettier
 ```
 
-- **API tests** run against a real MongoDB replica set, never a mock. Jest's global setup starts an in-memory one (`mongodb-memory-server`) and each spec file gets its own database. The suite has 99 spec files and 872 tests.
+- **API tests** run against a real MongoDB replica set, never a mock. Jest's global setup starts an in-memory one (`mongodb-memory-server`) and each spec file gets its own database. The suite has 103 spec files and 894 tests.
 - **One spec:** `cd apps/api && npx jest src/stock/stock.service.spec.ts`
 - **Type-check:** `npx tsc --noEmit -p apps/api/tsconfig.json` and `npx tsc --noEmit -p apps/web/tsconfig.json`
 
@@ -295,6 +296,7 @@ The core platform (tenancy, auth, roles, the ledger and the document-to-proposal
 | ✅ | 7 | Stock: moves and weighted-average valuation, line-to-item linking, reorders, the opening and closing stock entries |
 | ✅ | 8 | Reports and answers: management reports, comparisons and budgets, any report as PDF or CSV and by scheduled email, the AI monthly narrative, Ask your books |
 | ✅ | 9 | Projects and currencies: projects and timesheets with invoices drafted from time, foreign-currency documents with realised and unrealised exchange, exports under LUT in the returns |
+| ✅ | | Navigation and pages: the sidebar grouped as Sales, Purchases, Time Tracking, Accountant and the rest, one page per list, form and record instead of pop-ups; multi-line invoices and bills priced on the server, direct and recurring expenses, manual journals, bulk update, and the documents library. Plan: [docs/plans/NAVIGATION_AND_PAGES.md](docs/plans/NAVIGATION_AND_PAGES.md) |
 
 **Not done yet**
 - A real GSP: e-invoice, e-way bill and GST filing run end to end against a mock adapter only.

@@ -53,9 +53,9 @@ flowchart LR
   %% One box per group of pages under apps/web/src/app/(app)
   subgraph web["Web app: Next.js 14, apps/web"]
     wCapture["Capture and review<br/>/review /inbox"]:::built
-    wTrade["Sell and buy<br/>/sales /purchase /orders /items<br/>/expenses /approvals /recurring /projects"]:::built
-    wLedger["Bank and ledger<br/>/banking /vouchers /accounts /currency"]:::built
-    wTax["Tax and close<br/>/gst /tds /month-end /closing"]:::built
+    wTrade["Sell and buy, one page per module<br/>/sales/* /purchases/* /items /stock<br/>/approvals /time/*"]:::built
+    wLedger["Bank and ledger<br/>/banking /accountant/* /vouchers<br/>/currency /documents"]:::built
+    wTax["Tax and close<br/>/gst /tds /month-end<br/>/accountant/transaction-locking"]:::built
     wReports["Reports<br/>/dashboard /insights /reports<br/>/reports/management /exports /audit"]:::built
     wSetup["Setup<br/>/onboarding /settings /migration"]:::built
     wFirm["CA firm and platform<br/>/crm /firm-portal /platform-admin"]:::built
@@ -499,7 +499,7 @@ erDiagram
   }
   attachments {
     string orgId
-    string entityType "invoice, bill, voucher, payment or party"
+    string entityType "invoice, bill, voucher, payment, party, claim or expense"
     string entityId
     string storageKey "in S3"
   }
@@ -525,6 +525,9 @@ erDiagram
   sales_invoices ||--o{ payment_reminders : "chased by"
   recurring_templates ||--o{ sales_invoices : "drafts"
   recurring_templates ||--o{ purchase_bills : "drafts"
+  recurring_templates ||--o{ expenses : "drafts"
+  vendors |o--o{ expenses : "paid to"
+  expenses |o--o| journals : "one payment voucher when posted"
 
   customers {
     ObjectId _id PK
@@ -610,9 +613,21 @@ erDiagram
   }
   recurring_templates {
     string orgId
-    string kind "bill, invoice or journal"
+    string kind "bill, invoice, journal or expense"
     string nextRunDate
     object amountsPaise
+  }
+  expenses {
+    string orgId
+    string number "EXP/fy/0001, gapless"
+    string date
+    ObjectId expenseAccountId FK
+    ObjectId paidThroughAccountId FK "a bank or cash account"
+    int taxablePaise
+    bool claimable "input GST, needs the supplier GSTIN"
+    ObjectId projectId FK
+    string status "draft or posted"
+    ObjectId journalId FK
   }
 ```
 
@@ -1028,7 +1043,9 @@ flowchart TB
       D13["Approval policy:<br/>maker-checker, risk score"]:::built
       D14["Payment run: MSME first,<br/>bank bulk file"]:::built
       D15["Expense claims: submit,<br/>approve, post, reimburse"]:::built
+      D15e["Expenses paid from bank<br/>or cash, and recurring ones"]:::built
       D11 --> D12 --> D13 --> D14
+      D15e --> D13
     end
     subgraph bank["Bank and pay"]
       direction TB
