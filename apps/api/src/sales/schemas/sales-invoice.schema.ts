@@ -41,6 +41,26 @@ class InvoiceLineItem {
   @Prop({ type: Boolean, default: false }) notStock: boolean;
   /** The project this line's income or cost belongs to; its journal line carries it. */
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Project', default: null }) projectId: Types.ObjectId | null;
+  /**
+   * This line's share of the invoice's discount, before tax. amountPaise is
+   * quantity times rate; amountPaise less this is the line's taxable value,
+   * which the return and the ledger use.
+   */
+  @Prop({ type: Number, default: 0, min: 0, validate: { validator: Number.isInteger, message: 'Money must be integer paise (Invariant 1)' } }) discountPaise: number;
+}
+
+/** A discount on the whole invoice, before tax: the percent asked for (null for an amount), and what it came to. */
+@Schema({ _id: false })
+class InvoiceDiscount {
+  @Prop({ type: Number, default: null }) percent: number | null;
+  @Prop({ type: Number, required: true, min: 0, validate: { validator: Number.isInteger, message: 'Money must be integer paise (Invariant 1)' } }) amountPaise: number;
+}
+
+/** Added after tax and not taxed, at most ₹99.99 either way; it posts to Round Off. Signed paise. */
+@Schema({ _id: false })
+class InvoiceAdjustment {
+  @Prop({ type: String, default: 'Adjustment' }) label: string;
+  @Prop({ type: Number, required: true, validate: { validator: Number.isInteger, message: 'Money must be integer paise (Invariant 1)' } }) paise: number;
 }
 
 @Schema({ collection: 'sales_invoices', timestamps: true })
@@ -63,8 +83,20 @@ export class SalesInvoice {
   })
   status: InvoiceStatus;
 
+  /** The total includes any adjustment: total − (taxable value + tax) is the adjustment. */
   @Prop({ type: InvoiceAmounts, required: true }) amountsPaise: InvoiceAmounts;
   @Prop({ type: [InvoiceLineItem], default: [] }) lineItems: InvoiceLineItem[];
+  @Prop({ type: InvoiceDiscount, default: null }) discount: InvoiceDiscount | null;
+  @Prop({ type: InvoiceAdjustment, default: null }) adjustment: InvoiceAdjustment | null;
+
+  /** The customer's order number, or ours. */
+  @Prop({ type: String, default: null }) referenceNumber: string | null;
+  /** What the invoice is for, in a line. */
+  @Prop({ type: String, default: null }) subject: string | null;
+  @Prop({ type: String, default: null }) salespersonName: string | null;
+  @Prop({ type: String, default: null }) termsAndConditions: string | null;
+  /** Days the customer has to pay; the due date follows from it when none is given. */
+  @Prop({ type: Number, default: null, min: 0, max: 365 }) paymentTermsDays: number | null;
 
   @Prop({ type: String, default: null }) financialYear: string | null;
 

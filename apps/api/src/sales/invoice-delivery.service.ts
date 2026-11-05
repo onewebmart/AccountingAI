@@ -139,16 +139,33 @@ export class InvoiceDeliveryService {
       number: invoice.invoiceNumber ?? null,
       date: invoice.invoiceDate,
       dueDate: invoice.dueDate ?? null,
+      // Each line at its taxable value: its amount less its share of any discount (rule 46).
       lines: (invoice.lineItems ?? []).map((l) => ({
         description: l.description,
         hsnSac: l.hsnSac ?? null,
         qty: l.qty ?? 1,
         ratePaise: l.ratePaise,
-        amountPaise: l.amountPaise,
+        amountPaise: l.amountPaise - (l.discountPaise ?? 0),
         taxRatePct: l.taxRatePct ?? 0,
       })),
       amounts: invoice.amountsPaise,
+      discount:
+        invoice.discount && invoice.discount.amountPaise > 0
+          ? {
+              label: invoice.discount.percent ? `Discount (${invoice.discount.percent}%)` : 'Discount',
+              paise: invoice.discount.amountPaise,
+              subTotalPaise: (invoice.lineItems ?? []).reduce((s, l) => s + l.amountPaise, 0),
+            }
+          : null,
+      adjustmentLabel: invoice.adjustment?.label ?? null,
+      extraRows: [
+        ...(invoice.referenceNumber ? [['Order no.', invoice.referenceNumber] as [string, string]] : []),
+        ...(invoice.paymentTermsDays != null ? [['Terms', invoice.paymentTermsDays === 0 ? 'Due on receipt' : `Net ${invoice.paymentTermsDays}`] as [string, string]] : []),
+      ],
+      subject: invoice.subject ?? null,
+      salesperson: invoice.salespersonName ?? null,
       notes: invoice.notes ?? null,
+      terms: invoice.termsAndConditions ?? null,
       footer: settings?.invoiceNotes ?? null,
       draft: invoice.status === InvoiceStatus.DRAFT,
       einvoice: await this.einvoiceFor(orgId, invoice._id),

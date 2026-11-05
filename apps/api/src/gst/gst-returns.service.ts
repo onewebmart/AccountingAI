@@ -93,7 +93,8 @@ export class GstReturnsService {
         customerGstin: customer.gstin,
         customerState: customer.stateCode,
         amounts: inv.amountsPaise,
-        lines: inv.lineItems ?? [],
+        // Each line at the value it was taxed on: its amount less its share of any discount.
+        lines: (inv.lineItems ?? []).map((l) => ({ ...l, amountPaise: l.amountPaise - (l.discountPaise ?? 0) })),
         exportType: inv.exportType ?? null,
         shippingBill: inv.shippingBill ?? null,
       };
@@ -108,7 +109,9 @@ export class GstReturnsService {
       creditNotes: notes.flatMap((n) => {
         const inv = noteInvoiceById.get(n.invoiceId.toString());
         if (!inv) return [];
-        return [{ id: n._id.toString(), number: n.noteNumber, date: n.noteDate, amounts: n.amountsPaise, invoice: sale(inv) }];
+        // An itemised note is split by its own lines; a note by value, by its invoice's.
+        const lines = (n.lines ?? []).map((l) => ({ ...l, amountPaise: l.amountPaise - (l.discountPaise ?? 0) }));
+        return [{ id: n._id.toString(), number: n.noteNumber, date: n.noteDate, amounts: n.amountsPaise, invoice: sale(inv), ...(lines.length ? { lines } : {}) }];
       }),
       unpostedCount,
     });

@@ -1,12 +1,14 @@
 import { Body, Controller, Get, Param, Patch, Post, Query, Request, Res, UseGuards } from '@nestjs/common';
 import { Type } from 'class-transformer';
-import { IsArray, IsEmail, IsIn, IsInt, IsMongoId, IsNumber, IsOptional, IsString, Length, Matches, Min, ValidateNested } from 'class-validator';
+import { IsArray, IsEmail, IsIn, IsInt, IsMongoId, IsNumber, IsOptional, IsString, Length, Matches, Max, Min, ValidateNested } from 'class-validator';
 import { Response } from 'express';
 import { Permission } from '@ai-accounting/shared';
 import { RequirePermission } from '../auth/decorators';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionGuard } from '../auth/guards/permission.guard';
 import { SalesDocsService } from './sales-docs.service';
+import { DocWordsDto, PricedDocDto } from './doc-extras.dto';
+import { CHALLAN_REASONS, ChallanReason } from './schemas/sales-docs.schema';
 
 interface AuthRequest {
   user: { orgId: string; sub: string };
@@ -26,18 +28,21 @@ export class DocLineDto {
   @IsOptional() @IsInt() @Min(0) orderLine?: number | null;
 }
 
-class QuoteDto {
+class QuoteDto extends PricedDocDto {
   @IsMongoId() customerId: string;
+  /** Typed by a person; blank takes the next QT number. */
+  @IsOptional() @IsString() @Length(0, 16) number?: string | null;
   @IsOptional() @Matches(DATE) date?: string;
   @IsOptional() @Matches(DATE) validUntil?: string;
+  @IsOptional() @IsMongoId() projectId?: string | null;
   @IsArray() @ValidateNested({ each: true }) @Type(() => DocLineDto) lines: DocLineDto[];
-  @IsOptional() @IsString() @Length(0, 1000) notes?: string | null;
+  @IsOptional() @IsString() @Length(0, 2000) notes?: string | null;
 }
 
-class QuoteUpdateDto {
+class QuoteUpdateDto extends PricedDocDto {
   @IsOptional() @Matches(DATE) validUntil?: string;
   @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => DocLineDto) lines?: DocLineDto[];
-  @IsOptional() @IsString() @Length(0, 1000) notes?: string | null;
+  @IsOptional() @IsString() @Length(0, 2000) notes?: string | null;
 }
 
 class SendDto {
@@ -49,13 +54,19 @@ class FromMessageDto {
   @IsString() @Length(1, 5000) text: string;
 }
 
-class OrderDto {
+class OrderDto extends PricedDocDto {
   @IsMongoId() customerId: string;
+  /** Typed by a person; blank takes the next SO number. */
+  @IsOptional() @IsString() @Length(0, 16) number?: string | null;
   @IsOptional() @Matches(DATE) date?: string;
+  /** The expected shipment date. */
   @IsOptional() @Matches(DATE) expectedBy?: string | null;
+  /** The order's reference: the customer's PO number. */
   @IsOptional() @IsString() @Length(0, 60) customerPoNumber?: string | null;
+  @IsOptional() @IsString() @Length(0, 60) deliveryMethod?: string | null;
+  @IsOptional() @IsInt() @Min(0) @Max(365) paymentTermsDays?: number | null;
   @IsArray() @ValidateNested({ each: true }) @Type(() => DocLineDto) lines: DocLineDto[];
-  @IsOptional() @IsString() @Length(0, 1000) notes?: string | null;
+  @IsOptional() @IsString() @Length(0, 2000) notes?: string | null;
 }
 
 class PickDto {
@@ -67,14 +78,17 @@ class InvoiceOrderDto {
   @IsArray() @ValidateNested({ each: true }) @Type(() => PickDto) lines: PickDto[];
 }
 
-class ChallanDto {
+class ChallanDto extends DocWordsDto {
   @IsMongoId() customerId: string;
+  /** Typed by a person; blank takes the next DC number. */
+  @IsOptional() @IsString() @Length(0, 16) number?: string | null;
   @IsOptional() @Matches(DATE) date?: string;
-  @IsIn(['supply', 'job_work', 'approval', 'other']) reason: 'supply' | 'job_work' | 'approval' | 'other';
+  /** The challan type: why the goods move (rule 55). */
+  @IsIn([...CHALLAN_REASONS]) reason: ChallanReason;
   @IsOptional() @IsMongoId() salesOrderId?: string | null;
   @IsArray() @ValidateNested({ each: true }) @Type(() => DocLineDto) lines: DocLineDto[];
   @IsOptional() @IsString() @Length(0, 20) vehicleNo?: string | null;
-  @IsOptional() @IsString() @Length(0, 1000) notes?: string | null;
+  @IsOptional() @IsString() @Length(0, 2000) notes?: string | null;
 }
 
 /** Quotes, sales orders and delivery challans. None of them posts. */

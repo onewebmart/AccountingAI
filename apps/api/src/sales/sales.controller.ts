@@ -16,10 +16,12 @@ import { PermissionGuard } from '../auth/guards/permission.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CustomersService } from './customers.service';
 import { SalesInvoicesService } from './sales-invoices.service';
-import { CreateCustomerDto, CreateSalesInvoiceDto, PayInvoiceDto, CreateCreditNoteDto, UpdateCustomerDto, EmailInvoiceDto, CreateInvoiceFromLinesDto } from './dto/sales.dto';
+import { CreateCustomerDto, CreateSalesInvoiceDto, PayInvoiceDto, CreateCreditNoteDto, UpdateCustomerDto, EmailInvoiceDto } from './dto/sales.dto';
+import { InvoiceFromLinesBodyDto, ItemisedCreditNoteDto } from './dto/sales-docs.dto';
 import { InvoiceFromLinesService } from './invoice-from-lines.service';
 import { CreditNotesService } from './credit-notes.service';
 import { InvoiceDeliveryService } from './invoice-delivery.service';
+import { GstinLookupService } from '../gsp/gstin-lookup';
 import { Response } from 'express';
 
 import { ItemsService } from '../items/items.service';
@@ -37,9 +39,22 @@ export class SalesController {
     private readonly delivery: InvoiceDeliveryService,
     private readonly items: ItemsService,
     private readonly fromLines: InvoiceFromLinesService,
+    private readonly gstinLookup: GstinLookupService,
   ) {}
 
   // ── Customers ────────────────────────────────────────────────────────────
+
+  /**
+   * Prefill a customer from their GSTIN: the state, PAN and kind of holder
+   * read from the GSTIN itself, the legal name and address when the GSP can
+   * give them, and any customer already here with the same GSTIN.
+   */
+  @Get('gstin/:gstin')
+  @RequirePermission(Permission.MANAGE_SALES)
+  async gstin(@Request() req: AuthRequest, @Param('gstin') gstin: string) {
+    const found = await this.gstinLookup.lookup(gstin);
+    return { ...found, existing: await this.customersService.withGstin(req.user.orgId, found.gstin) };
+  }
 
   @Get('customers')
   @RequirePermission(Permission.MANAGE_SALES)
@@ -102,7 +117,7 @@ export class SalesController {
   /** A draft invoice from its lines: amounts and tax heads worked out here, for the customer's state. */
   @Post('invoices/from-lines')
   @RequirePermission(Permission.MANAGE_SALES)
-  createInvoiceFromLines(@Request() req: AuthRequest, @Body() body: CreateInvoiceFromLinesDto) {
+  createInvoiceFromLines(@Request() req: AuthRequest, @Body() body: InvoiceFromLinesBodyDto) {
     return this.fromLines.create(req.user.orgId, req.user.sub, body);
   }
 
@@ -158,5 +173,16 @@ export class SalesController {
   @RequirePermission(Permission.MANAGE_SALES)
   listCreditNotes(@Request() req: AuthRequest, @Query('invoiceId') invoiceId?: string) {
     return this.creditNotesService.list(req.user.orgId, invoiceId);
+  }
+
+  /**
+   * An itemised credit note: lines, each to an income account, against one
+   * of the customer's posted invoices. It posts when it is raised, through
+   * PostingService, numbered in the CRN series.
+   */
+  @Post('credit-notes')
+  @RequirePermission(Permission.POST_JOURNAL)
+  createItemisedCreditNote(@Request() req: AuthRequest, @Body() body: ItemisedCreditNoteDto) {
+    return this.creditNotesService.createItemised(req.user.orgId, req.user.sub, body);
   }
 }

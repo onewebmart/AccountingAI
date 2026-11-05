@@ -6,6 +6,9 @@
  *  ✓ A challan delivers against the order, never beyond it; the order shows invoiced and delivered
  *  ✓ A customer's message becomes a draft quote at their last prices; what the rules cannot read goes to the model
  *  ✓ Sent quotes with no answer after a week come back with a follow-up; another org sees none of it
+ *  ✓ A quote's discount and adjustment are priced on the server and carried to its order and invoice
+ *  ✓ Invoicing an order in parts carries its discounted values, the last part taking what is left
+ *  ✓ A typed number is kept unless used; the series skips it. A challan says why goods move, liquid gas included
  */
 import 'reflect-metadata';
 import mongoose, { Model, Types } from 'mongoose';
@@ -202,5 +205,90 @@ describe('drafting from a message', () => {
     expect(f).toMatchObject({ number: q.number, customerName: 'Rao Traders' });
     expect(f.message).toMatch(/valid until 2026-11-01; we are happy to renew it/);
     expect(await docs.followUps(orgId, '2026-10-24')).toEqual([]);
+  });
+});
+
+describe('the full sales document', () => {
+  const desk = { description: 'Desk', qty: 1, ratePaise: 100000, taxRatePct: 18 };
+  const chair = { description: 'Chair', qty: 3, ratePaise: 50000, taxRatePct: 18 };
+
+  it("prices a quote's discount and adjustment, and carries them to its order and invoice", async () => {
+    const { orgId, local } = await org();
+    const q = await docs.createQuote(orgId, ACTOR, {
+      customerId: local, date: '2026-11-04', lines: [desk, { ...chair, qty: 1 }], discount: { percent: 10 }, adjustment: { label: 'Round off', paise: 70 },
+      referenceNumber: 'ENQ-12', subject: 'Furniture for the new office', salespersonName: 'Asha', termsAndConditions: 'Prices valid for 15 days.', notes: 'Looking forward to your business.',
+    });
+    expect(q.toObject()).toMatchObject({
+      amountsPaise: { taxableValue: 135000, cgst: 12150, sgst: 12150, total: 159370 },
+      discount: { percent: 10, amountPaise: 15000 }, adjustment: { label: 'Round off', paise: 70 },
+      referenceNumber: 'ENQ-12', subject: 'Furniture for the new office', salespersonName: 'Asha', termsAndConditions: 'Prices valid for 15 days.',
+    });
+    expect(q.lines.map((l) => l.discountPaise)).toEqual([10000, 5000]);
+    await expect(docs.createQuote(orgId, ACTOR, { customerId: local, lines: [desk], adjustment: { paise: 10000 } })).rejects.toThrow(/at most ₹99.99/);
+
+    // The PDF shows the discount, the adjustment and the terms.
+    const pdf = (await docs.pdf(orgId, 'quote', String(q._id))).content.toString('latin1');
+    expect(pdf).toContain('Less: Discount \\(10%\\)'); // PDF strings escape brackets
+    expect(pdf).toContain('Round off');
+    expect(pdf).toContain('Furniture for the new office');
+    expect(pdf).toContain('Terms and conditions');
+
+    // Changing a draft re-prices it with the discount it has.
+    const changed = await docs.updateQuote(orgId, ACTOR, String(q._id), { lines: [desk, { ...chair, qty: 2 }] });
+    expect(changed.amountsPaise.taxableValue).toBe(180000);
+    await docs.updateQuote(orgId, ACTOR, String(q._id), { lines: [desk, { ...chair, qty: 1 }], subject: 'Office furniture' });
+
+    await docs.answerQuote(orgId, ACTOR, String(q._id), 'accepted');
+    const made = await docs.convertQuote(orgId, ACTOR, String(q._id), 'sales_order');
+    const order = await docs.getOrder(orgId, made.id);
+    expect(order).toMatchObject({ amountsPaise: { total: 159370 }, discount: { percent: 10, amountPaise: 15000 }, customerPoNumber: 'ENQ-12', subject: 'Office furniture' });
+
+    // All of it in one go: the invoice charges exactly what was quoted, rounding and all.
+    const invoice = await docs.invoiceOrder(orgId, ACTOR, made.id, [{ orderLine: 0, qty: 1 }, { orderLine: 1, qty: 1 }]);
+    expect(invoice.toObject()).toMatchObject({ amountsPaise: { taxableValue: 135000, total: 159370 }, adjustment: { paise: 70 }, referenceNumber: 'ENQ-12', subject: 'Office furniture', termsAndConditions: 'Prices valid for 15 days.' });
+    expect(invoice.lineItems.map((l) => l.discountPaise)).toEqual([10000, 5000]);
+
+    // A quote made straight into an invoice carries the same.
+    const q2 = await docs.createQuote(orgId, ACTOR, { customerId: local, lines: [desk], discount: { amountPaise: 2500 } });
+    const inv2 = await docs.convertQuote(orgId, ACTOR, String(q2._id), 'invoice');
+    const stored = await invoices.findById(inv2.id).lean().exec();
+    expect(stored).toMatchObject({ amountsPaise: { taxableValue: 97500 }, discount: { percent: null, amountPaise: 2500 } });
+  });
+
+  it('invoices an order in parts at its discounted values, the last part taking what is left of the discount', async () => {
+    const { orgId, local } = await org();
+    const order = await docs.createOrder(orgId, ACTOR, {
+      customerId: local, lines: [chair], discount: { amountPaise: 1000 }, expectedBy: '2099-12-01', deliveryMethod: 'Courier', paymentTermsDays: 30, customerPoNumber: 'PO-5',
+    });
+    expect(order.toObject()).toMatchObject({ deliveryMethod: 'Courier', paymentTermsDays: 30, expectedBy: '2099-12-01', amountsPaise: { taxableValue: 149000 } });
+    const first = await docs.invoiceOrder(orgId, ACTOR, String(order._id), [{ orderLine: 0, qty: 1 }]);
+    const second = await docs.invoiceOrder(orgId, ACTOR, String(order._id), [{ orderLine: 0, qty: 1 }]);
+    const third = await docs.invoiceOrder(orgId, ACTOR, String(order._id), [{ orderLine: 0, qty: 1 }]);
+    expect([first, second, third].map((i) => i.lineItems[0].discountPaise)).toEqual([333, 333, 334]);
+    expect([first, second, third].reduce((s, i) => s + i.amountsPaise.taxableValue, 0)).toBe(149000);
+    // Due by the order's payment terms.
+    expect(first.dueDate).toBe(new Date(Date.parse(`${first.invoiceDate}T00:00:00Z`) + 30 * 86_400_000).toISOString().slice(0, 10));
+    expect(first.paymentTermsDays).toBe(30);
+    await expect(docs.createOrder(orgId, ACTOR, { customerId: local, date: '2026-11-04', expectedBy: '2026-11-01', lines: [chair] })).rejects.toThrow(/on or after/);
+  });
+
+  it('keeps a typed number unless it is used, and says why goods move on a challan', async () => {
+    const { orgId, local } = await org();
+    const typed = await docs.createQuote(orgId, ACTOR, { customerId: local, date: '2026-11-04', number: 'QT/2026-27/0001', lines: [desk] });
+    expect(typed.number).toBe('QT/2026-27/0001');
+    await expect(docs.createQuote(orgId, ACTOR, { customerId: local, number: 'QT/2026-27/0001', lines: [desk] })).rejects.toThrow(/already used/);
+    await expect(docs.createQuote(orgId, ACTOR, { customerId: local, number: 'QT #1', lines: [desk] })).rejects.toThrow(/16 letters/);
+    // The series skips the number typed by hand.
+    expect((await docs.createQuote(orgId, ACTOR, { customerId: local, date: '2026-11-04', lines: [desk] })).number).toBe('QT/2026-27/0002');
+
+    const gas = await docs.createChallan(orgId, ACTOR, {
+      customerId: local, date: '2026-11-04', reason: 'liquid_gas', number: 'DC-77', lines: [{ description: 'LPG 19 kg', qty: 10, ratePaise: 180000, taxRatePct: 18 }],
+      referenceNumber: 'Tanker 4', notes: 'Quantity measured at delivery.', termsAndConditions: 'Return the cylinders within 30 days.',
+    });
+    expect(gas.toObject()).toMatchObject({ number: 'DC-77', reason: 'liquid_gas', referenceNumber: 'Tanker 4', notes: 'Quantity measured at delivery.', termsAndConditions: 'Return the cylinders within 30 days.' });
+    const pdf = (await docs.pdf(orgId, 'challan', String(gas._id))).content.toString('latin1');
+    expect(pdf).toContain('Supply of liquid gas');
+    expect(pdf).toContain('Return the cylinders');
+    await expect(docs.createChallan(orgId, ACTOR, { customerId: local, reason: 'gift' as never, lines: [desk] })).rejects.toThrow(/Say why the goods move/);
   });
 });

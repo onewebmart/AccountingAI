@@ -21,6 +21,7 @@ import {
   Length,
   Matches,
   IsMongoId,
+  IsNumber,
   Max,
   Min,
   ValidateNested,
@@ -32,6 +33,8 @@ import { PermissionGuard } from '../auth/guards/permission.guard';
 import { RecurringService } from './recurring.service';
 import { RemindersService } from './reminders.service';
 import { RecurringKind } from './schemas/recurring-template.schema';
+import { FREQUENCIES, Frequency } from './schedule';
+import { AdjustmentDto, DiscountDto } from '../orders/doc-extras.dto';
 
 interface AuthRequest {
   user: { orgId: string; sub: string; role: string };
@@ -51,16 +54,19 @@ class AmountsDto {
 class LineDto {
   @IsString() @Length(1, 300) description: string;
   @IsOptional() @IsString() hsnSac?: string | null;
-  @IsOptional() @IsInt() @Min(0) qty?: number;
+  /** Invoices take up to three decimals (2.5 kg); bills whole units, as before. */
+  @IsOptional() @IsNumber() @Min(0) qty?: number;
   @IsInt() @Min(0) ratePaise: number;
   @IsInt() @Min(0) amountPaise: number;
   @IsOptional() @Min(0) @Max(100) taxRatePct?: number;
+  @IsOptional() @IsMongoId() itemId?: string | null;
+  @IsOptional() @IsString() @Length(0, 3) uqc?: string | null;
 }
 
 class CreateRecurringDto {
   @IsString() @Length(1, 120) name: string;
   @IsString() partyId: string;
-  @IsIn(['monthly', 'quarterly', 'yearly']) frequency: 'monthly' | 'quarterly' | 'yearly';
+  @IsIn([...FREQUENCIES]) frequency: Frequency;
   @IsInt() @Min(1) @Max(31) dayOfMonth: number;
   @Matches(DATE, { message: 'startDate must be a date like 2026-10-01' }) startDate: string;
   @IsOptional() @Matches(DATE, { message: 'endDate must be a date like 2027-03-31' }) endDate?: string | null;
@@ -69,6 +75,13 @@ class CreateRecurringDto {
   @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => LineDto) lineItems?: LineDto[];
   @IsOptional() @IsBoolean() isReverseCharge?: boolean;
   @IsOptional() @IsString() @Length(0, 500) notes?: string | null;
+  /** Invoices: the order number, subject, salesperson and terms each draft carries; the discount and adjustment it is priced with. */
+  @IsOptional() @IsString() @Length(0, 60) referenceNumber?: string | null;
+  @IsOptional() @IsString() @Length(0, 250) subject?: string | null;
+  @IsOptional() @IsString() @Length(0, 80) salespersonName?: string | null;
+  @IsOptional() @IsString() @Length(0, 3000) termsAndConditions?: string | null;
+  @IsOptional() @ValidateNested() @Type(() => DiscountDto) discount?: DiscountDto | null;
+  @IsOptional() @ValidateNested() @Type(() => AdjustmentDto) adjustment?: AdjustmentDto | null;
 }
 
 class ReminderSettingsDto {
@@ -85,7 +98,7 @@ class JournalLineDto {
 
 class CreateRecurringJournalDto {
   @IsString() @Length(1, 120) name: string;
-  @IsIn(['monthly', 'quarterly', 'yearly']) frequency: 'monthly' | 'quarterly' | 'yearly';
+  @IsIn([...FREQUENCIES]) frequency: Frequency;
   @IsInt() @Min(1) @Max(31) dayOfMonth: number;
   @Matches(DATE, { message: 'startDate must be a date like 2026-10-01' }) startDate: string;
   @IsOptional() @Matches(DATE, { message: 'endDate must be a date like 2027-03-31' }) endDate?: string | null;
@@ -98,7 +111,7 @@ class CreateRecurringExpenseDto {
   @IsString() @Length(1, 120) name: string;
   /** The vendor paid, when they are one in the books. */
   @IsOptional() @IsMongoId() partyId?: string;
-  @IsIn(['monthly', 'quarterly', 'yearly']) frequency: 'monthly' | 'quarterly' | 'yearly';
+  @IsIn([...FREQUENCIES]) frequency: Frequency;
   @IsInt() @Min(1) @Max(31) dayOfMonth: number;
   @Matches(DATE, { message: 'startDate must be a date like 2026-10-01' }) startDate: string;
   @IsOptional() @Matches(DATE, { message: 'endDate must be a date like 2027-03-31' }) endDate?: string | null;

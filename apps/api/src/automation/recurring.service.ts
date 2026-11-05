@@ -14,6 +14,9 @@ import {
   RecurringTemplateDocument,
 } from './schemas/recurring-template.schema';
 import { addDays, firstOccurrence, Frequency, nextOccurrence, todayIst } from './schedule';
+import { OrgSettings, OrgSettingsDocument } from '../org-settings/schemas/org-settings.schema';
+import { ItemsService } from '../items/items.service';
+import { DiscountInput, isInterState, lineAmount, lineProblem, priceDoc, text } from '../orders/doc-lines';
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -40,9 +43,18 @@ export interface CreateRecurringInput {
     ratePaise: number;
     amountPaise: number;
     taxRatePct?: number;
+    itemId?: string | null;
+    uqc?: string | null;
   }>;
   isReverseCharge?: boolean;
   notes?: string | null;
+  /** Invoices: carried onto each draft. */
+  referenceNumber?: string | null;
+  subject?: string | null;
+  salespersonName?: string | null;
+  termsAndConditions?: string | null;
+  discount?: DiscountInput | null;
+  adjustment?: { label?: string | null; paise?: number | null } | null;
   /** Expenses: what each one is booked to and paid from. partyId, when given, is the vendor. */
   expense?: {
     expenseAccountId: string;
@@ -84,11 +96,19 @@ export class RecurringService {
     @Optional() private adjustments?: AdjustmentsService,
     // Optional for the same reason: recurring expenses need the direct-expenses module.
     @Optional() private directExpenses?: DirectExpensesService,
+    // Invoices priced from their lines: our state, and the items the lines pick.
+    @Optional() @InjectModel(OrgSettings.name) private settingsModel?: Model<OrgSettingsDocument>,
+    @Optional() private items?: ItemsService,
   ) {}
 
   async create(orgId: string, actorId: string, input: CreateRecurringInput): Promise<RecurringTemplateDocument> {
     if (input.kind === 'journal') return this.createJournal(orgId, actorId, input);
     if (input.kind === 'expense') return this.createExpense(orgId, actorId, input);
+    // An invoice with lines is priced here, as any invoice is: the discount
+    // spread over the lines, tax on what is left for the customer's state, the
+    // adjustment after tax. What the browser previewed is not what is stored.
+    const priced = input.kind === 'invoice' && input.lineItems?.length ? await this.priceInvoice(orgId, input) : null;
+    if (priced) input = { ...input, amountsPaise: priced.amounts, lineItems: priced.lines };
     const a = input.amountsPaise;
     if (!a) throw new BadRequestException('A recurring bill or invoice needs its amounts.');
     if (!input.partyId) throw new BadRequestException('Pick the vendor or customer.');
@@ -96,7 +116,7 @@ export class RecurringService {
     if (!parts.every((p) => Number.isInteger(p) && p >= 0)) {
       throw new BadRequestException('Amounts must be whole paise, zero or more.');
     }
-    if (a.taxableValue + a.cgst + a.sgst + a.igst + a.cess !== a.total) {
+    if (a.taxableValue + a.cgst + a.sgst + a.igst + a.cess + (priced?.adjustment?.paise ?? 0) !== a.total) {
       throw new BadRequestException('The total must be the taxable value plus the taxes.');
     }
     if (a.total <= 0) throw new BadRequestException('A recurring document needs an amount.');
@@ -132,6 +152,16 @@ export class RecurringService {
       lineItems: input.lineItems ?? [],
       isReverseCharge: input.isReverseCharge ?? false,
       notes: input.notes ?? null,
+      ...(input.kind === 'invoice'
+        ? {
+            referenceNumber: text(input.referenceNumber, 60),
+            subject: text(input.subject, 250),
+            salespersonName: text(input.salespersonName, 80),
+            termsAndConditions: text(input.termsAndConditions, 3000),
+            discount: priced?.discount ?? null,
+            adjustment: priced?.adjustment ?? null,
+          }
+        : {}),
       status: 'active',
       createdBy: actorId,
     });
@@ -226,6 +256,14 @@ export class RecurringService {
       amountsPaise: t.amountsPaise,
       journalLines: t.journalLines ?? [],
       isReverseCharge: t.isReverseCharge,
+      lineItems: t.lineItems ?? [],
+      notes: t.notes ?? null,
+      referenceNumber: t.referenceNumber ?? null,
+      subject: t.subject ?? null,
+      salespersonName: t.salespersonName ?? null,
+      termsAndConditions: t.termsAndConditions ?? null,
+      discount: t.discount ?? null,
+      adjustment: t.adjustment ?? null,
       expense: t.expense
         ? { ...t.expense, expenseAccountId: String(t.expense.expenseAccountId), paidThroughAccountId: String(t.expense.paidThroughAccountId), projectId: t.expense.projectId ? String(t.expense.projectId) : null }
         : null,
@@ -397,8 +435,47 @@ export class RecurringService {
       });
       return bill._id;
     }
-    const invoice = await this.invoices.create({ ...common, customerId: t.partyId!.toString(), invoiceDate: date });
+    const invoice = await this.invoices.create({
+      ...common,
+      customerId: t.partyId!.toString(),
+      invoiceDate: date,
+      referenceNumber: t.referenceNumber ?? null,
+      subject: t.subject ?? null,
+      salespersonName: t.salespersonName ?? null,
+      termsAndConditions: t.termsAndConditions ?? null,
+      paymentTermsDays: t.dueInDays,
+      discount: t.discount ?? null,
+      adjustment: t.adjustment ?? null,
+    });
     return invoice._id;
+  }
+
+  /**
+   * A recurring invoice's lines priced for the customer's state: checked as
+   * an invoice's are, filled from their items, the discount spread over them,
+   * tax on the discounted values and the adjustment after tax.
+   */
+  private async priceInvoice(orgId: string, input: CreateRecurringInput) {
+    const lines = input.lineItems ?? [];
+    lines.forEach((l, i) => {
+      const problem = lineProblem({ ...l, qty: l.qty ?? 1, taxRatePct: l.taxRatePct ?? 0 }, i);
+      if (problem) throw new BadRequestException(problem);
+    });
+    if (!input.partyId || !Types.ObjectId.isValid(input.partyId)) throw new BadRequestException('Pick the customer.');
+    const customer = await this.customerModel.findOne({ _id: input.partyId, orgId }).lean().exec();
+    if (!customer) throw new NotFoundException('Customer not found');
+    if (lines.some((l) => l.itemId) && !this.items) throw new BadRequestException('Lines with items need the items module.');
+    const plain = lines.map((l) => ({ description: l.description.trim().slice(0, 300), hsnSac: l.hsnSac?.trim() || null, qty: l.qty ?? 1, ratePaise: l.ratePaise, amountPaise: lineAmount({ qty: l.qty ?? 1, ratePaise: l.ratePaise }), taxRatePct: l.taxRatePct ?? 0, itemId: l.itemId || null, uqc: l.uqc || null }));
+    const resolved = this.items
+      ? (await this.items.resolveLines(orgId, plain, 'sale')).map((l) => ({ ...l, qty: l.qty ?? 1, taxRatePct: l.taxRatePct ?? 0, hsnSac: l.hsnSac ?? null }))
+      : plain.map((l) => ({ ...l, itemId: null, accountId: null, projectId: null }));
+    const settings = this.settingsModel ? await this.settingsModel.findOne({ orgId }).lean().exec() : null;
+    const interState = isInterState(settings?.gstin?.slice(0, 2) ?? settings?.stateCode ?? null, customer.gstin?.slice(0, 2) ?? customer.stateCode ?? null);
+    const priced = priceDoc(resolved, interState, { discount: input.discount, adjustment: input.adjustment });
+    return {
+      ...priced,
+      lines: priced.lines.map((l) => ({ description: l.description, hsnSac: l.hsnSac, qty: l.qty, ratePaise: l.ratePaise, amountPaise: l.amountPaise, taxRatePct: l.taxRatePct, itemId: l.itemId ? String(l.itemId) : null, uqc: l.uqc ?? null, accountId: l.accountId ?? null, discountPaise: l.discountPaise })),
+    };
   }
 
   private async party(orgId: string, kind: RecurringKind, partyId: string) {

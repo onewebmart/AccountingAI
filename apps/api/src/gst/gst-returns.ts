@@ -208,6 +208,8 @@ export interface CreditNoteIn {
   amounts: Amounts;
   /** The invoice it was raised against, which may be from an earlier month. */
   invoice: SaleIn;
+  /** An itemised note's own lines; without them the note is split as its invoice was. */
+  lines?: LineLike[];
 }
 
 export interface Issue {
@@ -430,7 +432,7 @@ export function buildGstr1(input: {
     }
     // A note follows its invoice: same customer, same place, same table.
     const placed = place(note.invoice, orgState, []);
-    const buckets = split(note.amounts, note.invoice.lines);
+    const buckets = split(note.amounts, note.lines?.length ? note.lines : note.invoice.lines);
     for (const b of buckets) {
       if (b.rate === 0) nil.set(nilSupply(placed), (nil.get(nilSupply(placed)) ?? 0) - b.txval);
       addHsn(placed.registered, b, -1);

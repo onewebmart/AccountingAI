@@ -6,7 +6,8 @@ import { SalesInvoiceDocument } from './schemas/sales-invoice.schema';
 import { SalesInvoicesService } from './sales-invoices.service';
 import { OrgSettings, OrgSettingsDocument } from '../org-settings/schemas/org-settings.schema';
 import { ItemsService } from '../items/items.service';
-import { DocLineInput, docAmounts, isInterState, lineAmount, lineProblem } from '../orders/doc-lines';
+import { DOC_NUMBER, DiscountInput, DocLineInput, isInterState, lineAmount, lineProblem, priceDoc, text } from '../orders/doc-lines';
+import { addDays } from '../automation/schedule';
 
 export interface InvoiceLineInput extends DocLineInput {
   projectId?: string | null;
@@ -19,6 +20,19 @@ export interface InvoiceFromLinesInput {
   dueDate?: string | null;
   notes?: string | null;
   lines: InvoiceLineInput[];
+  /** The customer's order number. */
+  referenceNumber?: string | null;
+  subject?: string | null;
+  salespersonName?: string | null;
+  termsAndConditions?: string | null;
+  /** Days to pay: with no due date given, the invoice is due this many days after its date. */
+  paymentTermsDays?: number | null;
+  /** The project the whole invoice is for: lines without one of their own take it. */
+  projectId?: string | null;
+  /** Before tax: a percent of the lines, or an amount, spread over them. */
+  discount?: DiscountInput | null;
+  /** After tax, not taxed, at most ₹99.99 either way. */
+  adjustment?: { label?: string | null; paise?: number | null } | null;
 }
 
 /** Where a sale is supplied from and to, which decides IGST or CGST and SGST. */
@@ -30,9 +44,10 @@ export interface PlaceOfSupply {
 
 /**
  * An invoice typed line by line. The browser sends what was sold, how many,
- * the rate and the slab; the amounts and the tax heads are worked out here,
- * the same way as for quotes and orders, for the customer's state. It is a
- * draft: nothing reaches the ledger until a person posts it.
+ * the rate and the slab, and any discount or adjustment; the discount is
+ * spread over the lines, the tax worked out on what is left, for the
+ * customer's state, the same way as for quotes and orders. It is a draft:
+ * nothing reaches the ledger until a person posts it.
  */
 @Injectable()
 export class InvoiceFromLinesService {
@@ -55,8 +70,18 @@ export class InvoiceFromLinesService {
       const problem = lineProblem(l, i);
       if (problem) throw new BadRequestException(problem);
     });
-    if (input.dueDate && input.dueDate < input.invoiceDate) {
+    const terms = input.paymentTermsDays ?? null;
+    if (terms !== null && (!Number.isInteger(terms) || terms < 0 || terms > 365)) throw new BadRequestException('Payment terms are 0 to 365 days.');
+    const dueDate = input.dueDate || (terms !== null ? addDays(input.invoiceDate, terms) : null);
+    if (dueDate && dueDate < input.invoiceDate) {
       throw new BadRequestException('The due date cannot be before the invoice date.');
+    }
+    const invoiceNumber = input.invoiceNumber?.trim() || null;
+    if (invoiceNumber) {
+      if (!DOC_NUMBER.test(invoiceNumber)) throw new BadRequestException('An invoice number is up to 16 letters, digits, "/" and "-" (rule 46).');
+      if (await this.invoices.numberTaken(orgId, invoiceNumber, input.invoiceDate)) {
+        throw new BadRequestException(`Invoice number ${invoiceNumber} is already used this financial year. Leave it blank to take the next one.`);
+      }
     }
     const customer = await this.customer(orgId, input.customerId);
     const { interState } = await this.supplyFor(orgId, customer);
@@ -73,22 +98,33 @@ export class InvoiceFromLinesService {
         ratePaise: l.ratePaise,
         amountPaise: lineAmount(l),
         taxRatePct: l.taxRatePct,
-        projectId: l.projectId || null,
+        projectId: l.projectId || input.projectId || null,
       })),
       'sale',
     );
-    const amounts = docAmounts(input.lines, interState);
+    const priced = priceDoc(
+      resolved.map((l) => ({ ...l, qty: l.qty ?? 1, taxRatePct: l.taxRatePct ?? 0 })),
+      interState,
+      { discount: input.discount, adjustment: input.adjustment },
+    );
 
     return this.invoices.create({
       orgId,
       actorId,
       customerId: String(customer._id),
-      invoiceNumber: input.invoiceNumber?.trim() || null,
+      invoiceNumber,
       invoiceDate: input.invoiceDate,
-      dueDate: input.dueDate || null,
-      amountsPaise: amounts,
-      lineItems: resolved.map((l) => ({ ...l, qty: l.qty ?? 1, taxRatePct: l.taxRatePct ?? 0 })),
-      notes: input.notes?.trim() || null,
+      dueDate,
+      amountsPaise: priced.amounts,
+      lineItems: priced.lines,
+      notes: text(input.notes, 2000),
+      referenceNumber: text(input.referenceNumber, 60),
+      subject: text(input.subject, 250),
+      salespersonName: text(input.salespersonName, 80),
+      termsAndConditions: text(input.termsAndConditions, 3000),
+      paymentTermsDays: terms,
+      discount: priced.discount,
+      adjustment: priced.adjustment,
     });
   }
 

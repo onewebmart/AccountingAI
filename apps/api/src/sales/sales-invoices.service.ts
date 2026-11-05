@@ -17,6 +17,7 @@ import { AuditService } from '../gl/audit.service';
 import { JournalDocument } from '../gl/schemas/journal.schema';
 import { outstandingPaise } from '../gl/schemas/settlement.schema';
 import { withOrg } from '../database/tenant.plugin';
+import { ADJUSTMENT_LIMIT_PAISE } from '../orders/doc-lines';
 
 /** The shape every list of sales invoices is rendered from. */
 export interface InvoiceListItem {
@@ -74,8 +75,18 @@ export interface CreateInvoiceInput {
     uqc?: string | null;
     accountId?: Types.ObjectId | null;
     projectId?: Types.ObjectId | null;
+    /** The line's share of the invoice's discount, before tax. */
+    discountPaise?: number;
   }>;
   notes?: string | null;
+  referenceNumber?: string | null;
+  subject?: string | null;
+  salespersonName?: string | null;
+  termsAndConditions?: string | null;
+  paymentTermsDays?: number | null;
+  discount?: { percent: number | null; amountPaise: number } | null;
+  /** Already in amountsPaise.total; kept to name it. */
+  adjustment?: { label: string; paise: number } | null;
   /** Set when a recurring template drafts this invoice. */
   recurringTemplateId?: string | null;
   source?: { kind: 'quote' | 'sales_order' | 'project'; id: string; lines?: Array<{ orderLine: number; qty: number }> } | null;
@@ -121,6 +132,13 @@ export class SalesInvoicesService {
       amountsPaise: input.amountsPaise,
       lineItems: input.lineItems ?? [],
       notes: input.notes ?? null,
+      referenceNumber: input.referenceNumber ?? null,
+      subject: input.subject ?? null,
+      salespersonName: input.salespersonName ?? null,
+      termsAndConditions: input.termsAndConditions ?? null,
+      paymentTermsDays: input.paymentTermsDays ?? null,
+      discount: input.discount ?? null,
+      adjustment: input.adjustment ?? null,
       recurringTemplateId: input.recurringTemplateId ? new Types.ObjectId(input.recurringTemplateId) : null,
       source: input.source ?? null,
       foreign: input.foreign ?? null,
@@ -133,7 +151,13 @@ export class SalesInvoicesService {
       entityId: invoice._id.toString(),
       action: 'CREATE',
       performedBy: input.actorId ?? 'unknown',
-      after: { status: invoice.status, invoiceNumber: invoice.invoiceNumber, totalPaise: invoice.amountsPaise.total },
+      after: {
+        status: invoice.status,
+        invoiceNumber: invoice.invoiceNumber,
+        totalPaise: invoice.amountsPaise.total,
+        ...(invoice.discount ? { discountPaise: invoice.discount.amountPaise } : {}),
+        ...(invoice.adjustment ? { adjustmentPaise: invoice.adjustment.paise } : {}),
+      },
     });
     this.logger.log(`Created SalesInvoice ${invoice._id} (draft) for customer ${input.customerId}`);
     return invoice;
@@ -228,12 +252,37 @@ export class SalesInvoicesService {
   }
 
   /**
+   * Is this number already another invoice's in the same financial year? GST
+   * wants an invoice number unique within the year (rule 46); a typed number
+   * is checked when the draft is saved and again when it posts.
+   */
+  async numberTaken(orgId: string, invoiceNumber: string, invoiceDate: string, opts: { exceptId?: string; postedOnly?: boolean; session?: ClientSession } = {}): Promise<boolean> {
+    const { exceptId, postedOnly, session } = opts;
+    const startYear = Number(financialYearOf(invoiceDate).slice(0, 4));
+    const start = `${startYear}-04-01`;
+    const end = `${startYear + 1}-03-31`;
+    const found = await withOrg(orgId, () =>
+      this.invoiceModel
+        .exists({
+          invoiceNumber,
+          invoiceDate: { $gte: start, $lte: end },
+          ...(exceptId ? { _id: { $ne: new Types.ObjectId(exceptId) } } : {}),
+          ...(postedOnly ? { status: { $in: [InvoiceStatus.POSTED, InvoiceStatus.PAID] } } : {}),
+        })
+        .session(session ?? null)
+        .exec(),
+    );
+    return !!found;
+  }
+
+  /**
    * Post a draft or sent invoice to the ledger via PostingService (Invariant 4).
    *
    * Journal entries:
-   *   Dr  Accounts Receivable          (total)
-   *   Cr  Sales / Revenue Account      (taxableValue)
+   *   Dr  Accounts Receivable          (total, adjustment included)
+   *   Cr  Sales / Revenue Account      (taxableValue: after any discount)
    *   Cr  GST Output Tax               (cgst + sgst + igst + cess)
+   *   Cr/Dr Round Off                  (the adjustment, when there is one: credit when it adds, debit when it takes off)
    */
   async post(id: string, orgId: string, actorId: string): Promise<SalesInvoiceDocument> {
     const invoice = await this.findById(id, orgId);
@@ -244,6 +293,11 @@ export class SalesInvoicesService {
 
     const { taxableValue, cgst, sgst, igst, cess, total } = invoice.amountsPaise;
     const fy = getFY(invoice.invoiceDate);
+    // Whatever the total is beyond value plus tax: the adjustment, at most ₹99.99 either way.
+    const adjustment = total - (taxableValue + cgst + sgst + igst + cess);
+    if (Math.abs(adjustment) > ADJUSTMENT_LIMIT_PAISE) {
+      throw new BadRequestException(`The total differs from the value plus tax by ${rupees(adjustment)}; an adjustment is at most ${rupees(ADJUSTMENT_LIMIT_PAISE)}. Correct the invoice.`);
+    }
 
     // Real accounts from this org's chart. These lines used to carry a fresh
     // `new Types.ObjectId()` per posting, so a manually entered invoice hit a
@@ -256,6 +310,7 @@ export class SalesInvoicesService {
       SystemAccountKey.GST_OUTPUT_SGST,
       SystemAccountKey.GST_OUTPUT_IGST,
       SystemAccountKey.GST_OUTPUT_CESS,
+      SystemAccountKey.ROUND_OFF,
     ]);
     const receivable = accounts.get(SystemAccountKey.ACCOUNTS_RECEIVABLE)!;
     const revenue = accounts.get(SystemAccountKey.SALES_REVENUE)!;
@@ -263,10 +318,16 @@ export class SalesInvoicesService {
     const outSgst = accounts.get(SystemAccountKey.GST_OUTPUT_SGST)!;
     const outIgst = accounts.get(SystemAccountKey.GST_OUTPUT_IGST)!;
     const outCess = accounts.get(SystemAccountKey.GST_OUTPUT_CESS)!;
+    const roundOff = accounts.get(SystemAccountKey.ROUND_OFF)!;
 
     // Lines whose item has its own income account are credited there; the
-    // rest go to Sales, in proportion, to the paise.
-    const revenueParts = splitByAccount(taxableValue, invoice.lineItems, revenue._id.toString());
+    // rest go to Sales, in proportion to each line's taxable value (after its
+    // share of any discount), to the paise.
+    const revenueParts = splitByAccount(
+      taxableValue,
+      invoice.lineItems.map((l) => ({ amountPaise: l.amountPaise - (l.discountPaise ?? 0), accountId: l.accountId, projectId: l.projectId })),
+      revenue._id.toString(),
+    );
     const names = await this.accountsService.namesOf(orgId, revenueParts.map((p) => p.accountId));
     const lines = [
       {
@@ -299,6 +360,15 @@ export class SalesInvoicesService {
         });
       }
     }
+    // The adjustment: receivables carry it, so Round Off takes the other side and the voucher balances.
+    if (adjustment !== 0) {
+      lines.push({
+        accountId: roundOff._id.toString(),
+        description: invoice.adjustment?.label && invoice.adjustment.label.toLowerCase() !== roundOff.name.toLowerCase() ? `${roundOff.name} — ${invoice.adjustment.label}` : roundOff.name,
+        debitPaise: adjustment < 0 ? -adjustment : 0,
+        creditPaise: adjustment > 0 ? adjustment : 0,
+      });
+    }
 
     // The voucher names the customer, so the day book and ledgers read as words, not ids.
     const customerName = (await withOrg(orgId, () => this.customerModel.findOne({ _id: invoice.customerId }).select('name').lean().exec()))?.name ?? 'customer';
@@ -322,9 +392,21 @@ export class SalesInvoicesService {
       // SALES voucher numbers, which scanned invoices also use, so it has no
       // gaps. A reversed and re-posted invoice keeps the number it had. Taken
       // before the voucher, in the same transaction, so the voucher can name it.
-      const invoiceNumber =
-        invoice.invoiceNumber ??
-        `INV/${fy}/${String(await this.postingService.nextDocumentNumber(orgId, 'INVOICE_SERIAL', fy, session)).padStart(4, '0')}`;
+      // A number typed by a person must still be free in its year: another
+      // invoice may have taken it since the draft was saved. The series skips
+      // a number someone typed by hand, so the two never collide.
+      let invoiceNumber = invoice.invoiceNumber;
+      if (invoiceNumber) {
+        if (await this.numberTaken(orgId, invoiceNumber, invoice.invoiceDate, { exceptId: id, postedOnly: true, session })) {
+          throw new BadRequestException(`Invoice number ${invoiceNumber} is already used in ${fy}. Change this invoice's number, or clear it to take the next one.`);
+        }
+      } else {
+        for (let i = 0; i < 100 && !invoiceNumber; i++) {
+          const next = `INV/${fy}/${String(await this.postingService.nextDocumentNumber(orgId, 'INVOICE_SERIAL', fy, session)).padStart(4, '0')}`;
+          if (!(await this.numberTaken(orgId, next, invoice.invoiceDate, { exceptId: id, session }))) invoiceNumber = next;
+        }
+        if (!invoiceNumber) throw new BadRequestException('Could not find a free invoice number. Type one on the invoice.');
+      }
 
       const journal = await this.postingService.post(
         {

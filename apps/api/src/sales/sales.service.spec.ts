@@ -77,11 +77,13 @@ async function seedCustomer(name = 'Rahul Enterprises') {
   return customersSvc.create({ orgId: ORG_ID, name, gstin: '27AAPFU0939F1ZV' });
 }
 
+// A number per invoice: GST wants each unique within its financial year, and posting checks it.
+let invoiceSerial = 0;
 async function seedInvoice(customerId: string, overrides: Record<string, unknown> = {}) {
   return invoicesSvc.create({
     orgId: ORG_ID,
     customerId,
-    invoiceNumber: 'INV-001',
+    invoiceNumber: `INV-${String(++invoiceSerial).padStart(3, '0')}`,
     invoiceDate: '2025-04-15',
     dueDate: '2025-05-15',
     amountsPaise: {

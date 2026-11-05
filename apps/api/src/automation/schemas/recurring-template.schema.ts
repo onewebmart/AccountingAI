@@ -1,6 +1,7 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument, Schema as MongooseSchema, Types } from 'mongoose';
 import { tenantIsolationPlugin } from '../../database/tenant.plugin';
+import { FREQUENCIES, Frequency } from '../schedule';
 
 export type RecurringTemplateDocument = HydratedDocument<RecurringTemplate>;
 
@@ -27,6 +28,11 @@ class TemplateLine {
   @Prop(paise) ratePaise: number;
   @Prop(paise) amountPaise: number;
   @Prop({ type: Number, default: 0 }) taxRatePct: number;
+  /** Invoices: the item picked for the line, its unit, and its share of the discount. */
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Item', default: null }) itemId: Types.ObjectId | null;
+  @Prop({ type: String, default: null }) uqc: string | null;
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'LedgerAccount', default: null }) accountId: Types.ObjectId | null;
+  @Prop({ type: Number, default: 0, min: 0, validate: { validator: Number.isInteger, message: 'must be whole paise' } }) discountPaise: number;
 }
 
 /** Expenses only: what each drafted expense is booked to and paid from. */
@@ -69,9 +75,10 @@ export class RecurringTemplate {
   /** The vendor for a bill, the customer for an invoice; none for a journal. */
   @Prop({ type: MongooseSchema.Types.ObjectId, default: null }) partyId: Types.ObjectId | null;
 
-  @Prop({ type: String, enum: ['monthly', 'quarterly', 'yearly'], required: true })
-  frequency: 'monthly' | 'quarterly' | 'yearly';
-  /** Day of the month each document is dated; 31 means the month's last day. */
+  /** Weekly and fortnightly step from the start date; the rest by months, on dayOfMonth. */
+  @Prop({ type: String, enum: FREQUENCIES, required: true })
+  frequency: Frequency;
+  /** Day of the month each document is dated; 31 means the month's last day. Not used weekly or fortnightly. */
   @Prop({ type: Number, required: true, min: 1, max: 31 }) dayOfMonth: number;
   @Prop({ type: String, required: true }) startDate: string;
   @Prop({ type: String, default: null }) endDate: string | null;
@@ -90,6 +97,14 @@ export class RecurringTemplate {
   /** Bills only: GST on this purchase is ours to pay. */
   @Prop({ type: Boolean, default: false }) isReverseCharge: boolean;
   @Prop({ type: String, default: null }) notes: string | null;
+
+  /** Invoices: carried onto each draft. The profile's name is `name`; payment terms are `dueInDays`. */
+  @Prop({ type: String, default: null }) referenceNumber: string | null;
+  @Prop({ type: String, default: null }) subject: string | null;
+  @Prop({ type: String, default: null }) salespersonName: string | null;
+  @Prop({ type: String, default: null }) termsAndConditions: string | null;
+  @Prop({ type: Object, default: null }) discount: { percent: number | null; amountPaise: number } | null;
+  @Prop({ type: Object, default: null }) adjustment: { label: string; paise: number } | null;
 
   @Prop({ type: String, enum: ['active', 'paused', 'ended'], default: 'active', index: true })
   status: RecurringStatus;

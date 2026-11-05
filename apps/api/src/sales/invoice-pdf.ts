@@ -19,7 +19,16 @@ export interface InvoicePdfData {
   dueDate: string | null;
   lines: Array<{ description: string; hsnSac: string | null; qty: number; ratePaise: number; amountPaise: number; taxRatePct: number }>;
   amounts: { taxableValue: number; cgst: number; sgst: number; igst: number; cess: number; total: number };
+  /** A discount before tax: the lines then carry their discounted values, and the totals show the sub total and the discount. */
+  discount?: { label: string; paise: number; subTotalPaise: number } | null;
+  /** What the total's adjustment is called ("Round off" when not given). */
+  adjustmentLabel?: string | null;
+  /** What the document is for, printed above the lines. */
+  subject?: string | null;
+  salesperson?: string | null;
   notes: string | null;
+  /** Terms and conditions, printed under the notes. */
+  terms?: string | null;
   /** Printed under the totals on every invoice: bank details, terms. */
   footer: string | null;
   /** Shown across the top while the invoice is not yet posted. */
@@ -101,6 +110,7 @@ export function renderInvoicePdf(d: InvoicePdfData): Buffer {
     ['Date', displayDate(d.date)],
     ...(d.dueDate ? [['Due', displayDate(d.dueDate)]] : []),
     ...(d.extraRows ?? []),
+    ...(d.salesperson ? [['Salesperson', d.salesperson]] : []),
     ['Place of supply', stateName(d.buyer.stateCode)],
     ['Reverse charge', 'No'],
   ] as Array<[string, string]>) {
@@ -136,6 +146,14 @@ export function renderInvoicePdf(d: InvoicePdfData): Buffer {
   page.text(MARGIN + 10, y - 27, d.buyer.name, 10, true);
   buyerLines.forEach((l, i) => page.text(MARGIN + 10, y - 40 - i * 11, l, 8.5));
   y -= boxH + 18;
+
+  if (d.subject?.trim()) {
+    for (const l of wrap(`Subject: ${d.subject.trim()}`, 9, right - MARGIN, true)) {
+      page.text(MARGIN, y, l, 9, true);
+      y -= 12;
+    }
+    y -= 6;
+  }
 
   // Items.
   // Right edges: qty 360, rate 425, GST 462, taxable value at the margin, so a line in crores still fits.
@@ -180,13 +198,19 @@ export function renderInvoicePdf(d: InvoicePdfData): Buffer {
   // Totals.
   y -= 8;
   const a = d.amounts;
-  const totals: Array<[string, number, boolean]> = [['Taxable value', a.taxableValue, false]];
+  const totals: Array<[string, number, boolean]> = [];
+  // A discount before tax: what the lines came to, less the discount, is the taxable value.
+  if (d.discount && d.discount.paise > 0) {
+    totals.push(['Sub total', d.discount.subTotalPaise, false]);
+    totals.push([`Less: ${d.discount.label}`, -d.discount.paise, false]);
+  }
+  totals.push(['Taxable value', a.taxableValue, false]);
   if (a.cgst) totals.push(['CGST', a.cgst, false]);
   if (a.sgst) totals.push(['SGST / UTGST', a.sgst, false]);
   if (a.igst) totals.push(['IGST', a.igst, false]);
   if (a.cess) totals.push(['Cess', a.cess, false]);
   const roundOff = a.total - (a.taxableValue + a.cgst + a.sgst + a.igst + a.cess);
-  if (roundOff) totals.push(['Round off', roundOff, false]);
+  if (roundOff) totals.push([d.adjustmentLabel?.trim() || 'Round off', roundOff, false]);
   totals.push(['Total', a.total, true]);
   for (const [label, value, bold] of totals) {
     if (bold) {
@@ -203,8 +227,21 @@ export function renderInvoicePdf(d: InvoicePdfData): Buffer {
   }
   y -= 6;
 
-  for (const block of [d.notes, d.footer].filter((b): b is string => !!b?.trim())) {
-    for (const l of wrap(block, 8.5, right - MARGIN)) {
+  for (const [heading, block] of [[null, d.notes], ['Terms and conditions', d.terms], [null, d.footer]] as Array<[string | null, string | null | undefined]>) {
+    if (!block?.trim()) continue;
+    const lines = wrap(block, 8.5, right - MARGIN);
+    // A long block moves to a fresh page rather than running into the signature.
+    if (y - (lines.length + (heading ? 1 : 0)) * 11 < MARGIN + 60) {
+      page.right(right, MARGIN - 14, 'Continued on the next page', 7.5);
+      page = new Page();
+      pages.push(page);
+      y = PAGE_H - MARGIN - 10;
+    }
+    if (heading) {
+      page.text(MARGIN, y, heading, 8.5, true);
+      y -= 11;
+    }
+    for (const l of lines) {
       page.text(MARGIN, y, l, 8.5);
       y -= 11;
     }

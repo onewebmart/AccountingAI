@@ -6,6 +6,7 @@
  *  ✓ An end date ends the template; resuming skips the paused months
  *  ✓ A failed draft hands its date back for tomorrow, with the reason
  *  ✓ A recurring invoice drafts, and takes its serial when posted
+ *  ✓ A recurring invoice with lines is priced on the server (discount, adjustment), repeats weekly, every two or six months, carries its words
  *  ✓ A recurring expense drafts a draft expense once on its date, never posted; it pays only from bank or cash
  *  ✓ The ladder is off until switched on, sends each rung once, and jumps to the latest rung
  *  ✓ A customer with no email or phone is reported, not skipped silently
@@ -332,5 +333,53 @@ describe('payment reminders', () => {
     const early = composeReminder({ ...base, rung: 'before_due', daysLate: -3 });
     expect(early.subject).toBe('Invoice INV-9 is due on 10 Oct 2026');
     expect(early.body).toContain('₹1,180.00');
+  });
+});
+
+describe('recurring invoices, as a full document', () => {
+  it('prices its lines on the server, repeats weekly, and drafts each with its words, never posted', async () => {
+    const { orgId, customerId } = await org();
+    const template = await recurring.create(orgId, ACTOR, {
+      kind: 'invoice', name: 'Weekly cleaning', partyId: customerId, frequency: 'weekly', dayOfMonth: 4,
+      startDate: '2026-11-04', endDate: '2026-11-18', dueInDays: 7,
+      // What the browser previewed is not what is stored: the server prices the lines.
+      amountsPaise: { taxableValue: 1, cgst: 0, sgst: 0, igst: 0, cess: 0, total: 1 },
+      lineItems: [
+        { description: 'Cleaning visit', hsnSac: '998533', qty: 2, ratePaise: 50000, amountPaise: 100000, taxRatePct: 18 },
+        { description: 'Supplies', qty: 1, ratePaise: 50000, amountPaise: 50000, taxRatePct: 18 },
+      ],
+      discount: { percent: 10 }, adjustment: { label: 'Round off', paise: 30 },
+      referenceNumber: 'AMC-2026', subject: 'Weekly office cleaning', salespersonName: 'Asha', termsAndConditions: 'Payable within 7 days.',
+    });
+    expect(template.toObject()).toMatchObject({
+      frequency: 'weekly', nextRunDate: '2026-11-04',
+      amountsPaise: { taxableValue: 135000, cgst: 12150, sgst: 12150, total: 159330 },
+      discount: { percent: 10, amountPaise: 15000 }, adjustment: { paise: 30 }, subject: 'Weekly office cleaning',
+    });
+    expect(template.lineItems.map((l) => l.discountPaise)).toEqual([10000, 5000]);
+
+    const run = await recurring.runDue(orgId, '2026-11-20');
+    expect(run.drafted.map((d) => d.documentDate)).toEqual(['2026-11-04', '2026-11-11', '2026-11-18']);
+    expect((await templates.findById(template._id).lean().exec())).toMatchObject({ status: 'ended', nextRunDate: null });
+    const drafts = await invoices.find({ orgId, recurringTemplateId: template._id }).sort({ invoiceDate: 1 }).lean().exec();
+    expect(drafts.map((d) => d.status)).toEqual([InvoiceStatus.DRAFT, InvoiceStatus.DRAFT, InvoiceStatus.DRAFT]);
+    expect(drafts[0]).toMatchObject({ dueDate: '2026-11-11', referenceNumber: 'AMC-2026', subject: 'Weekly office cleaning', salespersonName: 'Asha', paymentTermsDays: 7, amountsPaise: { total: 159330 } });
+
+    // Posted by a person: the adjustment goes to Round Off and the voucher balances.
+    const posted = await invoicesSvc.post(String(drafts[0]._id), orgId, ACTOR);
+    const j = (await journalModel.findById(posted.journalId).lean().exec()) as unknown as { lines: Array<{ description: string; debitPaise: number; creditPaise: number }> };
+    expect(j.lines.reduce((s, l) => s + l.debitPaise, 0)).toBe(j.lines.reduce((s, l) => s + l.creditPaise, 0));
+    expect(j.lines.find((l) => /Round Off/.test(l.description))?.creditPaise).toBe(30);
+  });
+
+  it('repeats every two months and every six months', async () => {
+    const { orgId, customerId } = await org();
+    const base = { kind: 'invoice' as const, partyId: customerId, dayOfMonth: 1, startDate: '2026-04-01', amountsPaise: { taxableValue: 100000, cgst: 9000, sgst: 9000, igst: 0, cess: 0, total: 118000 } };
+    await recurring.create(orgId, ACTOR, { ...base, name: 'Every two months', frequency: 'bimonthly' });
+    await recurring.create(orgId, ACTOR, { ...base, name: 'Every six months', frequency: 'half_yearly' });
+    const run = await recurring.runDue(orgId, '2026-11-01');
+    const dates = (name: string) => run.drafted.filter((d) => d.name === name).map((d) => d.documentDate);
+    expect(dates('Every two months')).toEqual(['2026-04-01', '2026-06-01', '2026-08-01', '2026-10-01']);
+    expect(dates('Every six months')).toEqual(['2026-04-01', '2026-10-01']);
   });
 });

@@ -157,7 +157,7 @@ export class ManagementReportsService {
     const byId = new Map(items.map((i) => [String(i._id), i]));
     const facts: LineFact[] = lines.map((l) => {
       const item = l.itemId ? byId.get(String(l.itemId)) : undefined;
-      return { itemId: item ? String(item._id) : null, name: item?.name ?? l.description, uqc: item?.uqc ?? null, qty: l.qty ?? 1, amountPaise: l.amountPaise };
+      return { itemId: item ? String(item._id) : null, name: item?.name ?? l.description, uqc: item?.uqc ?? null, qty: l.qty ?? 1, amountPaise: l.amountPaise - ((l as { discountPaise?: number }).discountPaise ?? 0) };
     });
     return byItem(side, facts, rangeLabel(r.from, r.to));
   }

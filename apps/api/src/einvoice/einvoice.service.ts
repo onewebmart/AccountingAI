@@ -315,7 +315,8 @@ export class EinvoiceService {
         qty: l.qty ?? 1,
         uqc: l.uqc ?? null,
         ratePaise: l.ratePaise,
-        amountPaise: l.amountPaise,
+        // The line's assessable value: its amount less its share of any discount.
+        amountPaise: l.amountPaise - (l.discountPaise ?? 0),
         taxRatePct: l.taxRatePct ?? 0,
       })),
     };
