@@ -1,8 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { AuditService } from '../gl/audit.service';
-import { gstinProblem } from '../extraction/invoice-checks';
-import { cleanPartyDetails, PartyDetailsInput } from '../gl/party-details';
+import { PartyChangesInput, partyChanges, partyView, sameValue } from '../gl/party-profile';
 import { TDS_SECTION_CODES, TdsSection, defaultTdsRateBps, panFromGstin } from '../gl/tds';
 import { Model, Types } from 'mongoose';
 import { BillStatus } from '@ai-accounting/shared';
@@ -13,15 +12,19 @@ import { withOrg } from '../database/tenant.plugin';
 import { buildAgeingSummary, AgeingSummary } from './ageing.util';
 import { outstandingPaise } from '../gl/schemas/settlement.schema';
 
-export interface CreateVendorInput {
+/** The details of PartyChangesInput (gl/party-profile.ts) and the vendor's TDS; only the name is required. */
+export interface CreateVendorInput extends PartyChangesInput {
   orgId: string;
   /** Who created it, for the audit trail. */
   actorId?: string;
+  /** The display name. */
   name: string;
   gstin?: string | null;
   phone?: string | null;
   email?: string | null;
   address?: string | null;
+  city?: string | null;
+  pincode?: string | null;
   notes?: string | null;
   pan?: string | null;
   tdsSection?: string | null;
@@ -66,31 +69,31 @@ export class VendorsService {
   ) {}
 
   async create(input: CreateVendorInput): Promise<VendorDocument> {
-    // A typed GSTIN with a wrong check digit is a typo; catch it here rather
+    const { orgId, actorId, pan, tdsSection, tdsRateBps, ...details } = input;
+    // A typed GSTIN with a wrong check digit is a typo; caught here rather
     // than on the GST return.
-    const gstin = input.gstin?.trim() ? input.gstin.trim().toUpperCase() : null;
-    const problem = gstin ? gstinProblem(gstin) : null;
-    if (problem) throw new BadRequestException(`GSTIN ${gstin} ${problem}`);
-
-    const vendor = await this.vendorModel.create({
-      orgId: input.orgId,
-      name: input.name,
-      gstin,
-      phone: input.phone ?? null,
-      email: input.email ?? null,
-      address: input.address ?? null,
-      notes: input.notes ?? null,
-      ...this.taxSettings({ pan: input.pan ?? panFromGstin(gstin), tdsSection: input.tdsSection, tdsRateBps: input.tdsRateBps }),
-    });
+    const set = partyChanges(details, { gstin: null, billingAddress: null }, 'vendor');
+    const gstin = (set.gstin as string | null | undefined) ?? null;
+    const tax = this.taxSettings({ pan: pan || panFromGstin(gstin), tdsSection, tdsRateBps });
+    const vendor = await this.vendorModel.create({ orgId, gstin: null, ...set, ...tax });
     await this.auditService.record({
-      orgId: input.orgId,
+      orgId,
       entityType: 'Vendor',
       entityId: vendor._id.toString(),
       action: 'CREATE',
-      performedBy: input.actorId ?? 'unknown',
-      after: { name: vendor.name, gstin: vendor.gstin, tdsSection: vendor.tdsSection, tdsRateBps: vendor.tdsRateBps },
+      performedBy: actorId ?? 'unknown',
+      // What was filled in: every field, as kept, that is not blank.
+      after: Object.fromEntries(
+        Object.entries({ ...set, gstin: vendor.gstin, ...tax }).filter(([, v]) => v !== null && !(Array.isArray(v) && v.length === 0)),
+      ),
     });
     return vendor;
+  }
+
+  /** Vendors already on the books with this GSTIN: a second one is usually the same business typed twice. */
+  async withGstin(orgId: string, gstin: string): Promise<Array<{ _id: string; name: string }>> {
+    const found = await withOrg(orgId, () => this.vendorModel.find({ gstin: gstin.trim().toUpperCase() }, { name: 1 }).limit(5).lean().exec());
+    return found.map((v) => ({ _id: String(v._id), name: v.name }));
   }
 
   /**
@@ -108,7 +111,7 @@ export class VendorsService {
       const key = String(bill.vendorId);
       owed.set(key, (owed.get(key) ?? 0) + outstandingPaise(bill));
     }
-    return vendors.map((v) => ({ ...v, outstandingPaise: owed.get(String(v._id)) ?? 0 }));
+    return vendors.map((v) => ({ ...partyView(v), outstandingPaise: owed.get(String(v._id)) ?? 0 }));
   }
 
   /**
@@ -116,10 +119,14 @@ export class VendorsService {
    * they were issued with: they are stamped first, so a corrected GSTIN does
    * not rewrite GST returns or the purchase register for past months.
    */
-  async update(id: string, orgId: string, actorId: string, input: PartyDetailsInput): Promise<VendorDocument> {
+  async update(id: string, orgId: string, actorId: string, input: PartyChangesInput): Promise<VendorDocument> {
     const vendor = await this.findById(id, orgId);
-    const set = cleanPartyDetails(input, { gstin: vendor.gstin });
-    const changed = Object.keys(set).filter((k) => set[k] !== (vendor as unknown as Record<string, unknown>)[k]);
+    // The PAN goes with the TDS settings (updateTax), never here.
+    const { pan: _pan, ...rest } = input;
+    void _pan;
+    const set = partyChanges(rest, { gstin: vendor.gstin, billingAddress: vendor.billingAddress }, 'vendor');
+    const now = vendor.toObject() as unknown as Record<string, unknown>;
+    const changed = Object.keys(set).filter((k) => !sameValue(set[k], now[k]));
     if (changed.length === 0) return vendor;
 
     let stamped = 0;
@@ -135,7 +142,7 @@ export class VendorsService {
       stamped = result.modifiedCount;
     }
     const updated = await withOrg(orgId, () =>
-      this.vendorModel.findOneAndUpdate({ _id: vendor._id }, { $set: set }, { new: true }).exec(),
+      this.vendorModel.findOneAndUpdate({ _id: vendor._id }, { $set: Object.fromEntries(changed.map((k) => [k, set[k]])) }, { new: true }).exec(),
     );
     await this.auditService.record({
       orgId,
@@ -143,7 +150,7 @@ export class VendorsService {
       entityId: id,
       action: 'UPDATE',
       performedBy: actorId,
-      before: Object.fromEntries(changed.map((k) => [k, (vendor as unknown as Record<string, unknown>)[k] ?? null])),
+      before: Object.fromEntries(changed.map((k) => [k, now[k] ?? null])),
       after: Object.fromEntries(changed.map((k) => [k, set[k]])),
       meta: stamped ? { billsKeptAsIssued: stamped } : undefined,
     });
@@ -155,7 +162,7 @@ export class VendorsService {
     id: string,
     orgId: string,
     actorId: string,
-    input: PartyDetailsInput & UpdateVendorTaxInput & UpdateVendorBankingInput,
+    input: PartyChangesInput & UpdateVendorTaxInput & UpdateVendorBankingInput,
   ): Promise<VendorDocument> {
     const { pan, tdsSection, tdsRateBps, bankAccount, msme, ...details } = input;
     let vendor = await this.update(id, orgId, actorId, details);

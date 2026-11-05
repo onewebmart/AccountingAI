@@ -60,6 +60,29 @@ export interface GspProvider {
   saveReturn(gstin: string, returnType: ReturnType_, period: string, json: Record<string, unknown>): Promise<{ reference: string }>;
   requestFilingOtp(gstin: string, returnType: ReturnType_, period: string): Promise<{ sentTo: string }>;
   fileReturn(gstin: string, returnType: ReturnType_, period: string, otp: string): Promise<{ arn: string; filedAt: string }>;
+
+  /**
+   * The GST portal's public record of a GSTIN (the "Search Taxpayer" call):
+   * legal and trade name, status and principal place of business. Null when
+   * the gateway cannot say, which is always the case for the mock: a name or
+   * address is never made up.
+   */
+  searchTaxpayer(gstin: string): Promise<TaxpayerRecord | null>;
+}
+
+/** What the GST portal holds about a registration. Fields it did not give are null. */
+export interface TaxpayerRecord {
+  gstin: string;
+  legalName: string | null;
+  tradeName: string | null;
+  /** Active, Cancelled, Suspended… as the portal words it. */
+  status: string | null;
+  /** Regular, Composition… */
+  taxpayerType: string | null;
+  /** YYYY-MM-DD. */
+  registeredOn: string | null;
+  /** The principal place of business. */
+  address: { street1: string | null; street2: string | null; city: string | null; stateCode: string | null; pincode: string | null } | null;
 }
 
 export type ReturnType_ = 'GSTR1' | 'GSTR3B';
@@ -141,5 +164,10 @@ export class MockGsp implements GspProvider {
     const arn = `AA${gstin.slice(0, 2)}${period.slice(5, 7)}${period.slice(2, 4)}${createHash('sha256').update(key).digest('hex').slice(0, 7).toUpperCase()}`;
     this.filed.set(key, arn);
     return { arn, filedAt: new Date().toISOString() };
+  }
+
+  /** The mock is not connected to the GST portal, so it knows no taxpayer's name or address. */
+  async searchTaxpayer(): Promise<TaxpayerRecord | null> {
+    return null;
   }
 }

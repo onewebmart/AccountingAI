@@ -42,8 +42,12 @@ export class PortalService {
   async createLink(orgId: string, actorId: string, customerId: string, days = DEFAULT_DAYS) {
     if (!Number.isInteger(days) || days < 1 || days > MAX_DAYS) throw new BadRequestException(`A link lasts 1 to ${MAX_DAYS} days.`);
     if (!Types.ObjectId.isValid(customerId)) throw new NotFoundException('Customer not found');
-    const customer = await this.customerModel.findOne({ _id: customerId, orgId }, { name: 1 }).lean().exec();
+    const customer = await this.customerModel.findOne({ _id: customerId, orgId }, { name: 1, portalEnabled: 1 }).lean().exec();
     if (!customer) throw new NotFoundException('Customer not found');
+    // Turned off in the customer's details: no link until it is turned on again.
+    if (customer.portalEnabled === false) {
+      throw new BadRequestException(`Portal access is turned off for ${customer.name}. Turn on "Allow portal access" in their details first.`);
+    }
     const token = `${orgId}.${randomBytes(32).toString('base64url')}`;
     const expiresAt = new Date(Date.now() + days * 86_400_000);
     const link = await this.linkModel.create({ orgId, customerId: customer._id, tokenHash: hash(token), expiresAt, createdBy: actorId });
@@ -124,6 +128,11 @@ export class PortalService {
     if (!m) throw new NotFoundException(GONE);
     const link = await this.linkModel.findOne({ orgId: m[1], tokenHash: hash(token) }).exec();
     if (!link || link.revokedAt || link.expiresAt.getTime() < Date.now()) throw new NotFoundException(GONE);
+    // Portal access turned off in the customer's details: their links stop working with it.
+    const customer = await withOrg(link.orgId, () =>
+      this.customerModel.findOne({ _id: link.customerId, orgId: link.orgId }, { portalEnabled: 1 }).lean().exec(),
+    );
+    if (customer?.portalEnabled === false) throw new NotFoundException(GONE);
     return link;
   }
 }

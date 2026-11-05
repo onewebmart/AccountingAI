@@ -3,6 +3,8 @@ import {
   ArrayMaxSize,
   ArrayMinSize,
   IsArray,
+  IsBoolean,
+  IsEmail,
   IsIn,
   IsInt,
   IsISO8601,
@@ -13,9 +15,12 @@ import {
   Length,
   Matches,
   Min,
+  ValidateIf,
   ValidateNested,
 } from 'class-validator';
 import { UQC_CODES } from '../../items/hsn';
+import { filledValue, PartyProfileDto } from '../../gl/party-profile.dto';
+import { PARTY_TYPES } from '../../gl/party-profile';
 
 /**
  * Bodies for POST /api/v1/sales/*.
@@ -97,21 +102,42 @@ export class LineItemDto {
   projectId?: string;
 }
 
-export class CreateCustomerDto {
+/**
+ * POST /sales/customers. Only the display name is required; the rest of
+ * what a customer form holds (type, contact person, addresses, terms) is in
+ * PartyProfileDto.
+ */
+export class CreateCustomerDto extends PartyProfileDto {
+  /** The display name. */
   @IsString()
   @Length(1, 200)
   name: string;
 
   @IsOptional()
+  @IsIn(PARTY_TYPES)
+  customerType?: string;
+
+  @IsOptional()
+  @IsString()
+  pan?: string;
+
+  /** Allow portal links to be made for them (the default). */
+  @IsOptional()
+  @IsBoolean()
+  portalEnabled?: boolean;
+
+  @IsOptional()
   @IsString()
   gstin?: string;
 
+  /** The work phone. */
   @IsOptional()
   @IsString()
   phone?: string;
 
   @IsOptional()
-  @IsString()
+  @ValidateIf(filledValue)
+  @IsEmail({}, { message: 'email must look like name@example.com' })
   email?: string;
 
   @IsOptional()
@@ -156,24 +182,39 @@ export class EmailInvoiceDto {
   message?: string;
 }
 
-/** PATCH /sales/customers/:id — only the fields sent change. */
-export class UpdateCustomerDto {
+/** PATCH /sales/customers/:id — only the fields sent change; null clears one. */
+export class UpdateCustomerDto extends PartyProfileDto {
   @IsOptional()
   @IsString()
   @Length(1, 200)
   name?: string;
+
+  @IsOptional()
+  @ValidateIf(filledValue)
+  @IsIn(PARTY_TYPES)
+  customerType?: string | null;
+
+  @IsOptional()
+  @IsString()
+  pan?: string | null;
+
+  @IsOptional()
+  @IsBoolean()
+  portalEnabled?: boolean;
 
   /** null or '' clears it. */
   @IsOptional()
   @IsString()
   gstin?: string | null;
 
+  /** The work phone. */
   @IsOptional()
   @IsString()
   phone?: string | null;
 
   @IsOptional()
-  @IsString()
+  @ValidateIf(filledValue)
+  @IsEmail({}, { message: 'email must look like name@example.com' })
   email?: string | null;
 
   @IsOptional()

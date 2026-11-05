@@ -12,6 +12,7 @@ import { PurchaseBillsService } from './purchase-bills.service';
 import { PurchaseController } from './purchase.controller';
 import { PartyPaymentsModule } from '../payments/party-payments.module';
 import { GlModule } from '../gl/gl.module';
+import { GspModule } from '../gsp/gsp.module';
 
 import { ItemsModule } from '../items/items.module';
 import { ApprovalsModule } from '../approvals/approvals.module';
@@ -30,6 +31,7 @@ import { ApprovalsModule } from '../approvals/approvals.module';
     ItemsModule, // lines that pick an item
     ApprovalsModule, // bills and bill payments under approval policies
     PartyPaymentsModule, // a note larger than what is owed becomes the party's credit
+    GspModule, // the GSTIN prefill's taxpayer search
   ],
   controllers: [PurchaseController],
   providers: [VendorsService, PurchaseBillsService, DebitNotesService, BillsFromLinesService],

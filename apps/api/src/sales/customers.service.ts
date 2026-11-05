@@ -1,8 +1,7 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { AuditService } from '../gl/audit.service';
-import { gstinProblem } from '../extraction/invoice-checks';
-import { cleanPartyDetails, PartyDetailsInput } from '../gl/party-details';
+import { PartyChangesInput, partyChanges, partyView, sameValue } from '../gl/party-profile';
 import { Model, Types } from 'mongoose';
 import { InvoiceStatus } from '@ai-accounting/shared';
 import { Customer, CustomerDocument } from './schemas/customer.schema';
@@ -11,10 +10,12 @@ import { withOrg } from '../database/tenant.plugin';
 import { buildAgeingSummary, AgeingSummary } from '../purchase/ageing.util';
 import { outstandingPaise } from '../gl/schemas/settlement.schema';
 
-export interface CreateCustomerInput {
+/** The details of PartyChangesInput (gl/party-profile.ts); only the name is required. */
+export interface CreateCustomerInput extends PartyChangesInput {
   orgId: string;
   /** Who created it, for the audit trail. */
   actorId?: string;
+  /** The display name. */
   name: string;
   gstin?: string | null;
   phone?: string | null;
@@ -27,6 +28,7 @@ export interface CreateCustomerInput {
   notes?: string | null;
 }
 
+
 @Injectable()
 export class CustomersService {
   constructor(
@@ -36,34 +38,30 @@ export class CustomersService {
   ) {}
 
   async create(input: CreateCustomerInput): Promise<CustomerDocument> {
-    // A typed GSTIN with a wrong check digit is a typo; catch it here rather
-    // than on the GST return.
-    const gstin = input.gstin?.trim() ? input.gstin.trim().toUpperCase() : null;
-    const problem = gstin ? gstinProblem(gstin) : null;
-    if (problem) throw new BadRequestException(`GSTIN ${gstin} ${problem}`);
-
-    const customer = await this.customerModel.create({
-      orgId: input.orgId,
-      name: input.name,
-      gstin,
-      phone: input.phone ?? null,
-      email: input.email ?? null,
-      address: input.address ?? null,
-      city: input.city?.trim() || null,
-      pincode: input.pincode ? cleanPartyDetails({ pincode: input.pincode }, { gstin: null }).pincode ?? null : null,
-      // The GSTIN names the state it was issued in, so it wins over a picked one.
-      stateCode: gstin ? gstin.slice(0, 2) : input.stateCode ?? null,
-      notes: input.notes ?? null,
-    });
+    const { orgId, actorId, ...details } = input;
+    // A typed GSTIN with a wrong check digit is a typo; caught here rather
+    // than on the GST return. The GSTIN names the state it was issued in, so
+    // it wins over a picked one; with neither, the billing address's state.
+    const set = partyChanges(details, { gstin: null, stateCode: null, pan: null, billingAddress: null }, 'customer');
+    const customer = await this.customerModel.create({ orgId, gstin: null, stateCode: null, ...set });
     await this.auditService.record({
-      orgId: input.orgId,
+      orgId,
       entityType: 'Customer',
       entityId: customer._id.toString(),
       action: 'CREATE',
-      performedBy: input.actorId ?? 'unknown',
-      after: { name: customer.name, gstin: customer.gstin, stateCode: customer.stateCode },
+      performedBy: actorId ?? 'unknown',
+      // What was filled in: every field, as kept, that is not blank.
+      after: Object.fromEntries(
+        Object.entries({ ...set, stateCode: customer.stateCode, gstin: customer.gstin }).filter(([, v]) => v !== null && !(Array.isArray(v) && v.length === 0)),
+      ),
     });
     return customer;
+  }
+
+  /** Customers already on the books with this GSTIN: a second one is usually the same business typed twice. */
+  async withGstin(orgId: string, gstin: string): Promise<Array<{ _id: string; name: string }>> {
+    const found = await withOrg(orgId, () => this.customerModel.find({ gstin: gstin.trim().toUpperCase() }, { name: 1 }).limit(5).lean().exec());
+    return found.map((c) => ({ _id: String(c._id), name: c.name }));
   }
 
   /**
@@ -83,7 +81,7 @@ export class CustomersService {
       const key = String(inv.customerId);
       owed.set(key, (owed.get(key) ?? 0) + outstandingPaise(inv));
     }
-    return customers.map((c) => ({ ...c, receivablePaise: owed.get(String(c._id)) ?? 0 }));
+    return customers.map((c) => ({ ...partyView(c), receivablePaise: owed.get(String(c._id)) ?? 0 }));
   }
 
   /**
@@ -91,10 +89,11 @@ export class CustomersService {
    * and state they were issued with: they are stamped first, so a corrected
    * GSTIN does not rewrite GST returns for months already filed.
    */
-  async update(id: string, orgId: string, actorId: string, input: PartyDetailsInput): Promise<CustomerDocument> {
+  async update(id: string, orgId: string, actorId: string, input: PartyChangesInput): Promise<CustomerDocument> {
     const customer = await this.findById(id, orgId);
-    const set = cleanPartyDetails(input, { gstin: customer.gstin, stateCode: customer.stateCode });
-    const changed = Object.keys(set).filter((k) => set[k] !== (customer as unknown as Record<string, unknown>)[k]);
+    const set = partyChanges(input, customer, 'customer');
+    const now = customer.toObject() as unknown as Record<string, unknown>;
+    const changed = Object.keys(set).filter((k) => !sameValue(set[k], now[k]));
     if (changed.length === 0) return customer;
 
     let stamped = 0;
@@ -110,9 +109,9 @@ export class CustomersService {
       stamped = result.modifiedCount;
     }
     const updated = await withOrg(orgId, () =>
-      this.customerModel.findOneAndUpdate({ _id: customer._id }, { $set: set }, { new: true }).exec(),
+      this.customerModel.findOneAndUpdate({ _id: customer._id }, { $set: Object.fromEntries(changed.map((k) => [k, set[k]])) }, { new: true }).exec(),
     );
-    const before = Object.fromEntries(changed.map((k) => [k, (customer as unknown as Record<string, unknown>)[k] ?? null]));
+    const before = Object.fromEntries(changed.map((k) => [k, now[k] ?? null]));
     await this.auditService.record({
       orgId,
       entityType: 'Customer',

@@ -112,4 +112,18 @@ describe('customer portal', () => {
     expect(await portal.revoke(orgId, ACTOR, String(rao._id))).toEqual({ revoked: 2 });
     await expect(portal.view(fresh)).rejects.toThrow(/expired or was withdrawn/);
   });
+
+  it('makes no link, and opens none, while portal access is turned off for the customer', async () => {
+    const { orgId, rao } = await seed();
+    const customers = moduleRef.get<Model<unknown>>(getModelToken(Customer.name));
+    const token = (await portal.createLink(orgId, ACTOR, String(rao._id))).url.split('/portal/')[1];
+
+    await customers.updateOne({ _id: rao._id }, { $set: { portalEnabled: false } });
+    await expect(portal.createLink(orgId, ACTOR, String(rao._id))).rejects.toThrow(/Portal access is turned off for Rao Traders/);
+    await expect(portal.view(token)).rejects.toThrow(/expired or was withdrawn/);
+
+    // Turned on again, the link still in date works again.
+    await customers.updateOne({ _id: rao._id }, { $set: { portalEnabled: true } });
+    await expect(portal.view(token)).resolves.toMatchObject({ customer: { name: 'Rao Traders' } });
+  });
 });

@@ -220,6 +220,28 @@ describe('entering opening balances by hand', () => {
     ]);
   });
 
+  it('posts one party’s opening balance against Suspense, as the customer and vendor forms send it', async () => {
+    const orgId = new Types.ObjectId().toString();
+    await chartOf(orgId);
+    const rao = await moduleRef.get(CustomersService).create({ orgId, actorId: ACTOR, name: 'Rao Traders', paymentTerms: 'net_30' });
+    const sigma = await moduleRef.get(VendorsService).create({ orgId, actorId: ACTOR, name: 'Sigma Supplies' });
+
+    for (const [kind, party, paise] of [['customer', rao, 2500000], ['vendor', sigma, 1200000]] as const) {
+      const preview = await migration.manual(orgId, ACTOR, { parties: [{ kind, partyId: String(party._id), balancePaise: paise }] });
+      expect(preview.opening.differencePaise).toBe(kind === 'customer' ? paise : -paise);
+      await expect(migration.commit(orgId, ACTOR, preview._id, { openingDate: '2026-04-01' })).rejects.toThrow(/out by/);
+      await migration.commit(orgId, ACTOR, preview._id, { openingDate: '2026-04-01', differenceToSuspense: true });
+    }
+
+    const entries = await journals.find({ orgId }).sort({ createdAt: 1 }).lean().exec();
+    expect(entries.map((j) => j.lines.map((l) => [l.description, l.debitPaise, l.creditPaise]).sort())).toEqual([
+      [['Accounts Receivable', 2500000, 0], ['Difference in opening balances', 0, 2500000]],
+      [['Accounts Payable', 0, 1200000], ['Difference in opening balances', 1200000, 0]],
+    ]);
+    expect(await invoices.findOne({ orgId, customerId: rao._id }).lean().exec()).toMatchObject({ isOpeningBalance: true, amountsPaise: expect.objectContaining({ total: 2500000 }) });
+    expect(await bills.findOne({ orgId, vendorId: sigma._id }).lean().exec()).toMatchObject({ isOpeningBalance: true, amountsPaise: expect.objectContaining({ total: 1200000 }) });
+  });
+
   it('refuses control accounts, groups, both sides, and other orgs’ parties', async () => {
     const orgId = new Types.ObjectId().toString();
     const { code } = await chartOf(orgId);

@@ -1,6 +1,7 @@
 import { Global, Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { GSP_PROVIDER, GspProvider, MockGsp } from '../einvoice/gsp.provider';
+import { GstinLookupService } from './gstin-lookup';
 
 /**
  * GSP_PROVIDER picks the gateway. Only the mock exists until a GSP is
@@ -13,10 +14,10 @@ export function gspProvider(config: ConfigService): GspProvider {
   throw new Error(`GSP_PROVIDER "${which}" has no adapter yet: only "mock" is available.`);
 }
 
-/** One gateway, and one mock's memory, for e-invoices, e-way bills and returns. */
+/** One gateway, and one mock's memory, for e-invoices, e-way bills, returns and the GSTIN prefill. */
 @Global()
 @Module({
-  providers: [{ provide: GSP_PROVIDER, inject: [ConfigService], useFactory: gspProvider }],
-  exports: [GSP_PROVIDER],
+  providers: [{ provide: GSP_PROVIDER, inject: [ConfigService], useFactory: gspProvider }, GstinLookupService],
+  exports: [GSP_PROVIDER, GstinLookupService],
 })
 export class GspModule {}

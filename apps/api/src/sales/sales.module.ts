@@ -13,6 +13,7 @@ import { InvoiceFromLinesService } from './invoice-from-lines.service';
 import { OrgSettings, OrgSettingsSchema } from '../org-settings/schemas/org-settings.schema';
 import { PartyPaymentsModule } from '../payments/party-payments.module';
 import { GlModule } from '../gl/gl.module';
+import { GspModule } from '../gsp/gsp.module';
 
 import { ItemsModule } from '../items/items.module';
 import { EInvoice, EInvoiceSchema } from '../einvoice/schemas/e-invoice.schema';
@@ -30,6 +31,7 @@ import { EInvoice, EInvoiceSchema } from '../einvoice/schemas/e-invoice.schema';
     ItemsModule, // lines that pick an item
     PartyPaymentsModule, // a note larger than what is owed becomes the party's credit
     MailModule, // emails the invoice PDF
+    GspModule, // the GSTIN prefill's taxpayer search
   ],
   controllers: [SalesController],
   providers: [CustomersService, SalesInvoicesService, CreditNotesService, InvoiceDeliveryService, InvoiceFromLinesService],

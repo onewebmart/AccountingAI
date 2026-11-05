@@ -19,6 +19,7 @@ import { CreateVendorDto, CreateBillDto, CreateBillFromLinesDto, PayBillDto, Cre
 import { BillsFromLinesService } from './bills-from-lines.service';
 import { DebitNotesService } from './debit-notes.service';
 import { ItemsService } from '../items/items.service';
+import { GstinLookupService } from '../gsp/gstin-lookup';
 
 interface AuthRequest {
   user: { orgId: string; sub: string; role: string };
@@ -33,9 +34,22 @@ export class PurchaseController {
     private readonly debitNotesService: DebitNotesService,
     private readonly items: ItemsService,
     private readonly fromLines: BillsFromLinesService,
+    private readonly gstinLookup: GstinLookupService,
   ) {}
 
   // ── Vendors ───────────────────────────────────────────────────────────────
+
+  /**
+   * Prefill a vendor from their GSTIN: the state, PAN and kind of holder
+   * read from the GSTIN itself, the legal name and address when the GSP can
+   * give them, and any vendor already here with the same GSTIN.
+   */
+  @Get('gstin/:gstin')
+  @RequirePermission(Permission.MANAGE_PURCHASE)
+  async gstin(@Request() req: AuthRequest, @Param('gstin') gstin: string) {
+    const found = await this.gstinLookup.lookup(gstin);
+    return { ...found, existing: await this.vendorsService.withGstin(req.user.orgId, found.gstin) };
+  }
 
   @Get('vendors')
   @RequirePermission(Permission.MANAGE_PURCHASE)
