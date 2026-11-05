@@ -220,6 +220,28 @@ function buildDbPayload(
   };
 }
 
+/**
+ * Why the AI could not read a document, in words a person can act on: the
+ * provider's credit used up, a limit reached, a refused key, or an answer that
+ * could not be read as a bill. Retrying only helps once the first three are sorted.
+ */
+export function readFailureReason(lastError: string): string {
+  const e = lastError.toLowerCase();
+  if (/\b402\b|payment required|credits? (are )?depleted|billing|prepay/.test(e)) {
+    return 'The AI service has no credit left, so the document could not be read. Top up the AI account (Google AI Studio for Gemini), then press Retry.';
+  }
+  if (/\b429\b|quota|rate limit|resource.?exhausted|too many requests/.test(e)) {
+    return 'The AI service is over its limit just now. Press Retry in a few minutes.';
+  }
+  if (/\b40[13]\b|api key|permission denied|unauthori[sz]ed/.test(e)) {
+    return 'The AI key was refused. Check GEMINI_API_KEY in the server settings, then press Retry.';
+  }
+  if (/fetch failed|enotfound|econn|etimedout|network/.test(e)) {
+    return 'The AI service could not be reached. Press Retry when the connection is back.';
+  }
+  return "The AI's answer could not be read as a bill or invoice. Press Retry, or enter it by hand with Add to.";
+}
+
 @Injectable()
 export class ExtractionService {
   private readonly logger = new Logger(ExtractionService.name);
@@ -251,6 +273,7 @@ export class ExtractionService {
     let normalized: ReturnType<typeof buildDbPayload> | null = null;
     let retryCount = 0;
     let lastRawJson = '';
+    let lastError = '';
     let totalTokensIn = 0;
     let totalTokensOut = 0;
 
@@ -276,7 +299,8 @@ export class ExtractionService {
           `Document ${documentId}: attempt ${attempt + 1} — JSON parsed but failed validation`,
         );
       } catch (err) {
-        this.logger.warn(`Document ${documentId}: attempt ${attempt + 1} — ${String(err)}`);
+        lastError = String(err);
+        this.logger.warn(`Document ${documentId}: attempt ${attempt + 1} — ${lastError}`);
       }
       retryCount = attempt + 1;
     }
@@ -312,7 +336,7 @@ export class ExtractionService {
       amountsPaise: { taxableValue: 0, cgst: 0, sgst: 0, igst: 0, cess: 0, total: 0, confidence: 0 },
       lineItems: [],
       isReverseCharge: false,
-      rawWarnings: ['AI extraction failed after 2 attempts — manual entry required'],
+      rawWarnings: [readFailureReason(lastError)],
     });
   }
 }

@@ -79,7 +79,7 @@ export class DocumentsController {
   @HttpCode(HttpStatus.OK)
   @RequirePermission(Permission.UPLOAD_DOCUMENT)
   retry(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
-    return this.docs.retryProcessing(id, user.orgId);
+    return this.docs.retryProcessing(id, user.orgId, user.sub);
   }
 
   /**

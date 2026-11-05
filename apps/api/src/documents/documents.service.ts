@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException, Optional } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { AuditService } from '../gl/audit.service';
 import { InjectQueue } from '@nestjs/bullmq';
@@ -9,6 +9,7 @@ import { DocumentStatus } from '@ai-accounting/shared';
 import { Document, DocumentDocument } from './schemas/document.schema';
 import { OcrResult, OcrResultDocument } from '../ocr/schemas/ocr-result.schema';
 import { ProposedEntry, ProposedEntryDocument } from '../proposals/schemas/proposed-entry.schema';
+import { ExtractedDocument, ExtractedDocumentDocument } from '../extraction/schemas/extracted-document.schema';
 import { StorageService } from './storage.service';
 import { withOrg } from '../database/tenant.plugin';
 
@@ -64,6 +65,8 @@ export class DocumentsService {
     @InjectQueue(DOCUMENT_PROCESSING_QUEUE) private processingQueue: Queue,
     private storage: StorageService,
     private auditService: AuditService,
+    // Read only: whether a document's proposal came from a read that failed.
+    @Optional() @InjectModel(ExtractedDocument.name) private extractedModel?: Model<ExtractedDocumentDocument>,
   ) {}
 
   async upload(input: UploadInput): Promise<DocumentDocument> {
@@ -227,6 +230,15 @@ export class DocumentsService {
     );
   }
 
+  /** The empty proposal a failed read left, still waiting and never entered by hand; null when there is none. */
+  private async unreadProposal(orgId: string, doc: DocumentDocument) {
+    if (doc.enteredAs || !this.extractedModel) return null;
+    const proposal = await this.proposalModel.findOne({ orgId, documentId: doc._id, status: 'proposed' }).sort({ createdAt: -1 }).lean().exec();
+    if (!proposal?.extractedDocumentId) return null;
+    const read = await this.extractedModel.findOne({ _id: proposal.extractedDocumentId, orgId }).select('status').lean().exec();
+    return read?.status === 'manual_required' ? proposal : null;
+  }
+
   async getPresignedUrl(documentId: string, orgId: string): Promise<string> {
     const doc = await this.findById(documentId, orgId);
     if (!doc) throw new BadRequestException('Document not found.');
@@ -241,14 +253,26 @@ export class DocumentsService {
    * reset. Without it a transient failure is permanent, and the only recourse
    * is uploading the same file again and living with a duplicate.
    */
-  async retryProcessing(documentId: string, orgId: string): Promise<{ jobId: string }> {
+  async retryProcessing(documentId: string, orgId: string, actorId = 'system'): Promise<{ jobId: string }> {
     const doc = await this.documentModel.findOne({ _id: documentId, orgId }).exec();
     if (!doc) throw new NotFoundException('Document not found');
 
     if (doc.status !== DocumentStatus.FAILED) {
-      throw new BadRequestException(
-        `Only a failed document can be retried — this one is ${doc.status}.`,
-      );
+      // Read before this change: a failed read left an empty proposal in
+      // Review. That one may be read again too; its empty proposal is closed.
+      const empty = await this.unreadProposal(orgId, doc);
+      if (!empty) {
+        throw new BadRequestException(
+          `Only a failed document can be retried — this one is ${doc.status}.`,
+        );
+      }
+      await this.proposalModel
+        .updateOne({ _id: empty._id, orgId, status: 'proposed' }, { $set: { status: 'rejected', rejectedBy: actorId, rejectionReason: 'Read again' } })
+        .exec();
+      await this.auditService.record({
+        orgId, entityType: 'ProposedEntry', entityId: String(empty._id), action: 'REJECT', performedBy: actorId,
+        before: { status: 'proposed' }, after: { status: 'rejected', reason: 'Read again' },
+      });
     }
 
     await this.updateStatus(documentId, DocumentStatus.UPLOADED);

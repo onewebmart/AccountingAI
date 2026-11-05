@@ -20,7 +20,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { getModelToken } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import configuration from '../config/configuration';
-import { ExtractionService } from './extraction.service';
+import { ExtractionService, readFailureReason } from './extraction.service';
 import { GeminiExtractionService } from './gemini-extraction.service';
 import { Organization, OrganizationSchema } from '../tenancy/schemas/organization.schema';
 import { ExtractedDocument, ExtractedDocumentSchema, ExtractedDocumentDocument } from './schemas/extracted-document.schema';
@@ -236,7 +236,8 @@ describe('Retry and failure handling', () => {
     const result = await svc.extract({ documentId: DOC_ID, orgId: ORG_ID, ocrResultId: OCR_RESULT_ID, ocrText: SAMPLE_OCR_TEXT });
 
     expect(result.status).toBe('manual_required');
-    expect(result.rawWarnings).toContain('AI extraction failed after 2 attempts — manual entry required');
+    // Bad JSON twice: the answer could not be read, and the person is told what to do.
+    expect(result.rawWarnings).toEqual([expect.stringMatching(/could not be read as a bill.*Retry/)]);
     expect(result.retryCount).toBeGreaterThanOrEqual(1);
     expect(fakeGroq.extract).toHaveBeenCalledTimes(2);
   });
@@ -328,5 +329,15 @@ describe('Deterministic checks and payment terms', () => {
     const result = await extract();
     expect(result.dueDate.value).toBe('2026-11-04');
     expect(result.paymentTerms).toBe('Net 30 days');
+  });
+});
+
+describe('why a read failed', () => {
+  it('names the cause a person can act on', () => {
+    expect(readFailureReason('[GoogleGenerativeAI Error]: [402 Payment Required] Your prepayment credits are depleted.')).toMatch(/no credit left.*Retry/);
+    expect(readFailureReason('[429 Too Many Requests] Resource has been exhausted (e.g. check quota).')).toMatch(/over its limit/);
+    expect(readFailureReason('[403 Forbidden] API key not valid.')).toMatch(/key was refused/);
+    expect(readFailureReason('TypeError: fetch failed')).toMatch(/could not be reached/);
+    expect(readFailureReason('')).toMatch(/could not be read as a bill/);
   });
 });

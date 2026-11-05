@@ -91,6 +91,14 @@ export class DocumentProcessingProcessor extends WorkerHost {
         ocrText: ocrResult.rawText,
       });
 
+      // Nothing read: say why, and leave it for Retry or for Add to, rather
+      // than an empty proposal in Review that nobody can act on or re-read.
+      if (extracted.status === 'manual_required') {
+        await this.docs.updateStatus(documentId, DocumentStatus.FAILED, extracted.rawWarnings?.[0] ?? 'The AI could not read this document.');
+        this.logger.warn(`Document ${documentId}: not read by AI; marked for retry or entry by hand`);
+        return;
+      }
+
       // Step 3: Create ProposedEntry (AI writes only here — Invariant 4)
       await this.proposals.createFromExtracted(extracted._id.toString(), orgId);
 

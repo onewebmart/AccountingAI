@@ -12,8 +12,10 @@ export interface DocumentExtraction {
   documentId: string;
   fileName: string;
   mimeType: string;
-  /** Not yet read, or read: the form can only be filled once it has been. */
+  /** Read by the AI: the form can only be filled from it once it has been. */
   read: boolean;
+  /** Why it could not be read, when the AI tried and failed. */
+  readProblem: string | null;
   documentType: string | null;
   party: { name: string | null; gstin: string | null };
   /** The vendor and the customer whose GSTIN, or failing that whose name, matches. */
@@ -61,7 +63,8 @@ export class DocumentEntryService {
       documentId: String(doc._id),
       fileName: doc.originalName,
       mimeType: doc.mimeType,
-      read: !!x,
+      read: x?.status === 'extracted',
+      readProblem: doc.failureReason ?? (x && x.status !== 'extracted' ? (x.rawWarnings?.[0] ?? 'The AI could not read this document.') : null),
       documentType: x?.documentType ?? doc.type ?? null,
       party: { name, gstin },
       vendor,
