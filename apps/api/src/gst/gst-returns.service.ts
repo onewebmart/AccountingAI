@@ -1,5 +1,5 @@
 import { partyAsIssued } from '../gl/party-as-issued';
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Optional } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { BillStatus, InvoiceStatus } from '@ai-accounting/shared';
@@ -22,6 +22,9 @@ import {
   SaleIn,
 } from './gst-returns';
 import { Gstr2bLine, Gstr2bLineDocument } from './schemas/gstr2b-line.schema';
+import { DirectExpense, DirectExpenseDocument } from '../direct-expenses/schemas/direct-expense.schema';
+import { ExpenseClaim, ExpenseClaimDocument } from '../expenses/schemas/expense-claim.schema';
+import { itcOf, type ClaimLine } from '../expenses/claim-rules';
 import { BillForItc, Line2bForItc, claims, match2b, periodOf, rule37, rule37Watchlist, sumRows } from './itc';
 import { explain2b } from './explain-2b';
 
@@ -53,6 +56,9 @@ export class GstReturnsService {
     @InjectModel(DebitNote.name) private debitNoteModel: Model<DebitNoteDocument>,
     @InjectModel(OrgSettings.name) private settingsModel: Model<OrgSettingsDocument>,
     @InjectModel(Gstr2bLine.name) private gstr2bModel: Model<Gstr2bLineDocument>,
+    // Credit also comes from expenses paid straight from bank or cash, and from employees' claims.
+    @Optional() @InjectModel(DirectExpense.name) private expenseModel?: Model<DirectExpenseDocument>,
+    @Optional() @InjectModel(ExpenseClaim.name) private claimModel?: Model<ExpenseClaimDocument>,
   ) {}
 
   async gstr1(orgId: string, period: string): Promise<Gstr1> {
@@ -142,11 +148,12 @@ export class GstReturnsService {
     const noteBillById = new Map(noteBills.map((b) => [b._id.toString(), b]));
 
     const itc = await this.itcFor(orgId, period);
+    const others = await this.otherInward(orgId, `${period}-01`, `${period}-31`, org.stateCode);
     return buildGstr3b({
       gstr1,
       orgState: org.stateCode ?? '',
       itc: itc.forReturn,
-      bills: bills.map(purchase),
+      bills: [...bills.map(purchase), ...others.map((o) => ({ id: o.id, number: o.number, vendorName: o.vendorName, vendorGstin: o.vendorGstin, isReverseCharge: false, amounts: o.amounts }))],
       debitNotes: notes.flatMap((n) => {
         const bill = noteBillById.get(n.billId.toString());
         return bill ? [{ id: n._id.toString(), amounts: n.amountsPaise, bill: purchase(bill) }] : [];
@@ -247,6 +254,17 @@ export class GstReturnsService {
             ],
       };
     });
+    const org = await this.org(orgId);
+    for (const o of await this.otherInward(orgId, `${from}-01`, `${period}-31`, org.stateCode)) {
+      const a = o.amounts;
+      forItc.push({
+        id: o.id, number: o.number, vendorName: o.vendorName, vendorGstin: o.vendorGstin, billDate: o.date, isReverseCharge: false,
+        heads: { txval: a.taxableValue, iamt: a.igst, camt: a.cgst, samt: a.sgst, csamt: a.cess },
+        totalPaise: a.total, tdsPaise: 0,
+        // Paid when it was spent: an expense from the bank, a claim the employee paid.
+        settlements: [{ date: o.date, amountPaise: a.total }],
+      });
+    }
     const forLines: Line2bForItc[] = lines
       .filter((l) => (l.documentType ?? 'B2B') === 'B2B')
       .map((l) => ({
@@ -267,6 +285,55 @@ export class GstReturnsService {
       matches: match2b(forLines, forItc, periodsWith2b),
       claimed: claims(forLines, forItc, periodsWith2b),
     };
+  }
+
+  /**
+   * Inward supplies with input credit that are not bills: posted expenses whose
+   * GST is claimed, and posted claim lines whose GST can be claimed, split as
+   * the claim was booked. Each as a document the credit rules can match to 2B.
+   */
+  private async otherInward(orgId: string, fromDate: string, toDate: string, orgState: string | null) {
+    const out: Array<{ id: string; number: string | null; vendorName: string; vendorGstin: string | null; date: string; amounts: { taxableValue: number; cgst: number; sgst: number; igst: number; cess: number; total: number } }> = [];
+    if (this.expenseModel) {
+      const expenses = await this.expenseModel
+        .find({ orgId, status: 'posted', claimable: true, date: { $gte: fromDate, $lte: toDate } })
+        .lean()
+        .exec();
+      const withTax = expenses.filter((e) => e.cgstPaise + e.sgstPaise + e.igstPaise > 0);
+      const vendors = await this.vendorModel.find({ orgId, _id: { $in: ids(withTax.flatMap((e) => (e.vendorId ? [e.vendorId] : []))) } }).select('name').lean().exec();
+      const vendorName = new Map(vendors.map((v) => [v._id.toString(), v.name]));
+      for (const e of withTax) {
+        out.push({
+          id: e._id.toString(),
+          number: e.reference ?? e.number,
+          vendorName: (e.vendorId && vendorName.get(e.vendorId.toString())) || 'Supplier',
+          vendorGstin: e.vendorGstin,
+          date: e.date,
+          amounts: { taxableValue: e.taxablePaise, cgst: e.cgstPaise, sgst: e.sgstPaise, igst: e.igstPaise, cess: 0, total: e.totalPaise },
+        });
+      }
+    }
+    if (this.claimModel) {
+      const claims = await this.claimModel.find({ orgId, status: { $in: ['posted', 'paid'] }, 'lines.date': { $gte: fromDate, $lte: toDate } }).lean().exec();
+      for (const c of claims) {
+        c.lines.forEach((l, i) => {
+          if (l.date < fromDate || l.date > toDate) return;
+          const { itcPaise } = itcOf(l as unknown as ClaimLine);
+          if (itcPaise <= 0) return;
+          const intra = !!orgState && l.merchantGstin?.slice(0, 2) === orgState;
+          const half = Math.round(itcPaise / 2);
+          out.push({
+            id: `${c._id.toString()}:${i}`,
+            number: `${c.number} line ${i + 1}`,
+            vendorName: l.merchant ?? 'Merchant',
+            vendorGstin: l.merchantGstin,
+            date: l.date,
+            amounts: { taxableValue: l.amountPaise - itcPaise, cgst: intra ? half : 0, sgst: intra ? itcPaise - half : 0, igst: intra ? 0 : itcPaise, cess: 0, total: l.amountPaise },
+          });
+        });
+      }
+    }
+    return out;
   }
 
   /** The org's GSTIN and state; the GSTIN's first two digits win over a picked state. */

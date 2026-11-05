@@ -26,6 +26,8 @@ import { PurchaseBill, PurchaseBillSchema } from '../purchase/schemas/purchase-b
 import { Vendor, VendorSchema } from '../purchase/schemas/vendor.schema';
 import { DebitNote, DebitNoteSchema } from '../purchase/schemas/debit-note.schema';
 import { OrgSettings, OrgSettingsSchema } from '../org-settings/schemas/org-settings.schema';
+import { DirectExpense, DirectExpenseSchema } from '../direct-expenses/schemas/direct-expense.schema';
+import { ExpenseClaim, ExpenseClaimSchema } from '../expenses/schemas/expense-claim.schema';
 
 let moduleRef: TestingModule;
 let returns: GstReturnsService;
@@ -52,6 +54,8 @@ beforeAll(async () => {
         { name: DebitNote.name, schema: DebitNoteSchema },
         { name: OrgSettings.name, schema: OrgSettingsSchema },
         { name: Gstr2bLine.name, schema: Gstr2bLineSchema },
+        { name: DirectExpense.name, schema: DirectExpenseSchema },
+        { name: ExpenseClaim.name, schema: ExpenseClaimSchema },
       ]),
     ],
     providers: [GstReturnsService],
@@ -177,6 +181,32 @@ describe('GSTR-3B', () => {
     const json = gstr3bPortalJson(r) as { ret_period: string; sup_details: { isup_rev: { camt: number } } };
     expect(json.ret_period).toBe('092026');
     expect(json.sup_details.isup_rev.camt).toBe(18);
+  });
+
+  it('takes credit from expenses paid straight from the bank and from claims, as booked', async () => {
+    const { orgId, vendor } = await seedOrg();
+    // Raw rows: only what the return reads matters here.
+    const expenses = moduleRef.get<Model<unknown>>(getModelToken(DirectExpense.name)).collection;
+    await expenses.insertMany([
+      { orgId, number: 'EXP/2026-27/0001', date: '2026-09-03', vendorId: vendor._id, vendorGstin: '27AAACS1234A1Z1', taxablePaise: 199900, cgstPaise: 17991, sgstPaise: 17991, igstPaise: 0, totalPaise: 235882, claimable: true, status: 'posted', reference: 'CN/0912' },
+      // Not claimed, a draft, and another month: none of them count.
+      { orgId, number: 'EXP/2026-27/0002', date: '2026-09-04', taxablePaise: 50000, cgstPaise: 4500, sgstPaise: 4500, igstPaise: 0, totalPaise: 59000, claimable: false, status: 'posted' },
+      { orgId, number: 'EXP/2026-27/0003', date: '2026-09-05', vendorGstin: '27AAACS1234A1Z1', taxablePaise: 50000, cgstPaise: 4500, sgstPaise: 4500, igstPaise: 0, totalPaise: 59000, claimable: true, status: 'draft' },
+      { orgId, number: 'EXP/2026-27/0004', date: '2026-10-01', vendorGstin: '27AAACS1234A1Z1', taxablePaise: 50000, cgstPaise: 4500, sgstPaise: 4500, igstPaise: 0, totalPaise: 59000, claimable: true, status: 'posted' },
+    ]);
+    await moduleRef.get<Model<unknown>>(getModelToken(ExpenseClaim.name)).collection.insertOne({
+      orgId, number: 'EC/2026-27/0001', status: 'posted', lines: [
+        // Intra-state: half CGST, half SGST. Inter-state: IGST. No GSTIN: no credit.
+        { date: '2026-09-10', kind: 'expense', merchant: 'Kiran Stationers', description: 'Printer cartridge', amountPaise: 118000, gstPaise: 18000, merchantGstin: '27AAACH1234A1Z5', hsnSac: null },
+        // Food is blocked credit (section 17(5)): none taken.
+        { date: '2026-09-10', kind: 'expense', merchant: 'Hotel Panchavati', description: 'Lunch', amountPaise: 118000, gstPaise: 18000, merchantGstin: '27AAACH1234A1Z5', hsnSac: null },
+        { date: '2026-09-11', kind: 'expense', merchant: 'Bengaluru Cabs', description: 'Cab', amountPaise: 105000, gstPaise: 5000, merchantGstin: '29AAACB1234A1Z5', hsnSac: null },
+        { date: '2026-09-12', kind: 'expense', merchant: 'Tea stall', description: 'Tea', amountPaise: 10500, gstPaise: 500, merchantGstin: null, hsnSac: null },
+      ],
+    });
+
+    const r = await returns.gstr3b(orgId, '2026-09');
+    expect(r.itcOther).toMatchObject({ iamt: 5000, camt: 17991 + 9000, samt: 17991 + 9000 });
   });
 
   it('claims only what the 2B carries, and reverses credit on bills unpaid after 180 days', async () => {

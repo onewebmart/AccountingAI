@@ -18,6 +18,8 @@ import { GlModule } from '../gl/gl.module';
 import { GspModule } from '../gsp/gsp.module';
 import { GstFiling, GstFilingSchema } from './schemas/gst-filing.schema';
 import { GstFilingService } from './gst-filing.service';
+import { DirectExpense, DirectExpenseSchema } from '../direct-expenses/schemas/direct-expense.schema';
+import { ExpenseClaim, ExpenseClaimSchema } from '../expenses/schemas/expense-claim.schema';
 
 @Module({
   imports: [
@@ -33,6 +35,9 @@ import { GstFilingService } from './gst-filing.service';
       { name: DebitNote.name, schema: DebitNoteSchema },
       { name: OrgSettings.name, schema: OrgSettingsSchema },
       { name: GstFiling.name, schema: GstFilingSchema },
+      // Read only: input credit on expenses and employee claims, beside bills.
+      { name: DirectExpense.name, schema: DirectExpenseSchema },
+      { name: ExpenseClaim.name, schema: ExpenseClaimSchema },
     ]),
     IngestModule,
     GspModule, // filing through the GST Suvidha Provider
