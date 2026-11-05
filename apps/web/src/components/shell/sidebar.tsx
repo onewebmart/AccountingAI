@@ -1,292 +1,328 @@
 'use client';
 
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard,
   Inbox,
   CheckSquare,
-  FileText,
-  ShoppingCart,
-  Package,
-  Receipt,
   UserCheck,
-  ClipboardList,
-  CalendarCheck,
+  Package,
   TrendingUp,
+  ShoppingBag,
+  Timer,
   Building2,
+  UserCog,
   ReceiptIndianRupee,
   BarChart3,
-  Lightbulb,
-  Settings,
-  Repeat,
-  Upload,
-  BookOpen,
-  Briefcase,
-  Users,
-  Bell,
   FolderOpen,
-  Bot,
+  Briefcase,
   Target,
-  ListChecks,
-  PieChart,
-  IndianRupee,
-  ShieldCheck,
-  MessageSquare,
   Palette,
-  Lock,
-  Warehouse,
-  FolderKanban,
-  Globe,
+  ShieldCheck,
+  Settings,
+  ChevronDown,
+  ChevronRight,
+  Plus,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-interface NavItem {
+interface NavLink {
   href: string;
   label: string;
-  icon: React.ReactNode;
-  badge?: number;
+  /** A quick "new" button beside the item, as for customers and vendors. */
+  create?: string;
 }
 
-interface NavGroup {
-  heading: string;
-  items: NavItem[];
-  /** Practice groups appear only once the org has a firm. */
+interface NavEntry {
+  label: string;
+  icon: React.ReactNode;
+  /** A single page… */
+  href?: string;
+  /** …or a group of them, opened and closed from its heading. */
+  items?: NavLink[];
+  /** Practice entries appear only once the org has a firm. */
   practice?: boolean;
 }
 
 /**
- * The main board, grouped.
- *
- * A flat list of twenty-two entries is a wall to scan, so the board is
- * sectioned — but it is still one board, not the books and the practice as
- * separate products.
- *
- * The accounting half follows the order these tasks actually happen in, which
- * is also the order Tally, Zoho Books and QuickBooks use: what comes in, what
- * you trade, what that becomes in the ledger, what you file, what you read
- * back. Documents arrive and are approved before anything can be a
- * transaction; a transaction becomes a voucher against an account; the ledger
- * produces the return and then the reports.
+ * The main board: a few pages on their own, then the work grouped by area,
+ * each area a list of its modules. The order follows the work: what comes in,
+ * what you sell and buy, the bank, the accountant's adjustments, tax, and
+ * what you read back.
  */
-const NAV_GROUPS: NavGroup[] = [
+const NAV: NavEntry[] = [
+  { label: 'Home', icon: <LayoutDashboard size={18} />, href: '/dashboard' },
+  { label: 'Inbox', icon: <Inbox size={18} />, href: '/inbox' },
+  { label: 'Review', icon: <CheckSquare size={18} />, href: '/review' },
+  { label: 'Approvals', icon: <UserCheck size={18} />, href: '/approvals' },
   {
-    heading: 'Overview',
+    label: 'Items',
+    icon: <Package size={18} />,
     items: [
-      { href: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} /> },
-      { href: '/inbox', label: 'Inbox', icon: <Inbox size={18} /> },
-      { href: '/review', label: 'Review', icon: <CheckSquare size={18} /> },
-      { href: '/approvals', label: 'Approvals', icon: <UserCheck size={18} /> },
+      { href: '/items', label: 'Items' },
+      { href: '/stock', label: 'Stock' },
     ],
   },
   {
-    heading: 'Transactions',
+    label: 'Sales',
+    icon: <TrendingUp size={18} />,
     items: [
-      { href: '/sales', label: 'Sales', icon: <TrendingUp size={18} /> },
-      { href: '/orders', label: 'Quotes & orders', icon: <ClipboardList size={18} /> },
-      { href: '/purchase', label: 'Purchase', icon: <ShoppingCart size={18} /> },
-      { href: '/expenses', label: 'Expense claims', icon: <Receipt size={18} /> },
-      { href: '/items', label: 'Items', icon: <Package size={18} /> },
-      { href: '/stock', label: 'Stock', icon: <Warehouse size={18} /> },
-      { href: '/projects', label: 'Projects', icon: <FolderKanban size={18} /> },
-      { href: '/banking', label: 'Banking', icon: <Building2 size={18} /> },
-      { href: '/recurring', label: 'Recurring', icon: <Repeat size={18} /> },
+      { href: '/sales/customers', label: 'Customers', create: '/sales/customers/new' },
+      { href: '/sales/quotes', label: 'Quotes' },
+      { href: '/sales/orders', label: 'Sales Orders' },
+      { href: '/sales/invoices', label: 'Invoices' },
+      { href: '/sales/recurring-invoices', label: 'Recurring Invoices' },
+      { href: '/sales/challans', label: 'Delivery Challans' },
+      { href: '/sales/payments-received', label: 'Payments Received' },
+      { href: '/sales/credit-notes', label: 'Credit Notes' },
     ],
   },
   {
-    heading: 'Accounting',
+    label: 'Purchases',
+    icon: <ShoppingBag size={18} />,
     items: [
-      { href: '/vouchers', label: 'Vouchers', icon: <FileText size={18} /> },
-      { href: '/accounts', label: 'Chart of accounts', icon: <BookOpen size={18} /> },
-      { href: '/gst', label: 'GST', icon: <ReceiptIndianRupee size={18} /> },
-      { href: '/tds', label: 'TDS', icon: <IndianRupee size={18} /> },
-      { href: '/currency', label: 'Foreign currency', icon: <Globe size={18} /> },
-      { href: '/migration', label: 'Opening balances', icon: <Upload size={18} /> },
+      { href: '/purchases/vendors', label: 'Vendors', create: '/purchases/vendors/new' },
+      { href: '/purchases/expenses', label: 'Expenses' },
+      { href: '/purchases/recurring-expenses', label: 'Recurring Expenses' },
+      { href: '/purchases/orders', label: 'Purchase Orders' },
+      { href: '/purchases/bills', label: 'Bills' },
+      { href: '/purchases/recurring-bills', label: 'Recurring Bills' },
+      { href: '/purchases/payments-made', label: 'Payments Made' },
+      { href: '/purchases/payment-runs', label: 'Payment Runs' },
+      { href: '/purchases/vendor-credits', label: 'Vendor Credits' },
+      { href: '/purchases/claims', label: 'Employee Claims' },
     ],
   },
   {
-    heading: 'Reports',
+    label: 'Time Tracking',
+    icon: <Timer size={18} />,
     items: [
-      { href: '/reports', label: 'Reports', icon: <BarChart3 size={18} /> },
-      { href: '/insights', label: 'Insights', icon: <Lightbulb size={18} /> },
-      { href: '/month-end', label: 'Month-end', icon: <CalendarCheck size={18} /> },
-      { href: '/closing', label: 'Close the books', icon: <Lock size={18} /> },
-      { href: '/audit', label: 'Audit trail', icon: <ShieldCheck size={18} /> },
+      { href: '/time/projects', label: 'Projects' },
+      { href: '/time/timesheet', label: 'Timesheet' },
+    ],
+  },
+  { label: 'Banking', icon: <Building2 size={18} />, href: '/banking' },
+  {
+    label: 'Accountant',
+    icon: <UserCog size={18} />,
+    items: [
+      { href: '/accountant/manual-journals', label: 'Manual Journals' },
+      { href: '/accountant/bulk-update', label: 'Bulk Update' },
+      { href: '/accountant/currency-adjustments', label: 'Currency Adjustments' },
+      { href: '/accountant/chart-of-accounts', label: 'Chart of Accounts' },
+      { href: '/accountant/budgets', label: 'Budgets' },
+      { href: '/accountant/transaction-locking', label: 'Transaction Locking' },
+      { href: '/month-end', label: 'Month-end' },
+      { href: '/migration', label: 'Opening Balances' },
+      { href: '/vouchers', label: 'All Vouchers' },
+      { href: '/currency', label: 'Foreign Currency' },
     ],
   },
   {
-    heading: 'Practice',
+    label: 'Taxes',
+    icon: <ReceiptIndianRupee size={18} />,
+    items: [
+      { href: '/gst', label: 'GST' },
+      { href: '/tds', label: 'TDS' },
+    ],
+  },
+  {
+    label: 'Reports',
+    icon: <BarChart3 size={18} />,
+    items: [
+      { href: '/reports', label: 'Reports' },
+      { href: '/reports/management', label: 'Management Reports' },
+      { href: '/insights', label: 'Insights' },
+      { href: '/audit', label: 'Audit Trail' },
+    ],
+  },
+  { label: 'Documents', icon: <FolderOpen size={18} />, href: '/documents' },
+  {
+    label: 'Practice',
+    icon: <Briefcase size={18} />,
     practice: true,
     items: [
-      { href: '/crm', label: 'Practice home', icon: <Briefcase size={18} /> },
-      { href: '/crm/clients', label: 'Clients', icon: <Users size={18} /> },
-      { href: '/crm/compliance', label: 'Compliance', icon: <Bell size={18} /> },
-      { href: '/crm/documents', label: 'Document hub', icon: <FolderOpen size={18} /> },
-      { href: '/crm/tasks', label: 'Tasks', icon: <ListChecks size={18} /> },
+      { href: '/crm', label: 'Practice home' },
+      { href: '/crm/clients', label: 'Clients' },
+      { href: '/crm/compliance', label: 'Compliance' },
+      { href: '/crm/documents', label: 'Document hub' },
+      { href: '/crm/tasks', label: 'Tasks' },
     ],
   },
   {
-    heading: 'Growth & fees',
+    label: 'Growth & fees',
+    icon: <Target size={18} />,
     practice: true,
     items: [
-      { href: '/crm/leads', label: 'Leads', icon: <Target size={18} /> },
-      { href: '/crm/invoices', label: 'Fees', icon: <IndianRupee size={18} /> },
-      { href: '/crm/agent', label: 'Support agent', icon: <Bot size={18} /> },
-      { href: '/crm/settings', label: 'Messaging', icon: <MessageSquare size={18} /> },
+      { href: '/crm/leads', label: 'Leads' },
+      { href: '/crm/invoices', label: 'Fees' },
+      { href: '/crm/agent', label: 'Support agent' },
+      { href: '/crm/settings', label: 'Messaging' },
     ],
   },
   {
-    heading: 'Firm',
+    label: 'Firm',
+    icon: <Palette size={18} />,
     practice: true,
     items: [
-      { href: '/crm/reports', label: 'Practice reports', icon: <PieChart size={18} /> },
-      // The only route to /firm/config — white-label branding and the client
-      // portal domain could not be configured from anywhere before this.
-      { href: '/firm-portal', label: 'Firm & branding', icon: <Palette size={18} /> },
+      { href: '/crm/reports', label: 'Practice reports' },
+      // The only route to white-label branding and the client portal domain.
+      { href: '/firm-portal', label: 'Firm & branding' },
     ],
   },
 ];
 
 /** Shown in place of the practice groups when the org has no firm yet. */
-const PRACTICE_SETUP_GROUP: NavGroup = {
-  heading: 'Practice',
-  items: [{ href: '/crm', label: 'Set up practice', icon: <Briefcase size={18} /> }],
-};
+const PRACTICE_SETUP: NavEntry = { label: 'Set up practice', icon: <Briefcase size={18} />, href: '/crm' };
+
+const OPEN_KEY = 'aibooks.sidebar.open';
+
+/** The one item a path belongs to: the longest href it starts with. */
+function activeHrefFor(pathname: string, hrefs: string[]): string | null {
+  let best: string | null = null;
+  for (const h of hrefs) {
+    if ((pathname === h || pathname.startsWith(`${h}/`)) && (!best || h.length > best.length)) best = h;
+  }
+  return best;
+}
 
 interface SidebarProps {
   inboxCount?: number;
   reviewCount?: number;
-  /**
-   * The practice this org runs, when it has one. Without a firm the list ends
-   * at a single setup entry rather than hiding that half of the product.
-   */
+  /** The practice this org runs, when it has one. */
   firmName?: string;
-  /**
-   * The signed-in user's role.
-   *
-   * There are two boards, not three. A platform admin runs the platform and has
-   * no books of their own, so they get the admin board alone; everyone else gets
-   * the main board, which carries the whole product.
-   */
+  /** A platform admin runs the platform and has no books: the admin board alone. */
   role?: string;
 }
 
 export function Sidebar({ inboxCount = 0, reviewCount = 0, firmName, role }: SidebarProps) {
   const pathname = usePathname();
   const isPlatformAdmin = role === 'PLATFORM_SUPER_ADMIN';
+  const entries = useMemo(
+    () => (isPlatformAdmin ? [] : firmName ? NAV : [...NAV.filter((e) => !e.practice), PRACTICE_SETUP]),
+    [isPlatformAdmin, firmName],
+  );
+  const allHrefs = useMemo(() => entries.flatMap((e) => (e.href ? [e.href] : (e.items ?? []).map((i) => i.href))), [entries]);
+  const active = activeHrefFor(pathname, allHrefs);
+  const activeGroup = entries.find((e) => e.items?.some((i) => i.href === active))?.label ?? null;
 
-  // An org with no firm keeps the accounting groups and gets a single setup
-  // entry in place of the three practice ones, rather than losing that half of
-  // the product with no way back to it.
-  const groups: NavGroup[] = isPlatformAdmin
-    ? []
-    : firmName
-      ? NAV_GROUPS
-      : [...NAV_GROUPS.filter((g) => !g.practice), PRACTICE_SETUP_GROUP];
+  // Groups the person opened stay open between visits; the one in use always is.
+  const [open, setOpen] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(OPEN_KEY) ?? '[]');
+      if (Array.isArray(saved)) setOpen(new Set(saved.filter((s): s is string => typeof s === 'string')));
+    } catch {
+      // Storage may be unavailable; groups then start closed.
+    }
+  }, []);
+  const toggle = (label: string) => {
+    setOpen((cur) => {
+      const nextOpen = new Set(cur);
+      if (nextOpen.has(label)) nextOpen.delete(label);
+      else nextOpen.add(label);
+      try {
+        localStorage.setItem(OPEN_KEY, JSON.stringify([...nextOpen]));
+      } catch {
+        // Not remembered, but still toggled.
+      }
+      return nextOpen;
+    });
+  };
 
-  const badgeFor = (href: string) =>
-    href === '/inbox' && inboxCount > 0
-      ? inboxCount
-      : href === '/review' && reviewCount > 0
-        ? reviewCount
-        : undefined;
+  const badgeFor = (href: string) => (href === '/inbox' && inboxCount > 0 ? inboxCount : href === '/review' && reviewCount > 0 ? reviewCount : undefined);
 
-  const linkClass = (isActive: boolean) =>
-    cn(
-      'flex min-h-[44px] items-center gap-3 rounded-sm px-3 py-2.5 text-body transition-colors',
-      isActive ? 'sidebar-active text-white' : 'text-ink-400 hover:bg-white/5 hover:text-white',
-    );
+  const topClass = (isActive: boolean) =>
+    cn('flex min-h-[40px] w-full items-center gap-3 rounded-sm px-3 py-2 text-body transition-colors', isActive ? 'sidebar-active text-white' : 'text-ink-400 hover:bg-white/5 hover:text-white');
 
   return (
-    <aside
-      className="fixed left-0 top-0 z-40 h-screen w-[260px] flex flex-col"
-      style={{ backgroundColor: 'var(--roast-900)' }}
-    >
-      {/* Brand mark */}
-      <div className="flex h-16 items-center px-6 border-b border-white/10">
-        <span
-          className="text-h3 font-display text-white"
-         
-        >
-          ◆{' '}
-          <span className="text-marigold-400">Ai</span>
+    <aside className="fixed left-0 top-0 z-40 flex h-screen w-[260px] flex-col" style={{ backgroundColor: 'var(--roast-900)' }}>
+      <div className="flex h-16 items-center border-b border-white/10 px-6">
+        <span className="text-h3 font-display text-white">
+          ◆ <span className="text-marigold-400">Ai</span>
           <span className="text-white">Books</span>
         </span>
       </div>
 
-      <nav className="flex-1 overflow-y-auto py-4">
+      <nav className="flex-1 overflow-y-auto px-3 py-3" aria-label="Main">
         {isPlatformAdmin ? (
-          <>
-            <p className="px-6 pb-2 text-[11px] font-semibold uppercase tracking-wide text-ink-500">
-              Admin
-            </p>
-            <ul className="space-y-0.5 px-3">
-              <li>
-                <Link
-                  href="/platform-admin"
-                  className={linkClass(pathname.startsWith('/platform-admin'))}
-                >
-                  <span
-                    className={
-                      pathname.startsWith('/platform-admin') ? 'text-white' : 'text-ink-500'
-                    }
-                  >
-                    <ShieldCheck size={18} />
-                  </span>
-                  <span className="flex-1">Platform admin</span>
-                </Link>
-              </li>
-            </ul>
-          </>
+          <Link href="/platform-admin" className={topClass(pathname.startsWith('/platform-admin'))}>
+            <ShieldCheck size={18} className={pathname.startsWith('/platform-admin') ? 'text-white' : 'text-ink-500'} />
+            <span className="flex-1">Platform admin</span>
+          </Link>
         ) : (
-          groups.map((group, i) => (
-            <div key={group.heading} className={i > 0 ? 'mt-5' : undefined}>
-              <p className="px-6 pb-1.5 text-[11px] font-semibold uppercase tracking-wide text-ink-500">
-                {group.heading}
-              </p>
-              <ul className="space-y-0.5 px-3">
-                {group.items.map((item) => {
-                  // '/crm' must not light up for every practice page beneath it.
-                  const isActive =
-                    item.href === '/crm' ? pathname === '/crm' : pathname.startsWith(item.href);
-                  const badge = badgeFor(item.href);
-                  return (
-                    <li key={item.href}>
-                      <Link href={item.href} className={linkClass(isActive)}>
-                        <span className={isActive ? 'text-white' : 'text-ink-500'}>{item.icon}</span>
-                        <span className="flex-1">{item.label}</span>
-                        {badge !== undefined && (
-                          <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-marigold-400 px-1.5 text-[0.75rem] font-semibold text-ink-900">
-                            {badge}
-                          </span>
-                        )}
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          ))
+          <ul className="space-y-0.5">
+            {entries.map((entry) => {
+              if (entry.href) {
+                const isActive = active === entry.href;
+                const badge = badgeFor(entry.href);
+                return (
+                  <li key={entry.label}>
+                    <Link href={entry.href} className={topClass(isActive)}>
+                      <span className={isActive ? 'text-white' : 'text-ink-500'}>{entry.icon}</span>
+                      <span className="flex-1">{entry.label}</span>
+                      {badge !== undefined && (
+                        <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-marigold-400 px-1.5 text-[0.75rem] font-semibold text-ink-900">{badge}</span>
+                      )}
+                    </Link>
+                  </li>
+                );
+              }
+              const isOpen = open.has(entry.label) || activeGroup === entry.label;
+              const inGroup = activeGroup === entry.label;
+              return (
+                <li key={entry.label}>
+                  <button type="button" onClick={() => toggle(entry.label)} aria-expanded={isOpen} className={cn(topClass(false), inGroup && 'text-white')}>
+                    <span className={inGroup ? 'text-marigold-400' : 'text-ink-500'}>{entry.icon}</span>
+                    <span className="flex-1 text-left">{entry.label}</span>
+                    {isOpen ? <ChevronDown size={14} className="text-ink-500" /> : <ChevronRight size={14} className="text-ink-500" />}
+                  </button>
+                  {isOpen && (
+                    <ul className="mb-1 mt-0.5 space-y-0.5">
+                      {(entry.items ?? []).map((item) => {
+                        const isActive = active === item.href;
+                        return (
+                          <li key={item.href} className="group relative">
+                            <Link
+                              href={item.href}
+                              className={cn(
+                                'flex min-h-[34px] items-center rounded-sm py-1.5 pl-11 pr-9 text-[0.875rem] transition-colors',
+                                isActive ? 'sidebar-active text-white' : 'text-ink-400 hover:bg-white/5 hover:text-white',
+                              )}
+                            >
+                              {item.label}
+                            </Link>
+                            {item.create && (
+                              <Link
+                                href={item.create}
+                                aria-label={`New ${item.label.replace(/s$/, '').toLowerCase()}`}
+                                title={`New ${item.label.replace(/s$/, '').toLowerCase()}`}
+                                className="absolute right-1.5 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-sm bg-white/10 text-white hover:bg-saffron-600"
+                              >
+                                <Plus size={14} />
+                              </Link>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
         )}
       </nav>
 
-      {/* Org settings, at the bottom of the main board. A platform admin
-          administers the platform, not an organisation, so it is not theirs. */}
       {!isPlatformAdmin && (
-      <div className="border-t border-white/10 p-3">
-        <Link
-          href="/settings"
-          className={cn(
-            'flex items-center gap-3 rounded-sm px-3 py-2.5 text-body transition-colors min-h-[44px]',
-            pathname.startsWith('/settings')
-              ? 'sidebar-active text-white'
-              : 'text-ink-400 hover:text-white hover:bg-white/5',
-          )}
-        >
-          <Settings size={18} className={pathname.startsWith('/settings') ? 'text-white' : 'text-ink-500'} />
-          <span>Settings</span>
-        </Link>
-      </div>
+        <div className="border-t border-white/10 p-3">
+          <Link href="/settings" className={topClass(pathname.startsWith('/settings'))}>
+            <Settings size={18} className={pathname.startsWith('/settings') ? 'text-white' : 'text-ink-500'} />
+            <span>Settings</span>
+          </Link>
+        </div>
       )}
     </aside>
   );

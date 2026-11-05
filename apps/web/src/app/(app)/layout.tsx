@@ -7,6 +7,7 @@ import { Topbar } from '@/components/shell/topbar';
 import { useAuth } from '@/lib/auth-context';
 import { useWorkspace } from '@/lib/use-workspace';
 import { PageTransition } from '@/components/motion/page-transition';
+import { Notifier } from '@/components/page/notifier';
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -48,6 +49,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           <PageTransition>{children}</PageTransition>
         </div>
       </main>
+      <Notifier />
     </div>
   );
 }
