@@ -1,14 +1,15 @@
 'use client';
 
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { Plus } from 'lucide-react';
+import { ChevronRight, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { TableError } from '@/components/ui/query-error';
 import { PageHeader, ListToolbar, TableCard, EmptyState, Section, StatusChip, th, td, tdMoney } from '@/components/page/page-shell';
 import { notify } from '@/components/page/notifier';
 import { AdvancesPanel } from '@/components/payments/advances-panel';
+import { PaymentDetails, PAYMENT_MODE_LABEL } from '@/components/payments/payment-details';
 import { api } from '@/lib/api';
 import { formatPaise } from '@/lib/gst';
 import { shortDate, useInvoices } from '@/components/sales/sales-data';
@@ -16,6 +17,12 @@ import { shortDate, useInvoices } from '@/components/sales/sales-data';
 /** GET /payments?kind=receipt — one receipt, however many invoices it settled. */
 interface Receipt {
   _id: string;
+  /** RCT/2026-27/0001; null on note credits and receipts recorded before numbering. */
+  number?: string | null;
+  mode?: string | null;
+  depositAccountName?: string | null;
+  bankChargesPaise?: number;
+  notes?: string | null;
   partyId: string;
   partyName: string;
   date: string;
@@ -42,12 +49,13 @@ export default function PaymentsReceivedPage() {
   const invoices = useInvoices();
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('all');
+  const [openId, setOpenId] = useState<string | null>(null);
 
   const all = receipts.data ?? [];
   const q = search.trim().toLowerCase();
   const rows = all
     .filter((r) => (filter === 'advance' ? r.status === 'posted' && r.unappliedPaise > 0 : filter === 'reversed' ? r.status === 'reversed' : true))
-    .filter((r) => !q || [r.partyName, r.reference, ...r.allocations.map((a) => a.documentNumber)].some((v) => v?.toLowerCase().includes(q)));
+    .filter((r) => !q || [r.number, r.partyName, r.reference, ...r.allocations.map((a) => a.documentNumber)].some((v) => v?.toLowerCase().includes(q)));
   // Open invoices an advance can be applied to.
   const openDocuments = (invoices.data ?? [])
     .filter((d) => d.status === 'posted' && d.outstandingPaise > 0)
@@ -56,6 +64,7 @@ export default function PaymentsReceivedPage() {
   return (
     <div className="space-y-5">
       <PageHeader
+        guide="paymentsReceived"
         title="Payments received"
         subtitle="Money in from customers, and the invoices each receipt settled."
         actions={<Button asChild><Link href="/sales/payments-received/new"><Plus size={14} /> Record receipt</Link></Button>}
@@ -67,6 +76,7 @@ export default function PaymentsReceivedPage() {
 
       {!receipts.isLoading && !receipts.isError && all.length === 0 ? (
         <EmptyState
+          guide="paymentsReceived"
           title="No receipts yet"
           body="Record money in from a customer: one receipt can settle several invoices, and anything left over is held as an advance."
           action={<Button asChild><Link href="/sales/payments-received/new"><Plus size={14} /> Record receipt</Link></Button>}
@@ -76,7 +86,7 @@ export default function PaymentsReceivedPage() {
           <ListToolbar
             search={search}
             onSearch={setSearch}
-            placeholder="Search customer, reference or invoice"
+            placeholder="Search payment #, customer, reference or invoice"
             filters={{ value: filter, onChange: setFilter, options: [['all', 'All'], ['advance', 'Holds an advance'], ['reversed', 'Reversed']] }}
           />
           <TableCard>
@@ -84,8 +94,10 @@ export default function PaymentsReceivedPage() {
               <thead>
                 <tr className="border-b border-line-200 bg-surface-sink">
                   <th className={th}>Date</th>
+                  <th className={th}>Payment #</th>
                   <th className={th}>Customer</th>
-                  <th className={th}>Through</th>
+                  <th className={th}>Mode</th>
+                  <th className={th}>Deposit to</th>
                   <th className={th}>Reference</th>
                   <th className={th}>Settled</th>
                   <th className={`${th} text-right`}>Received</th>
@@ -96,20 +108,28 @@ export default function PaymentsReceivedPage() {
               </thead>
               <tbody>
                 {receipts.isLoading ? (
-                  <tr><td colSpan={9} className="px-3 py-8 text-center text-caption text-ink-400">Loading…</td></tr>
+                  <tr><td colSpan={11} className="px-3 py-8 text-center text-caption text-ink-400">Loading…</td></tr>
                 ) : receipts.isError ? (
-                  <TableError error={receipts.error} colSpan={9} onRetry={() => void receipts.refetch()} />
+                  <TableError error={receipts.error} colSpan={11} onRetry={() => void receipts.refetch()} />
                 ) : rows.length === 0 ? (
-                  <tr><td colSpan={9} className="px-3 py-8 text-center text-caption text-ink-400">No receipts match.</td></tr>
+                  <tr><td colSpan={11} className="px-3 py-8 text-center text-caption text-ink-400">No receipts match.</td></tr>
                 ) : (
                   rows.map((r) => (
-                    <tr key={r._id} className={`border-b border-line-100 align-top last:border-0 ${r.status === 'reversed' ? 'opacity-60' : ''}`}>
+                    <Fragment key={r._id}>
+                    <tr className={`border-b border-line-100 align-top last:border-0 ${r.status === 'reversed' ? 'opacity-60' : ''}`}>
                       <td className={`${td} whitespace-nowrap text-caption text-ink-600`}>{shortDate(r.date)}</td>
+                      <td className={`${td} whitespace-nowrap font-mono text-caption`}>
+                        <button type="button" className="inline-flex items-center gap-1 hover:underline" aria-expanded={openId === r._id} onClick={() => setOpenId(openId === r._id ? null : r._id)} title="Notes, charges and files">
+                          <ChevronRight size={12} className={`shrink-0 text-ink-400 transition-transform ${openId === r._id ? 'rotate-90' : ''}`} />
+                          {r.number ?? <span className="text-ink-400">—</span>}
+                        </button>
+                      </td>
                       <td className={`${td} font-medium`}>
                         <Link href={`/sales/customers/${r.partyId}`} className="hover:underline">{r.partyName}</Link>
                         {r.source === 'credit_note' && <p className="text-[0.7rem] font-normal text-ink-500">Credit from a credit note</p>}
                       </td>
-                      <td className={`${td} text-caption`}>{r.source === 'money' ? VIA[r.via] : '—'}</td>
+                      <td className={`${td} text-caption`}>{r.mode ? PAYMENT_MODE_LABEL[r.mode] ?? r.mode : <span className="text-ink-400">—</span>}</td>
+                      <td className={`${td} text-caption`}>{r.source === 'money' ? r.depositAccountName ?? VIA[r.via] : '—'}</td>
                       <td className={`${td} max-w-[12rem] truncate text-caption text-ink-600`} title={r.reference ?? undefined}>{r.reference ?? '—'}</td>
                       <td className={`${td} text-caption`}>
                         {r.allocations.length === 0 ? (
@@ -130,6 +150,12 @@ export default function PaymentsReceivedPage() {
                       <td className={`${tdMoney} ${r.unappliedPaise > 0 && r.status === 'posted' ? 'text-pending-fg' : 'text-ink-400'}`}>{r.unappliedPaise ? formatPaise(r.unappliedPaise) : '—'}</td>
                       <td className={td}><StatusChip tone={r.status === 'posted' ? 'success' : 'neutral'}>{r.status === 'posted' ? 'Posted' : 'Reversed'}</StatusChip></td>
                     </tr>
+                    {openId === r._id && (
+                      <tr className="border-b border-line-100 bg-surface-sink/50">
+                        <td colSpan={11} className="px-3 py-3"><PaymentDetails payment={r} kind="receipt" /></td>
+                      </tr>
+                    )}
+                    </Fragment>
                   ))
                 )}
               </tbody>

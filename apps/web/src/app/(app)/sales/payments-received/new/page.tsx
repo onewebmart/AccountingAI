@@ -3,11 +3,11 @@
 import { Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { PageHeader } from '@/components/page/page-shell';
-import { ReceiptForm } from '@/components/sales/receipt-form';
+import { RecordPaymentForm } from '@/components/payments/record-payment-form';
 
 function Form() {
   const params = useSearchParams();
-  return <ReceiptForm initialCustomerId={params.get('customerId') ?? ''} />;
+  return <RecordPaymentForm kind="receipt" initialPartyId={params.get('customerId') ?? ''} />;
 }
 
 export default function NewReceiptPage() {

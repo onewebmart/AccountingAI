@@ -1,9 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { Plus } from 'lucide-react';
+import { ChevronRight, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { TableError } from '@/components/ui/query-error';
 import { ListToolbar, PageHeader, StatusChip, TableCard, td, tdMoney, th } from '@/components/page/page-shell';
@@ -11,10 +11,18 @@ import { api } from '@/lib/api';
 import { formatPaise } from '@/lib/gst';
 import { shortDate } from '@/components/purchases/purchase-data';
 import { VendorAdvances } from '@/components/purchases/vendor-advances';
+import { ModuleGuide } from '@/components/guide/module-guide';
+import { PaymentDetails, PAYMENT_MODE_LABEL } from '@/components/payments/payment-details';
 
 /** GET /payments?kind=payment — one payment to a vendor, across the bills it settles. */
 interface PartyPayment {
   _id: string;
+  /** PMT/2026-27/0001; null on note credits and payments recorded before numbering. */
+  number?: string | null;
+  mode?: string | null;
+  depositAccountName?: string | null;
+  bankChargesPaise?: number;
+  notes?: string | null;
   partyId: string;
   partyName: string;
   date: string;
@@ -45,6 +53,7 @@ type View = 'vendors' | 'vouchers';
 export default function PaymentsMadePage() {
   const [view, setView] = useState<View>('vendors');
   const [search, setSearch] = useState('');
+  const [openId, setOpenId] = useState<string | null>(null);
   const payments = useQuery({ queryKey: ['payments', 'list', 'payment'], queryFn: () => api.get<PartyPayment[]>('/payments?kind=payment') });
   const vouchers = useQuery({
     queryKey: ['journals', 'list', 'PAYMENT'],
@@ -54,12 +63,13 @@ export default function PaymentsMadePage() {
   });
   const q = search.trim().toLowerCase();
 
-  const rows = (payments.data ?? []).filter((p) => !q || [p.partyName, p.reference, ...p.allocations.map((a) => a.documentNumber)].some((s) => s?.toLowerCase().includes(q)));
+  const rows = (payments.data ?? []).filter((p) => !q || [p.number, p.partyName, p.reference, ...p.allocations.map((a) => a.documentNumber)].some((s) => s?.toLowerCase().includes(q)));
   const voucherRows = (vouchers.data?.data ?? []).filter((v) => !q || [v.voucherNumber, v.description].some((s) => s?.toLowerCase().includes(q)));
 
   return (
     <div className="space-y-5">
       <PageHeader
+        guide="paymentsMade"
         title="Payments made"
         subtitle="Money out to vendors. One payment can settle several bills; what is left over is held as an advance."
         actions={
@@ -76,7 +86,7 @@ export default function PaymentsMadePage() {
         <ListToolbar
           search={search}
           onSearch={setSearch}
-          placeholder={view === 'vendors' ? 'Search vendor, reference or bill' : 'Search voucher or narration'}
+          placeholder={view === 'vendors' ? 'Search payment #, vendor, reference or bill' : 'Search voucher or narration'}
           filters={{ value: view, onChange: (v) => setView(v as View), options: [['vendors', 'Payments to vendors'], ['vouchers', 'All payment vouchers']] }}
         />
         {view === 'vendors' ? (
@@ -85,7 +95,9 @@ export default function PaymentsMadePage() {
               <thead className="border-b border-line-200 bg-surface-sink">
                 <tr>
                   <th className={th}>Date</th>
+                  <th className={th}>Payment #</th>
                   <th className={th}>Vendor</th>
+                  <th className={th}>Mode</th>
                   <th className={th}>Paid through</th>
                   <th className={th}>Reference</th>
                   <th className={th}>Bills paid</th>
@@ -95,24 +107,32 @@ export default function PaymentsMadePage() {
               </thead>
               <tbody>
                 {payments.isLoading ? (
-                  <tr><td colSpan={7} className="px-3 py-8 text-center text-caption text-ink-400">Loading…</td></tr>
+                  <tr><td colSpan={9} className="px-3 py-8 text-center text-caption text-ink-400">Loading…</td></tr>
                 ) : payments.isError ? (
-                  <TableError error={payments.error} colSpan={7} onRetry={() => void payments.refetch()} />
+                  <TableError error={payments.error} colSpan={9} onRetry={() => void payments.refetch()} />
                 ) : rows.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-3 py-8 text-center text-caption text-ink-500">
+                    <td colSpan={9} className="px-3 py-8 text-center text-caption text-ink-500">
                       No payments across bills yet. A payment recorded on a single bill shows on that bill, and under All payment vouchers.
                     </td>
                   </tr>
                 ) : (
                   rows.map((p) => (
-                    <tr key={p._id} className="border-b border-line-100 last:border-0">
+                    <Fragment key={p._id}>
+                    <tr className="border-b border-line-100 last:border-0">
                       <td className={`${td} text-caption`}>{shortDate(p.date)}</td>
+                      <td className={`${td} whitespace-nowrap font-mono text-caption`}>
+                        <button type="button" className="inline-flex items-center gap-1 hover:underline" aria-expanded={openId === p._id} onClick={() => setOpenId(openId === p._id ? null : p._id)} title="Notes, charges and files">
+                          <ChevronRight size={12} className={`shrink-0 text-ink-400 transition-transform ${openId === p._id ? 'rotate-90' : ''}`} />
+                          {p.number ?? <span className="text-ink-400">—</span>}
+                        </button>
+                      </td>
                       <td className={td}>
                         <Link href={`/purchases/vendors/${p.partyId}`} className="hover:underline">{p.partyName}</Link>
                         {p.status === 'reversed' && <span className="ml-2"><StatusChip tone="neutral">Reversed</StatusChip></span>}
                       </td>
-                      <td className={`${td} text-caption capitalize`}>{p.source === 'debit_note' ? 'Debit note credit' : p.via}</td>
+                      <td className={`${td} text-caption`}>{p.mode ? PAYMENT_MODE_LABEL[p.mode] ?? p.mode : <span className="text-ink-400">—</span>}</td>
+                      <td className={`${td} text-caption ${p.depositAccountName ? '' : 'capitalize'}`}>{p.source === 'debit_note' ? 'Debit note credit' : p.depositAccountName ?? p.via}</td>
                       <td className={`${td} text-caption text-ink-600`}>{p.reference ?? '—'}</td>
                       <td className={`${td} text-caption`}>
                         {p.allocations.length === 0 ? (
@@ -128,6 +148,12 @@ export default function PaymentsMadePage() {
                       <td className={tdMoney}>{formatPaise(p.amountPaise)}</td>
                       <td className={tdMoney}>{p.unappliedPaise > 0 ? <span className="text-pending-fg">{formatPaise(p.unappliedPaise)}</span> : '—'}</td>
                     </tr>
+                    {openId === p._id && (
+                      <tr className="border-b border-line-100 bg-surface-sink/50">
+                        <td colSpan={9} className="px-3 py-3"><PaymentDetails payment={p} kind="payment" /></td>
+                      </tr>
+                    )}
+                    </Fragment>
                   ))
                 )}
               </tbody>
@@ -169,6 +195,8 @@ export default function PaymentsMadePage() {
         )}
         {view === 'vouchers' && <p className="mt-2 text-caption text-ink-500">Includes payments on single bills, payment runs, expenses and reimbursements. Open <Link href="/vouchers" className="underline">All vouchers</Link> to reverse one.</p>}
       </div>
+      {/* No vendor payment yet: show how paying works. */}
+      {view === 'vendors' && payments.data?.length === 0 && <ModuleGuide guide="paymentsMade" />}
     </div>
   );
 }
