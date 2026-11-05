@@ -154,6 +154,39 @@ describe('bills from lines', () => {
     expect(journal.lines.find((l) => l.description === 'Input IGST')!.debitPaise).toBe(225000);
   });
 
+  it('books a line to the account chosen on it, over the item; never to a control, tax or bank account', async () => {
+    const { orgId, localId } = await org();
+    const other = await org();
+    await accounts.seedDefaults(orgId);
+    await accounts.seedDefaults(other.orgId);
+    const id = async (o: string, name: string) => String((await accounts.list(o)).find((a) => a.name === name)!._id);
+    const rent = await id(orgId, 'Rent');
+    const computers = await id(orgId, 'Computers & IT Equipment');
+
+    const bill = await fromLines.create(orgId, ACTOR, {
+      vendorId: localId, billDate: '2026-11-01',
+      lines: [
+        { description: 'Office rent, November', hsnSac: '997212', qty: 1, ratePaise: 4000000, taxRatePct: 18, accountId: rent },
+        { description: 'Laptop for the office', hsnSac: '8471', qty: 1, ratePaise: 6000000, taxRatePct: 18, accountId: computers },
+        { description: 'Paper', qty: 1, ratePaise: 100000, taxRatePct: 12 },
+      ],
+    });
+    const posted = await bills.post(String(bill._id), orgId, ACTOR);
+    const journal = (await journals.findById(posted.journalId).exec())!;
+    const debit = (account: string) => journal.lines.filter((l) => String(l.accountId) === account).reduce((s, l) => s + l.debitPaise, 0);
+    expect(debit(rent)).toBe(4000000);
+    expect(debit(computers)).toBe(6000000);
+    expect(debit(await id(orgId, 'Purchases'))).toBe(100000);
+    // The voucher reads as words: the bill and the vendor by name.
+    expect(journal.narration).toBe('Purchase bill without a number — Sigma Supplies');
+
+    const line = { description: 'Rent', qty: 1, ratePaise: 100000, taxRatePct: 0 };
+    for (const name of ['Accounts Payable', 'Bank Accounts', 'Input CGST', 'Sales Revenue', 'Indirect Expenses']) {
+      await expect(fromLines.create(orgId, ACTOR, { vendorId: localId, billDate: '2026-11-01', lines: [{ ...line, accountId: await id(orgId, name) }] })).rejects.toThrow(/Line 1: a bill line cannot be booked to/);
+    }
+    await expect(fromLines.create(orgId, ACTOR, { vendorId: localId, billDate: '2026-11-01', lines: [{ ...line, accountId: await id(other.orgId, 'Rent') }] })).rejects.toThrow(/Line 1: that account is not one of yours/);
+  });
+
   it('refuses a line it cannot read, and a vendor from another org', async () => {
     const { orgId, localId } = await org();
     const other = await org();

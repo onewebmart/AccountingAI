@@ -6,6 +6,7 @@ import { DebitNote, DebitNoteSchema } from './schemas/debit-note.schema';
 import { DebitNotesService } from './debit-notes.service';
 import { BillsFromLinesService } from './bills-from-lines.service';
 import { OrgSettings, OrgSettingsSchema } from '../org-settings/schemas/org-settings.schema';
+import { LedgerAccount, LedgerAccountSchema } from '../gl/schemas/ledger-account.schema';
 import { VendorsService } from './vendors.service';
 import { PurchaseBillsService } from './purchase-bills.service';
 import { PurchaseController } from './purchase.controller';
@@ -22,6 +23,8 @@ import { ApprovalsModule } from '../approvals/approvals.module';
       { name: DebitNote.name, schema: DebitNoteSchema },
       // Read only: our state, against the vendor's, decides CGST+SGST or IGST on a bill typed by lines.
       { name: OrgSettings.name, schema: OrgSettingsSchema },
+      // Read only: the account a typed bill line is booked to.
+      { name: LedgerAccount.name, schema: LedgerAccountSchema },
     ]),
     GlModule, // for PostingService
     ItemsModule, // lines that pick an item

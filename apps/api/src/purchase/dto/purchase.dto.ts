@@ -286,6 +286,11 @@ export class BillLineDto {
   @IsOptional()
   @IsMongoId()
   projectId?: string | null;
+
+  /** The account this line is booked to; the item's, or Purchases, when left out. */
+  @IsOptional()
+  @IsMongoId()
+  accountId?: string | null;
 }
 
 /** POST /purchase/bills/from-lines — a draft bill priced on the server from its lines. */

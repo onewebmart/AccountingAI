@@ -1,6 +1,9 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
+import { AccountType } from '@ai-accounting/shared';
+import { isMoneyAccount } from '../gl/money-accounts';
+import { LedgerAccount, LedgerAccountDocument, SystemAccountKey } from '../gl/schemas/ledger-account.schema';
 import { ItemsService } from '../items/items.service';
 import { OrgSettings, OrgSettingsDocument } from '../org-settings/schemas/org-settings.schema';
 import { DocLineInput, docAmounts, isInterState, lineAmount, lineProblem } from '../orders/doc-lines';
@@ -12,6 +15,24 @@ const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 export interface BillLineInput extends DocLineInput {
   projectId?: string | null;
+  /** The account the line is booked to: rent to Rent, a laptop to Computers. The item's, or Purchases, when left out. */
+  accountId?: string | null;
+}
+
+/** Asset accounts a bill line may be booked to that the chart itself keeps: prepaid costs and stock. */
+const BOOKABLE_ASSET_KEYS = new Set<string>([SystemAccountKey.PREPAID_EXPENSES, SystemAccountKey.INVENTORY]);
+
+/**
+ * What a typed bill line may be booked to: an expense, or an asset bought
+ * (equipment, a prepaid cost). Never a group, a deactivated account, or one
+ * the books keep themselves: payables, receivables, tax, bank or cash.
+ */
+export function bookableForBill(a: { type: string; isGroup?: boolean | null; isActive?: boolean | null; systemKey?: string | null; name: string }): boolean {
+  if (a.isGroup || a.isActive === false) return false;
+  if (a.type === AccountType.EXPENSE) return true;
+  if (a.type !== AccountType.ASSETS) return false;
+  if (a.systemKey) return BOOKABLE_ASSET_KEYS.has(a.systemKey);
+  return !isMoneyAccount(a);
 }
 
 export interface BillFromLinesInput {
@@ -39,6 +60,7 @@ export class BillsFromLinesService {
   constructor(
     @InjectModel(Vendor.name) private vendorModel: Model<VendorDocument>,
     @InjectModel(OrgSettings.name) private settingsModel: Model<OrgSettingsDocument>,
+    @InjectModel(LedgerAccount.name) private accountModel: Model<LedgerAccountDocument>,
     private items: ItemsService,
     private bills: PurchaseBillsService,
   ) {}
@@ -73,7 +95,14 @@ export class BillsFromLinesService {
       })),
       'purchase',
     );
-    const lineItems = resolved.map((l) => ({ ...l, qty: l.qty ?? 1, taxRatePct: l.taxRatePct ?? 0 }));
+    // An account chosen on the line wins over the item's.
+    const chosen = await this.chosenAccounts(orgId, typed);
+    const lineItems = resolved.map((l, i) => ({
+      ...l,
+      qty: l.qty ?? 1,
+      taxRatePct: l.taxRatePct ?? 0,
+      ...(chosen[i] ? { accountId: chosen[i] } : {}),
+    }));
 
     const settings = await this.settingsModel.findOne({ orgId }).lean().exec();
     const ours = settings?.gstin?.slice(0, 2) ?? settings?.stateCode ?? null;
@@ -93,6 +122,22 @@ export class BillsFromLinesService {
       isReverseCharge: input.isReverseCharge ?? false,
       tdsSection: input.tdsSection,
       tdsRateBps: input.tdsRateBps,
+    });
+  }
+
+  /** Each line's chosen account, checked to be this org's and one a bill can be booked to; null where none was chosen. */
+  private async chosenAccounts(orgId: string, lines: BillLineInput[]): Promise<Array<Types.ObjectId | null>> {
+    const ids = [...new Set(lines.map((l) => l.accountId).filter((id): id is string => !!id))];
+    if (ids.length === 0) return lines.map(() => null);
+    if (ids.some((id) => !Types.ObjectId.isValid(id))) throw new BadRequestException('That account is not one of yours.');
+    const found = await this.accountModel.find({ orgId, _id: { $in: ids.map((id) => new Types.ObjectId(id)) } }).lean().exec();
+    const byId = new Map(found.map((a) => [String(a._id), a]));
+    return lines.map((l, i) => {
+      if (!l.accountId) return null;
+      const a = byId.get(l.accountId);
+      if (!a) throw new BadRequestException(`Line ${i + 1}: that account is not one of yours.`);
+      if (!bookableForBill(a)) throw new BadRequestException(`Line ${i + 1}: a bill line cannot be booked to ${a.name}. Pick an expense account, or an asset such as equipment.`);
+      return a._id as Types.ObjectId;
     });
   }
 }
