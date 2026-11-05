@@ -8,6 +8,7 @@ import { useAuth } from '@/lib/auth-context';
 import { useWorkspace } from '@/lib/use-workspace';
 import { PageTransition } from '@/components/motion/page-transition';
 import { Notifier } from '@/components/page/notifier';
+import { AskAssistant } from '@/components/assistant/ask-assistant';
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -45,11 +46,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       />
       <Topbar />
       <main className="ml-[260px] pt-16">
-        <div className="mx-auto max-w-content px-6 py-8">
+        {/* pb-28 lets the end of every page scroll clear of the Ask your books button. */}
+        <div className="mx-auto max-w-content px-6 pb-28 pt-8">
           <PageTransition>{children}</PageTransition>
         </div>
       </main>
       <Notifier />
+      <AskAssistant />
     </div>
   );
 }

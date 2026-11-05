@@ -30,8 +30,10 @@ export function Notifier() {
     return () => { listeners.delete(add); };
   }, []);
   if (!notes.length) return null;
+  // Stacked above the Ask your books button (bottom-6), which moves up over a
+  // form's action bar; the toasts move up with it.
   return (
-    <div className="fixed bottom-20 right-6 z-[60] flex max-w-sm flex-col gap-2" role="status" aria-live="polite">
+    <div className="fixed bottom-24 right-6 z-[60] flex max-w-sm flex-col gap-2 [body:has([data-form-bar])_&]:bottom-44" role="status" aria-live="polite">
       {notes.map((n) => (
         <div
           key={n.id}
