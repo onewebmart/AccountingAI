@@ -10,6 +10,7 @@ import { QueryError } from '@/components/ui/query-error';
 import { DetailGrid, PageHeader, Section, StatusChip, TableCard, td, tdMoney, th } from '@/components/page/page-shell';
 import { notify } from '@/components/page/notifier';
 import { AttachmentsSection } from '@/components/shell/attachments-section';
+import { useProjects } from '@/components/projects/project-select';
 import { ConfirmDialog, Notice, errorText, isApprovalHold, shortDate } from '@/components/accountant/common';
 import { VOUCHER_TYPE_LABELS, type JournalItem } from '@/components/accountant/journal-types';
 import { api } from '@/lib/api';
@@ -24,6 +25,7 @@ export default function ManualJournalPage() {
   const [held, setHeld] = useState<string | null>(null);
 
   const q = useQuery({ queryKey: ['journals', 'one', id], queryFn: () => api.get<JournalItem>(`/journals/${id}`) });
+  const projects = useProjects();
   const reverse = useMutation({
     mutationFn: () => api.post<JournalItem>(`/journals/${id}/reverse`),
     onSuccess: (r) => {
@@ -49,6 +51,8 @@ export default function ManualJournalPage() {
 
   const j = q.data;
   const reversed = j.status === 'reversed';
+  const withProject = j.lines.some((l) => l.projectId);
+  const projectName = (pid: string) => projects.data?.find((p) => p.id === pid)?.name ?? 'A project';
   return (
     <div className="space-y-5">
       {confirming && (
@@ -107,6 +111,7 @@ export default function ManualJournalPage() {
               <tr className="border-b border-line-200 bg-surface-sink">
                 <th className={th}>Account</th>
                 <th className={th}>Description</th>
+                {withProject && <th className={th}>Project</th>}
                 <th className={`${th} text-right`}>Debit</th>
                 <th className={`${th} text-right`}>Credit</th>
               </tr>
@@ -116,6 +121,7 @@ export default function ManualJournalPage() {
                 <tr key={i} className="border-b border-line-100 last:border-0">
                   <td className={td}>{l.accountName}</td>
                   <td className={`${td} text-ink-600`}>{l.description && l.description !== l.accountName ? l.description : ''}</td>
+                  {withProject && <td className={`${td} text-ink-600`}>{l.projectId ? projectName(l.projectId) : ''}</td>}
                   <td className={tdMoney}>{l.debitPaise ? formatPaise(l.debitPaise) : ''}</td>
                   <td className={tdMoney}>{l.creditPaise ? formatPaise(l.creditPaise) : ''}</td>
                 </tr>
@@ -123,7 +129,7 @@ export default function ManualJournalPage() {
             </tbody>
             <tfoot>
               <tr className="border-t border-line-200 bg-surface-sink">
-                <td className={`${td} font-medium`} colSpan={2}>Total</td>
+                <td className={`${td} font-medium`} colSpan={withProject ? 3 : 2}>Total</td>
                 <td className={`${tdMoney} font-medium`}>{formatPaise(j.totalDebitPaise)}</td>
                 <td className={`${tdMoney} font-medium`}>{formatPaise(j.totalCreditPaise)}</td>
               </tr>

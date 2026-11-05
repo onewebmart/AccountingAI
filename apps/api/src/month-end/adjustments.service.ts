@@ -20,7 +20,7 @@ export interface AdjustmentInput {
   date: string;
   narration: string;
   reason: string;
-  lines: Array<{ accountId: string; debitPaise: number; creditPaise: number }>;
+  lines: Array<{ accountId: string; debitPaise: number; creditPaise: number; projectId?: string | null }>;
   /** 1 for entries worked out from the books; capped below for the assistant's guesses. */
   confidence?: number;
   reverseOn?: string | null;
@@ -109,6 +109,7 @@ export class AdjustmentsService {
           creditPaise: l.creditPaise,
           confidence,
           isAiSuggested: confidence < 1,
+          projectId: l.projectId && Types.ObjectId.isValid(l.projectId) ? new Types.ObjectId(l.projectId) : null,
         })),
         financialYear: financialYearOf(input.date),
         narration: input.narration.slice(0, 300),

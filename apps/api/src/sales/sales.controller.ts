@@ -88,8 +88,8 @@ export class SalesController {
 
   @Get('invoices')
   @RequirePermission(Permission.MANAGE_SALES)
-  listInvoices(@Request() req: AuthRequest, @Query('status') status?: InvoiceStatus) {
-    return this.invoicesService.list(req.user.orgId, status);
+  listInvoices(@Request() req: AuthRequest, @Query('status') status?: InvoiceStatus, @Query('customerId') customerId?: string) {
+    return this.invoicesService.list(req.user.orgId, status, customerId || undefined);
   }
 
   @Post('invoices')

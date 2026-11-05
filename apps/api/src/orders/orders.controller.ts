@@ -115,6 +115,12 @@ export class OrdersController {
     return this.docs.lastPrice(req.user.orgId, customerId, itemId || null, description || null);
   }
 
+  // After the named quote routes (from-message, drafting, follow-ups), so they are not taken for an id.
+  @Get('quotes/:id')
+  quote(@Request() req: AuthRequest, @Param('id') id: string) {
+    return this.docs.getQuote(req.user.orgId, id);
+  }
+
   @Patch('quotes/:id')
   updateQuote(@Request() req: AuthRequest, @Param('id') id: string, @Body() body: QuoteUpdateDto) {
     return this.docs.updateQuote(req.user.orgId, req.user.sub, id, body);
@@ -145,6 +151,11 @@ export class OrdersController {
     return this.docs.listOrders(req.user.orgId);
   }
 
+  @Get('sales-orders/:id')
+  order(@Request() req: AuthRequest, @Param('id') id: string) {
+    return this.docs.getOrder(req.user.orgId, id);
+  }
+
   @Post('sales-orders')
   createOrder(@Request() req: AuthRequest, @Body() body: OrderDto) {
     return this.docs.createOrder(req.user.orgId, req.user.sub, body);
@@ -163,6 +174,11 @@ export class OrdersController {
   @Get('challans')
   challans(@Request() req: AuthRequest) {
     return this.docs.listChallans(req.user.orgId);
+  }
+
+  @Get('challans/:id')
+  challan(@Request() req: AuthRequest, @Param('id') id: string) {
+    return this.docs.getChallan(req.user.orgId, id);
   }
 
   @Post('challans')

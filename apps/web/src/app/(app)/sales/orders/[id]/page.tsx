@@ -11,7 +11,7 @@ import { PageHeader, Section, DetailGrid, TableCard, th, td, tdMoney } from '@/c
 import { notify } from '@/components/page/notifier';
 import { api } from '@/lib/api';
 import { formatPaise } from '@/lib/gst';
-import { errorText, openPdf, shortDate, useOrders, type OrderRow } from '@/components/sales/sales-data';
+import { errorText, openPdf, shortDate, useOrder, type OrderRow } from '@/components/sales/sales-data';
 import { DocStatusChip } from '@/components/sales/status';
 import { AmountsList } from '@/components/sales/doc-view';
 
@@ -90,7 +90,7 @@ function InvoicePart({ order }: { order: OrderRow }) {
 export default function SalesOrderPage() {
   const { id } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
-  const orders = useOrders();
+  const order = useOrder(id);
   const status = useMutation({
     mutationFn: (action: 'close' | 'cancel') => api.post(`/orders/sales-orders/${id}/${action}`),
     onSuccess: (_r, action) => {
@@ -100,14 +100,14 @@ export default function SalesOrderPage() {
     onError: (e) => notify(errorText(e), 'error'),
   });
 
-  if (orders.isError) return <QueryError error={orders.error} onRetry={() => void orders.refetch()} />;
-  if (orders.isLoading) return <p className="text-caption text-ink-400">Loading…</p>;
-  const o = (orders.data ?? []).find((x) => x._id === id);
+  if (order.isError) return <QueryError error={order.error} onRetry={() => void order.refetch()} />;
+  if (order.isLoading) return <p className="text-caption text-ink-400">Loading…</p>;
+  const o = order.data;
   if (!o) {
     return (
       <div>
         <PageHeader title="Sales order not found" back={{ href: '/sales/orders', label: 'Sales orders' }} />
-        <p className="text-body text-ink-500">It may belong to another organisation, or be older than the latest orders shown.</p>
+        <p className="text-body text-ink-500">There is no such sales order in this organisation.</p>
       </div>
     );
   }

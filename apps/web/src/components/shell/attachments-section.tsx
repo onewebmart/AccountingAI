@@ -22,7 +22,7 @@ export function AttachmentsSection({
   entityType,
   entityId,
 }: {
-  entityType: 'SalesInvoice' | 'PurchaseBill' | 'Journal' | 'PartyPayment' | 'Customer' | 'Vendor';
+  entityType: 'SalesInvoice' | 'PurchaseBill' | 'Journal' | 'PartyPayment' | 'Customer' | 'Vendor' | 'ExpenseClaim' | 'DirectExpense';
   entityId: string;
 }) {
   const queryClient = useQueryClient();

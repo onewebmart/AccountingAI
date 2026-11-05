@@ -138,7 +138,7 @@ function SummaryTab({ onToast }: { onToast: (m: string) => void }) {
                 </ul>
               </li>
             ))}
-            {noVendor.map((r) => <li key={r.itemId} className="rounded-md bg-pending-bg p-3 text-caption text-pending-fg">{r.name}: order {r.reorder!.suggestQty} {r.uqc}. {r.reorder!.reason} No bill from a vendor yet: raise the order on the <Link className="underline" href="/orders">orders page</Link>.</li>)}
+            {noVendor.map((r) => <li key={r.itemId} className="rounded-md bg-pending-bg p-3 text-caption text-pending-fg">{r.name}: order {r.reorder!.suggestQty} {r.uqc}. {r.reorder!.reason} No bill from a vendor yet: raise one under <Link className="underline" href="/purchases/orders/new">Purchase Orders</Link>.</li>)}
           </ul>
           {order.isError && <p className="mt-2 text-caption text-error-fg">{message(order.error)}</p>}
           <p className="mt-2 text-caption text-ink-500">A purchase order is a draft; it posts nothing and goes out when you send it.</p>

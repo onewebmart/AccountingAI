@@ -146,8 +146,10 @@ export class SalesInvoicesService {
    * `amountsPaise.total`, while every list of them needs a name and one total.
    * Joining here means the screen and the sub-ledger cannot disagree.
    */
-  async list(orgId: string, status?: InvoiceStatus): Promise<InvoiceListItem[]> {
-    const filter = status ? { status } : {};
+  /** The latest 200, or the latest 200 of one status or one customer. */
+  async list(orgId: string, status?: InvoiceStatus, customerId?: string): Promise<InvoiceListItem[]> {
+    if (customerId !== undefined && !Types.ObjectId.isValid(customerId)) return [];
+    const filter = { ...(status ? { status } : {}), ...(customerId ? { customerId: new Types.ObjectId(customerId) } : {}) };
     const invoices = await withOrg(orgId, () =>
       this.invoiceModel.find(filter).sort({ invoiceDate: -1 }).limit(200).exec(),
     );

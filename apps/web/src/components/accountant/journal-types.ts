@@ -13,7 +13,7 @@ export interface JournalItem {
   financialYear: string;
   /** The voucher number of the reversal that cancels this one. */
   reversedBy?: string;
-  lines: Array<{ accountId: string; accountName: string; description: string; debitPaise: number; creditPaise: number }>;
+  lines: Array<{ accountId: string; accountName: string; description: string; debitPaise: number; creditPaise: number; projectId?: string | null }>;
 }
 
 export const VOUCHER_TYPE_LABELS: Record<string, string> = {

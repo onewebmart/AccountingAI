@@ -123,7 +123,7 @@ function DocumentForm({ kind, onDone }: { kind: 'invoice' | 'bill'; onDone: (m: 
         {kind === 'invoice'
           ? 'Zero-rated under your letter of undertaking (LUT): no GST, reported in GSTR-1 table 6A. '
           : 'The vendor is owed the foreign amount; reverse-charge IGST is yours to pay on the rupee value. '}
-        Saved as a draft in rupees at this rate: post it from <Link className="underline" href={kind === 'invoice' ? '/sales' : '/purchase'}>{kind === 'invoice' ? 'Sales' : 'Purchase'}</Link>.
+        Saved as a draft in rupees at this rate: post it from <Link className="underline" href={kind === 'invoice' ? '/sales/invoices' : '/purchases/bills'}>{kind === 'invoice' ? 'Invoices' : 'Bills'}</Link>.
       </p>
     </section>
   );

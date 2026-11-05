@@ -162,6 +162,9 @@ describe('expense claims', () => {
     expect(listed).toMatchObject({ status: 'draft', sentBackReason: 'Attach the receipt' });
     // Someone else's claims are not an employee's to see or change.
     expect(await claims.list(orgId, new Types.ObjectId().toString(), UserRole.EMPLOYEE)).toEqual([]);
+    expect(await claims.get(orgId, EMPLOYEE, UserRole.EMPLOYEE, String(claim._id))).toMatchObject({ status: 'draft', title: 'Stationery' });
+    expect(await claims.get(orgId, MANAGER, UserRole.COMPANY_ADMIN, String(claim._id))).toMatchObject({ title: 'Stationery' });
+    await expect(claims.get(orgId, new Types.ObjectId().toString(), UserRole.EMPLOYEE, String(claim._id))).rejects.toThrow(/Claim not found/);
     await expect(claims.update(orgId, MANAGER, String(claim._id), { title: 'x' })).rejects.toThrow(/Only the employee/);
   });
 });

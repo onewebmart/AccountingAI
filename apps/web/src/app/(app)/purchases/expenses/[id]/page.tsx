@@ -13,6 +13,7 @@ import { useProjects } from '@/components/projects/project-select';
 import { api, ApiError } from '@/lib/api';
 import { formatPaise } from '@/lib/gst';
 import { HistoryLink, Line, errorText, shortDate, useLedgerRefresh } from '@/components/purchases/purchase-data';
+import { AttachmentsSection } from '@/components/shell/attachments-section';
 import type { ExpenseRow } from '@/components/purchases/expense-form';
 
 interface JournalView {
@@ -154,6 +155,8 @@ export default function ExpensePage() {
           <p className="text-body text-ink-600">Not posted yet. Posting makes one payment voucher: the expense{e.claimable && tax > 0 ? ' and input GST' : ''} debited, {e.paidThroughAccountName} credited.</p>
         </Section>
       )}
+
+      <AttachmentsSection entityType="DirectExpense" entityId={e._id} />
     </div>
   );
 }

@@ -76,6 +76,13 @@ export class ExpenseClaimsController {
     return this.claims.setRules(req.user.orgId, req.user.sub, body);
   }
 
+  // After 'rules', so that is not taken for an id.
+  @Get(':id')
+  @RequirePermission(Permission.UPLOAD_DOCUMENT)
+  get(@Request() req: AuthRequest, @Param('id') id: string) {
+    return this.claims.get(req.user.orgId, req.user.sub, req.user.role, id);
+  }
+
   @Post()
   @RequirePermission(Permission.UPLOAD_DOCUMENT)
   create(@Request() req: AuthRequest, @Body() body: ClaimDto) {

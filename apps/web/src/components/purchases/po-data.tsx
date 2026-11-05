@@ -2,6 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { getOrNull } from '@/components/sales/sales-data';
 import { StatusChip } from '@/components/page/page-shell';
 import type { Amounts } from './purchase-data';
 
@@ -42,6 +43,11 @@ export interface GrnRow {
   status: 'received' | 'cancelled';
   vendorChallanNo: string | null;
   lines: Array<{ poLine: number; description: string; qty: number; rejectedQty: number }>;
+}
+
+/** One PO with its received and billed quantities; null when this org has no such PO. */
+export function usePurchaseOrder(id: string) {
+  return useQuery({ queryKey: ['orders', 'purchase-orders', id], queryFn: () => getOrNull<PoRow>(`/orders/purchase-orders/${id}`) });
 }
 
 export function usePurchaseOrders() {

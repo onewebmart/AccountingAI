@@ -184,7 +184,7 @@ export default function DashboardPage() {
         overduePaise > 0
           ? `${formatRupeesCompact(overduePaise)} overdue from customers`
           : 'Nothing overdue',
-      href: '/sales',
+      href: '/sales/invoices',
       icon: <AlertTriangle size={14} />,
     },
     {

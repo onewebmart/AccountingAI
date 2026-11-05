@@ -12,7 +12,7 @@ import { notify } from '@/components/page/notifier';
 import { AttachmentsSection } from '@/components/shell/attachments-section';
 import { api } from '@/lib/api';
 import { formatPaise } from '@/lib/gst';
-import { errorText, shortDate, stateName, useInvoices, type CustomerRecord } from '@/components/sales/sales-data';
+import { errorText, shortDate, stateName, useCustomerInvoices, type CustomerRecord } from '@/components/sales/sales-data';
 import { InvoiceStatusChip } from '@/components/sales/status';
 
 /**
@@ -67,12 +67,12 @@ export default function CustomerPage() {
     queryKey: ['payments', 'advances', 'receipt'],
     queryFn: () => api.get<Array<{ partyId: string; unappliedPaise: number }>>('/payments/advances?kind=receipt'),
   });
-  const invoices = useInvoices();
+  const invoices = useCustomerInvoices(id);
 
   if (customer.isError) return <QueryError error={customer.error} onRetry={() => void customer.refetch()} />;
   if (!customer.data) return <p className="text-caption text-ink-400">Loading…</p>;
   const c = customer.data;
-  const theirs = (invoices.data ?? []).filter((i) => i.customerId === id);
+  const theirs = invoices.data ?? [];
   const held = (advances.data ?? []).find((a) => a.partyId === id)?.unappliedPaise ?? 0;
   const overdue = theirs.filter((i) => i.outstandingPaise > 0 && i.dueDate && i.dueDate < new Date().toISOString().slice(0, 10)).reduce((s, i) => s + i.outstandingPaise, 0);
 

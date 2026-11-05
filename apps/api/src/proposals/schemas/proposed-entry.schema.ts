@@ -18,6 +18,8 @@ class SuggestedLine {
   @Prop({ type: Number, required: true, min: 0 }) creditPaise: number;
   @Prop({ type: Number, required: true, min: 0, max: 1 }) confidence: number;
   @Prop({ type: Boolean, default: true }) isAiSuggested: boolean;
+  /** The project the line's money belongs to, carried onto the posted voucher. */
+  @Prop({ type: MongooseSchema.Types.ObjectId, default: null }) projectId?: Types.ObjectId | null;
 }
 
 @Schema({ _id: false })
@@ -116,6 +118,8 @@ export class ProposedEntry {
     /** Set once the accrual has been reversed ('manual' when a person did it). */
     reversalJournalId?: string;
     assets?: Array<{ assetId: string; amountPaise: number; from: string; to: string }>;
+    /** A bulk reclassification: the posted lines it moves, by journal and line index. */
+    sources?: Array<{ journalId: string; index: number }>;
   } | null;
 
   /** kind:refId:period, unique while in review or approved; cleared on reject so it can be drafted again. */

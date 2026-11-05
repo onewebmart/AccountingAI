@@ -10,7 +10,7 @@ import { QueryError } from '@/components/ui/query-error';
 import { EmptyState, ListToolbar, PageHeader, StatusChip, TableCard, td, tdMoney, th } from '@/components/page/page-shell';
 import { notify } from '@/components/page/notifier';
 import { errorText, shortDate } from '@/components/accountant/common';
-import { api, ApiError } from '@/lib/api';
+import { api } from '@/lib/api';
 import { formatPaise } from '@/lib/gst';
 
 /** An upload, as GET /documents lists it. */
@@ -27,16 +27,15 @@ interface ApiDocument {
   uploadedAt: string;
   source?: { channel: 'upload' | 'email' | 'whatsapp'; from: string | null };
 }
-/** An audit entry for a file attached to, or removed from, a record. */
-interface AuditRow {
+/** A file kept against a record, as GET /attachments lists them all. */
+interface ApiAttachment {
   id: string;
-  at: string;
+  fileName: string;
+  sizeBytes: number;
+  createdAt: string;
   entityType: string;
   entityId: string;
-  action: string;
-  actor: { name: string };
-  before: { attachmentId?: string } | null;
-  after: { attachmentId?: string; fileName?: string; sizeBytes?: number } | null;
+  uploadedByName: string;
 }
 
 type Status = 'reading' | 'ready' | 'posted' | 'rejected' | 'duplicate' | 'failed' | 'attached';
@@ -81,7 +80,8 @@ const RECORDS: Record<string, { label: string; href: (id: string) => string | nu
   PartyPayment: { label: 'Payment', href: () => null },
   Customer: { label: 'Customer', href: (id) => `/sales/customers/${id}` },
   Vendor: { label: 'Vendor', href: (id) => `/purchases/vendors/${id}` },
-  ExpenseClaim: { label: 'Expense claim', href: () => '/purchases/claims' },
+  ExpenseClaim: { label: 'Expense claim', href: (id) => `/purchases/claims/${id}` },
+  DirectExpense: { label: 'Expense', href: (id) => `/purchases/expenses/${id}` },
 };
 
 function uploadStatus(s: ApiDocument['status']): Status {
@@ -94,16 +94,6 @@ function uploadStatus(s: ApiDocument['status']): Status {
 }
 const size = (b: number | null) => (b == null ? '' : b >= 1_048_576 ? `${(b / 1_048_576).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`);
 
-/** Files attached to records, from the audit trail: attached, and not removed since. */
-async function attachments(): Promise<AuditRow[]> {
-  const [attached, removed] = await Promise.all([
-    api.get<{ entries: AuditRow[] }>('/audit?action=ATTACH&limit=200'),
-    api.get<{ entries: AuditRow[] }>('/audit?action=DETACH&limit=200'),
-  ]);
-  const gone = new Set(removed.entries.map((r) => r.before?.attachmentId).filter(Boolean));
-  return attached.entries.filter((r) => r.after?.attachmentId && !gone.has(r.after.attachmentId));
-}
-
 /** Every file in the books: uploads read by the inbox, and files kept against records. */
 export default function DocumentsPage() {
   const router = useRouter();
@@ -113,7 +103,7 @@ export default function DocumentsPage() {
   const [busy, setBusy] = useState<string | null>(null);
 
   const docs = useQuery({ queryKey: ['documents'], queryFn: () => api.get<{ data: ApiDocument[] }>('/documents') });
-  const files = useQuery({ queryKey: ['documents', 'attachments'], queryFn: attachments, retry: false });
+  const files = useQuery({ queryKey: ['documents', 'attachments'], queryFn: () => api.get<ApiAttachment[]>('/attachments') });
 
   const rows: Row[] = [
     ...(docs.data?.data ?? []).map((d): Row => {
@@ -127,10 +117,12 @@ export default function DocumentsPage() {
     }),
     ...(files.data ?? []).map((a): Row => {
       const rec = RECORDS[a.entityType];
+      const href = rec?.href(a.entityId) ?? null;
       return {
-        key: `a:${a.after!.attachmentId}`, id: a.after!.attachmentId!, source: 'attachment', name: a.after?.fileName ?? 'file', type: 'attachment', status: 'attached', at: a.at,
-        detail: `${rec?.label ?? a.entityType} · attached by ${a.actor.name}`, amountPaise: null, sizeBytes: a.after?.sizeBytes ?? null, proposalId: null,
-        record: rec ? { href: rec.href(a.entityId), label: `Open ${rec.label.toLowerCase()}` } : null,
+        key: `a:${a.id}`, id: a.id, source: 'attachment', name: a.fileName, type: 'attachment', status: 'attached', at: a.createdAt,
+        detail: `${rec?.label ?? a.entityType} · attached by ${a.uploadedByName}`, amountPaise: null, sizeBytes: a.sizeBytes, proposalId: null,
+        // A record with no page of its own (a payment) has no link; its file still opens.
+        record: rec && href ? { href, label: `Open ${rec.label.toLowerCase()}` } : null,
       };
     }),
   ].sort((x, y) => y.at.localeCompare(x.at));
@@ -168,12 +160,11 @@ export default function DocumentsPage() {
     }
   };
 
-  const noAudit = files.isError && files.error instanceof ApiError && files.error.status === 403;
   return (
     <div>
       <PageHeader
         title="Documents"
-        subtitle="Every file in the books: bills, invoices, statements and receipts sent to the inbox, and files kept against invoices, bills, vouchers and parties."
+        subtitle="Every file in the books: bills, invoices, statements and receipts sent to the inbox, and files kept against invoices, bills, vouchers, expenses, claims and parties."
         actions={<Button asChild><Link href="/inbox">Upload in the inbox</Link></Button>}
       />
       <ListToolbar
@@ -193,11 +184,7 @@ export default function DocumentsPage() {
       </ListToolbar>
 
       {docs.isError && <QueryError error={docs.error} onRetry={() => void docs.refetch()} />}
-      {files.isError && (
-        <p className="mb-3 text-caption text-ink-500">
-          {noAudit ? 'Files attached to records are listed for people who can read the audit trail; open them from each record.' : `Couldn't list the files attached to records: ${errorText(files.error)}`}
-        </p>
-      )}
+      {files.isError && <p className="mb-3 text-caption text-error-fg">Couldn&apos;t list the files attached to records: {errorText(files.error)}</p>}
 
       {docs.isLoading || files.isLoading ? (
         <p className="flex items-center gap-2 py-10 text-caption text-ink-400"><Loader2 size={14} className="animate-spin" /> Loading documents…</p>
@@ -250,7 +237,7 @@ export default function DocumentsPage() {
             </tbody>
           </table>
           <div className="border-t border-line-200 bg-surface-sink px-3 py-2.5 text-caption text-ink-500">
-            {shown.length} file{shown.length === 1 ? '' : 's'}. The latest 100 uploads and 200 attachments.
+            {shown.length} file{shown.length === 1 ? '' : 's'}. The latest 100 uploads and 300 attachments.
           </div>
         </TableCard>
       )}

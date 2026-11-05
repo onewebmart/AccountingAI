@@ -13,7 +13,7 @@ import { api } from '@/lib/api';
 import { formatPaise } from '@/lib/gst';
 import { AmountsSummary } from '@/components/purchases/bill-lines';
 import { HistoryLink, errorText, shortDate, todayIso, useLedgerRefresh } from '@/components/purchases/purchase-data';
-import { PoStatusChip, useGrns, usePurchaseOrders, type PoRow } from '@/components/purchases/po-data';
+import { PoStatusChip, useGrns, usePurchaseOrder, type PoRow } from '@/components/purchases/po-data';
 
 const round3 = (n: number) => Math.round(n * 1000) / 1000;
 const qtyCell = 'w-24 rounded-md border border-line-200 bg-white px-2 py-1 text-right font-mono text-caption focus:outline-none focus:ring-2 focus:ring-saffron-600/40';
@@ -138,7 +138,7 @@ function BillFromPo({ po }: { po: PoRow }) {
 /** One purchase order: its lines and progress, sending it, receiving goods, billing, and its goods notes. */
 export default function PurchaseOrderPage() {
   const { id } = useParams<{ id: string }>();
-  const pos = usePurchaseOrders();
+  const pos = usePurchaseOrder(id);
   const grns = useGrns();
   const refetch = () => {
     void pos.refetch();
@@ -163,8 +163,8 @@ export default function PurchaseOrderPage() {
   });
 
   if (pos.isError) return <QueryError error={pos.error} onRetry={() => void pos.refetch()} />;
-  if (!pos.data) return <p className="text-caption text-ink-400">Loading…</p>;
-  const po = pos.data.find((p) => p._id === id);
+  if (pos.isLoading) return <p className="text-caption text-ink-400">Loading…</p>;
+  const po = pos.data;
   if (!po) return <QueryError error={new Error('This purchase order was not found.')} />;
 
   const notes = (grns.data ?? []).filter((g) => g.purchaseOrderId === po._id);

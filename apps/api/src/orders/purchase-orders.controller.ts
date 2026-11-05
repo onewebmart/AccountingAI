@@ -58,6 +58,11 @@ export class PurchaseOrdersController {
     return this.docs.listPos(req.user.orgId);
   }
 
+  @Get('purchase-orders/:id')
+  po(@Request() req: AuthRequest, @Param('id') id: string) {
+    return this.docs.getPo(req.user.orgId, id);
+  }
+
   @Post('purchase-orders')
   create(@Request() req: AuthRequest, @Body() body: PoDto) {
     return this.docs.createPo(req.user.orgId, req.user.sub, body);

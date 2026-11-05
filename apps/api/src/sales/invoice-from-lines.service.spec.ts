@@ -41,6 +41,7 @@ const ACTOR = new Types.ObjectId().toString();
 
 let moduleRef: TestingModule;
 let fromLines: InvoiceFromLinesService;
+let invoiceList: SalesInvoicesService;
 let invoices: Model<SalesInvoiceDocument>;
 let customers: Model<CustomerDocument>;
 let settings: Model<unknown>;
@@ -75,6 +76,7 @@ beforeAll(async () => {
     ],
   }).compile();
   fromLines = moduleRef.get(InvoiceFromLinesService);
+  invoiceList = moduleRef.get(SalesInvoicesService);
   invoices = moduleRef.get(getModelToken(SalesInvoice.name));
   customers = moduleRef.get(getModelToken(Customer.name));
   settings = moduleRef.get(getModelToken(OrgSettings.name));
@@ -150,6 +152,16 @@ describe('an invoice from its lines', () => {
     expect(invoice.invoiceNumber).toBe('KS/101');
     expect(invoice.amountsPaise).toMatchObject({ taxableValue: 300000, cgst: 0, sgst: 0, igst: 42000, total: 342000 });
     expect(invoice.lineItems.map((l) => l.taxRatePct)).toEqual([18, 12]);
+  });
+
+  it("lists one customer's invoices, and none for a customer that is not one", async () => {
+    const o = await org();
+    const mine = await fromLines.create(o.orgId, ACTOR, { customerId: o.local, invoiceDate: '2026-11-05', lines: lines(o.project, o.item) });
+    await fromLines.create(o.orgId, ACTOR, { customerId: o.away, invoiceDate: '2026-11-05', lines: lines(o.project, o.item) });
+    expect((await invoiceList.list(o.orgId)).length).toBe(2);
+    expect((await invoiceList.list(o.orgId, undefined, o.local)).map((i) => String(i._id))).toEqual([String(mine._id)]);
+    expect(await invoiceList.list(o.orgId, InvoiceStatus.POSTED, o.local)).toEqual([]);
+    expect(await invoiceList.list(o.orgId, undefined, 'not-an-id')).toEqual([]);
   });
 
   it('refuses a bad line and saves nothing', async () => {

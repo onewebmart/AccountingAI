@@ -55,8 +55,8 @@ export class SalesDocsService {
 
   // ── Quotes ────────────────────────────────────────────────────────────────
 
-  async listQuotes(orgId: string, today = todayIst()): Promise<Array<Record<string, unknown>>> {
-    const quotes = await this.quoteModel.find({ orgId }).sort({ date: -1, number: -1 }).limit(300).lean().exec();
+  async listQuotes(orgId: string, today = todayIst(), id?: string): Promise<Array<Record<string, unknown>>> {
+    const quotes = await this.quoteModel.find(oneOrAll(orgId, id)).sort({ date: -1, number: -1 }).limit(300).lean().exec();
     const names = await this.customerNames(orgId, quotes.map((q) => q.customerId));
     return quotes.map((q) => ({ ...q, customerName: names.get(String(q.customerId)) ?? 'Unknown', expired: q.status === 'sent' && q.validUntil < today }));
   }
@@ -278,8 +278,8 @@ export class SalesDocsService {
   }
 
   /** Orders with each line's ordered, invoiced and delivered quantities. */
-  async listOrders(orgId: string): Promise<Array<Record<string, unknown>>> {
-    const orders = await this.orderModel.find({ orgId }).sort({ date: -1, number: -1 }).limit(300).lean().exec();
+  async listOrders(orgId: string, id?: string): Promise<Array<Record<string, unknown>>> {
+    const orders = await this.orderModel.find(oneOrAll(orgId, id)).sort({ date: -1, number: -1 }).limit(300).lean().exec();
     const names = await this.customerNames(orgId, orders.map((o) => o.customerId));
     const progress = await this.progress(orgId, orders.map((o) => String(o._id)));
     return orders.map((o) => {
@@ -350,8 +350,8 @@ export class SalesDocsService {
     return challan;
   }
 
-  async listChallans(orgId: string): Promise<Array<Record<string, unknown>>> {
-    const challans = await this.challanModel.find({ orgId }).sort({ date: -1, number: -1 }).limit(300).lean().exec();
+  async listChallans(orgId: string, id?: string): Promise<Array<Record<string, unknown>>> {
+    const challans = await this.challanModel.find(oneOrAll(orgId, id)).sort({ date: -1, number: -1 }).limit(300).lean().exec();
     const names = await this.customerNames(orgId, challans.map((c) => c.customerId));
     return challans.map((c) => ({ ...c, customerName: names.get(String(c.customerId)) ?? 'Unknown' }));
   }
@@ -364,6 +364,20 @@ export class SalesDocsService {
     await challan.save();
     await this.audit.record({ orgId, entityType: 'DeliveryChallan', entityId: id, action: status.toUpperCase(), performedBy: actorId, before: { status: 'issued' }, after: { status } });
     return challan;
+  }
+
+  // ── One record, as its list shows it ─────────────────────────────────────
+
+  async getQuote(orgId: string, id: string) {
+    return only(await this.listQuotes(orgId, todayIst(), id), 'Quote');
+  }
+
+  async getOrder(orgId: string, id: string) {
+    return only(await this.listOrders(orgId, id), 'Sales order');
+  }
+
+  async getChallan(orgId: string, id: string) {
+    return only(await this.listChallans(orgId, id), 'Challan');
   }
 
   // ── PDFs ──────────────────────────────────────────────────────────────────
@@ -492,4 +506,16 @@ export class SalesDocsService {
     if (!o) throw new NotFoundException('Sales order not found');
     return o;
   }
+}
+
+/** The org's records, or just the one asked for; an id that cannot be one finds nothing. */
+function oneOrAll(orgId: string, id?: string): Record<string, unknown> {
+  if (id === undefined) return { orgId };
+  if (!Types.ObjectId.isValid(id)) throw new NotFoundException('Not found');
+  return { orgId, _id: new Types.ObjectId(id) };
+}
+
+function only<T>(rows: T[], what: string): T {
+  if (rows.length === 0) throw new NotFoundException(`${what} not found`);
+  return rows[0];
 }

@@ -339,9 +339,9 @@ export default function MigrationPage() {
                   balances to collect or pay.
                 </p>
                 <p className="text-caption text-ink-500">
-                  See them on <Link href="/accounts" className="text-brand-600 hover:underline">Chart of accounts</Link>,{' '}
-                  <Link href="/sales" className="text-brand-600 hover:underline">Sales</Link> and{' '}
-                  <Link href="/purchase" className="text-brand-600 hover:underline">Purchase</Link>. Reversing the opening voucher undoes the balances.
+                  See them on <Link href="/accountant/chart-of-accounts" className="text-brand-600 hover:underline">Chart of accounts</Link>,{' '}
+                  <Link href="/sales/invoices" className="text-brand-600 hover:underline">Invoices</Link> and{' '}
+                  <Link href="/purchases/bills" className="text-brand-600 hover:underline">Bills</Link>. Reversing the opening voucher undoes the balances.
                 </p>
               </div>
             ) : (

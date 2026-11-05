@@ -35,6 +35,7 @@ export interface ApproveInput {
     debitPaise: number;
     creditPaise: number;
     description?: string;
+    projectId?: string | null;
   }>;
 }
 
@@ -377,11 +378,13 @@ export class ProposalsService {
       accountName: l.accountName,
       debitPaise: l.debitPaise,
       creditPaise: l.creditPaise,
+      projectId: l.projectId ? l.projectId.toString() : null,
     }))).map((l) => ({
       accountId: l.accountId,
       description: l.accountName,
       debitPaise: l.debitPaise,
       creditPaise: l.creditPaise,
+      projectId: l.projectId ?? null,
     }));
 
     const { journal, updated, sync } = await this.postingService.inTransaction(async (session) => {

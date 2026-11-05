@@ -23,6 +23,7 @@ export interface JournalListItem {
     description: string;
     debitPaise: number;
     creditPaise: number;
+    projectId: string | null;
   }>;
 }
 
@@ -145,6 +146,7 @@ export class JournalsService {
         description: l.description ?? '',
         debitPaise: l.debitPaise,
         creditPaise: l.creditPaise,
+        projectId: l.projectId ? String(l.projectId) : null,
       })),
     };
   }

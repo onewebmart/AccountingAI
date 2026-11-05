@@ -145,6 +145,9 @@ describe('purchase orders', () => {
     const [listed] = (await docs.listPos(orgId)) as Array<{ status: string; lines: Array<{ receivedQty: number; billedQty: number }> }>;
     expect(listed.status).toBe('closed');
     expect(listed.lines.map((l) => [l.receivedQty, l.billedQty])).toEqual([[120, 120], [4, 4]]);
+    // By id, what the list shows; not to another org.
+    expect(await docs.getPo(orgId, String(po._id))).toEqual(listed);
+    await expect(docs.getPo(new Types.ObjectId().toString(), String(po._id))).rejects.toThrow(/Purchase order not found/);
   });
 
   it('matches a typed bill to its PO, and keeps a billed goods note', async () => {

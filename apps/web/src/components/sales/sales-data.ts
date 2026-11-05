@@ -246,6 +246,37 @@ export function useInvoices() {
   return useQuery({ queryKey: ['sales', 'invoices'], queryFn: () => api.get<InvoiceRow[]>('/sales/invoices') });
 }
 
+/** A customer's invoices: the latest 200 of theirs, not of everyone's. */
+export function useCustomerInvoices(customerId: string) {
+  return useQuery({
+    queryKey: ['sales', 'invoices', { customerId }],
+    queryFn: () => api.get<InvoiceRow[]>(`/sales/invoices?customerId=${encodeURIComponent(customerId)}`),
+    enabled: !!customerId,
+  });
+}
+
+/** One record by id, shaped as its list shows it; null when this org has no such record. */
+export async function getOrNull<T>(path: string): Promise<T | null> {
+  try {
+    return await api.get<T>(path);
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 404) return null;
+    throw e;
+  }
+}
+
+export function useQuote(id: string) {
+  return useQuery({ queryKey: ['orders', 'quotes', id], queryFn: () => getOrNull<QuoteRow>(`/orders/quotes/${id}`) });
+}
+
+export function useOrder(id: string) {
+  return useQuery({ queryKey: ['orders', 'sales-orders', id], queryFn: () => getOrNull<OrderRow>(`/orders/sales-orders/${id}`) });
+}
+
+export function useChallan(id: string) {
+  return useQuery({ queryKey: ['orders', 'challans', id], queryFn: () => getOrNull<ChallanRow>(`/orders/challans/${id}`) });
+}
+
 export function useQuotes() {
   return useQuery({ queryKey: ['orders', 'quotes'], queryFn: () => api.get<QuoteRow[]>('/orders/quotes') });
 }

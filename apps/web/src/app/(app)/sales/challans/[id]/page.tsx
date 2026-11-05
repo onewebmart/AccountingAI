@@ -9,7 +9,7 @@ import { QueryError } from '@/components/ui/query-error';
 import { PageHeader, Section, DetailGrid } from '@/components/page/page-shell';
 import { notify } from '@/components/page/notifier';
 import { api } from '@/lib/api';
-import { CHALLAN_REASON, errorText, openPdf, shortDate, useChallans } from '@/components/sales/sales-data';
+import { CHALLAN_REASON, errorText, openPdf, shortDate, useChallan } from '@/components/sales/sales-data';
 import { DocStatusChip } from '@/components/sales/status';
 import { DocLinesTable } from '@/components/sales/doc-view';
 
@@ -17,7 +17,7 @@ import { DocLinesTable } from '@/components/sales/doc-view';
 export default function ChallanPage() {
   const { id } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
-  const challans = useChallans();
+  const challan = useChallan(id);
   const status = useMutation({
     mutationFn: (action: 'return' | 'cancel') => api.post(`/orders/challans/${id}/${action}`),
     onSuccess: (_r, action) => {
@@ -27,14 +27,14 @@ export default function ChallanPage() {
     onError: (e) => notify(errorText(e), 'error'),
   });
 
-  if (challans.isError) return <QueryError error={challans.error} onRetry={() => void challans.refetch()} />;
-  if (challans.isLoading) return <p className="text-caption text-ink-400">Loading…</p>;
-  const c = (challans.data ?? []).find((x) => x._id === id);
+  if (challan.isError) return <QueryError error={challan.error} onRetry={() => void challan.refetch()} />;
+  if (challan.isLoading) return <p className="text-caption text-ink-400">Loading…</p>;
+  const c = challan.data;
   if (!c) {
     return (
       <div>
         <PageHeader title="Challan not found" back={{ href: '/sales/challans', label: 'Delivery challans' }} />
-        <p className="text-body text-ink-500">It may belong to another organisation, or be older than the latest 300 challans.</p>
+        <p className="text-body text-ink-500">There is no such challan in this organisation.</p>
       </div>
     );
   }

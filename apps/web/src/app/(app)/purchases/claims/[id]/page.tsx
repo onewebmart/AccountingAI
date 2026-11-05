@@ -12,6 +12,7 @@ import { api, ApiError } from '@/lib/api';
 import { formatPaise } from '@/lib/gst';
 import { CLAIM_STATUS, ClaimLinesEditor, claimLinesToApi, claimToEdit, type Claim, type ClaimEditLine } from '@/components/purchases/claim-lines';
 import { HistoryLink, Line, Voucher, errorText, shortDate, todayIso, useExpenseAccounts } from '@/components/purchases/purchase-data';
+import { getOrNull } from '@/components/sales/sales-data';
 
 /** A draft's lines, editable by the employee who made it; saved, or saved and submitted. */
 function DraftLines({ claim, onDone }: { claim: Claim; onDone: () => void }) {
@@ -44,7 +45,7 @@ function DraftLines({ claim, onDone }: { claim: Claim; onDone: () => void }) {
 export default function ClaimPage() {
   const { id } = useParams<{ id: string }>();
   const qc = useQueryClient();
-  const claims = useQuery({ queryKey: ['expense-claims'], queryFn: () => api.get<Claim[]>('/expense-claims') });
+  const claims = useQuery({ queryKey: ['expense-claims', id], queryFn: () => getOrNull<Claim>(`/expense-claims/${id}`) });
   const accounts = useExpenseAccounts();
   const [paidOn, setPaidOn] = useState(todayIso());
   const [held, setHeld] = useState<string | null>(null);
@@ -71,8 +72,8 @@ export default function ClaimPage() {
   });
 
   if (claims.isError) return <QueryError error={claims.error} onRetry={() => void claims.refetch()} />;
-  if (!claims.data) return <p className="text-caption text-ink-400">Loading…</p>;
-  const c = claims.data.find((x) => x._id === id);
+  if (claims.isLoading) return <p className="text-caption text-ink-400">Loading…</p>;
+  const c = claims.data;
   if (!c) return <QueryError error={new Error('This claim was not found, or it is not yours to see.')} />;
   const s = CLAIM_STATUS[c.status];
   const accountName = (aid: string) => accounts.data.find((a) => a._id === String(aid))?.name ?? 'Account';

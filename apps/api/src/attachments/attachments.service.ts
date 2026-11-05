@@ -4,6 +4,7 @@ import { createHash } from 'crypto';
 import { Connection, Model, Types } from 'mongoose';
 import { AuditService } from '../gl/audit.service';
 import { StorageService } from '../documents/storage.service';
+import { User, UserDocument } from '../tenancy/schemas/user.schema';
 import { ATTACHABLE, AttachableType, Attachment, AttachmentDocument } from './schemas/attachment.schema';
 
 /** What may be attached: documents and images people actually keep. */
@@ -19,6 +20,7 @@ const MODEL: Record<AttachableType, string> = {
   Customer: 'Customer',
   Vendor: 'Vendor',
   ExpenseClaim: 'ExpenseClaim',
+  DirectExpense: 'DirectExpense',
 };
 
 /**
@@ -30,6 +32,7 @@ const MODEL: Record<AttachableType, string> = {
 export class AttachmentsService {
   constructor(
     @InjectModel(Attachment.name) private attachmentModel: Model<AttachmentDocument>,
+    @InjectModel(User.name) private userModel: Model<UserDocument>,
     @InjectConnection() private connection: Connection,
     private storage: StorageService,
     private audit: AuditService,
@@ -71,6 +74,15 @@ export class AttachmentsService {
     if (!Types.ObjectId.isValid(entityId)) throw new NotFoundException('Record not found');
     const rows = await this.attachmentModel.find({ orgId, entityType: type, entityId: new Types.ObjectId(entityId), removedAt: null }).sort({ createdAt: -1 }).exec();
     return rows.map((r) => this.row(r));
+  }
+
+  /** The latest files kept against any record, for the documents library: each with its record and who added it. */
+  async listAll(orgId: string) {
+    const rows = await this.attachmentModel.find({ orgId, removedAt: null }).sort({ createdAt: -1 }).limit(300).exec();
+    const ids = [...new Set(rows.map((r) => r.uploadedBy))].filter((id) => Types.ObjectId.isValid(id) && id.length === 24);
+    const users = ids.length ? await this.userModel.find({ _id: { $in: ids.map((id) => new Types.ObjectId(id)) } }, { name: 1, email: 1 }).lean().exec() : [];
+    const name = new Map(users.map((u) => [u._id.toString(), u.name || u.email]));
+    return rows.map((r) => ({ ...this.row(r), entityType: r.entityType, entityId: String(r.entityId), uploadedByName: name.get(r.uploadedBy) ?? 'Someone' }));
   }
 
   /** A short-lived link to open the file. */

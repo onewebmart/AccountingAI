@@ -27,8 +27,10 @@ export class AttachmentsController {
 
   @Get()
   @RequirePermission(Permission.VIEW_DOCUMENT)
-  list(@Request() req: AuthRequest, @Query('entityType') entityType: string, @Query('entityId') entityId: string) {
-    return this.attachments.list(req.user.orgId, entityType, entityId);
+  list(@Request() req: AuthRequest, @Query('entityType') entityType?: string, @Query('entityId') entityId?: string) {
+    // No record named: every file kept against any record, for the documents library.
+    if (!entityType && !entityId) return this.attachments.listAll(req.user.orgId);
+    return this.attachments.list(req.user.orgId, entityType ?? '', entityId ?? '');
   }
 
   @Post()

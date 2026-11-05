@@ -75,9 +75,11 @@ export class ExpenseClaimsService implements OnModuleInit {
   }
 
   /** An employee sees their own claims; whoever may see reports sees all. */
-  async list(orgId: string, actorId: string, role: string): Promise<Array<Record<string, unknown>>> {
+  async list(orgId: string, actorId: string, role: string, id?: string): Promise<Array<Record<string, unknown>>> {
     const all = hasPermission(role as UserRole, Permission.POST_JOURNAL) || hasPermission(role as UserRole, Permission.APPROVE_PROPOSAL);
-    const claims = await this.claimModel.find({ orgId, ...(all ? {} : { employeeId: actorId }) }).sort({ createdAt: -1 }).limit(300).lean().exec();
+    if (id !== undefined && !Types.ObjectId.isValid(id)) throw new NotFoundException('Claim not found');
+    const one = id === undefined ? {} : { _id: new Types.ObjectId(id) };
+    const claims = await this.claimModel.find({ orgId, ...one, ...(all ? {} : { employeeId: actorId }) }).sort({ createdAt: -1 }).limit(300).lean().exec();
     // Sent back by an approver: back to the maker as a draft to fix.
     const latest = await this.approvals.latestFor(orgId, 'expense_claim', claims.filter((c) => c.status === 'submitted').map((c) => String(c._id)));
     const out: Array<Record<string, unknown>> = [];
@@ -89,6 +91,13 @@ export class ExpenseClaimsService implements OnModuleInit {
       } else out.push(c);
     }
     return out;
+  }
+
+  /** One claim, to whoever may see it in the list. */
+  async get(orgId: string, actorId: string, role: string, id: string) {
+    const [claim] = await this.list(orgId, actorId, role, id);
+    if (!claim) throw new NotFoundException('Claim not found');
+    return claim;
   }
 
   async create(orgId: string, actorId: string, input: { title: string; lines: ClaimLineInput[] }) {

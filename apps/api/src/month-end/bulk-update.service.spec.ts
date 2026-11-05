@@ -206,9 +206,10 @@ describe('bulk update', () => {
     const approved = (await proposalModel.findById(result.proposalId).lean().exec())!;
     const reclass = (await journals.findById(approved.journalId).lean().exec())!;
     expect(reclass).toMatchObject({ voucherType: VoucherType.JOURNAL, date: '2025-10-31', status: 'posted' });
-    expect(reclass.lines.map((l) => [String(l.accountId), l.debitPaise, l.creditPaise])).toEqual([
-      [id('Repairs & Maintenance'), 1_500_000, 0],
-      [id('Rent'), 0, 1_500_000],
+    // Both lines keep the project the moved lines shared, so its figures move with the money.
+    expect(reclass.lines.map((l) => [String(l.accountId), l.debitPaise, l.creditPaise, l.projectId ? String(l.projectId) : null])).toEqual([
+      [id('Repairs & Maintenance'), 1_500_000, 0, project],
+      [id('Rent'), 0, 1_500_000, project],
     ]);
     expect(await snapshot([a._id, b._id])).toEqual(before);
     // The originals show as moved; the reclass's own credit to Rent is a line like any other.

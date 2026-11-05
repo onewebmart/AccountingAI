@@ -120,6 +120,10 @@ describe('quotes', () => {
     expect((await docs.answerQuote(orgId, ACTOR, String(q1._id), 'accepted')).status).toBe('accepted');
     await expect(docs.createQuote(orgId, ACTOR, { customerId: local, lines: [{ ...pen, taxRatePct: 17 }] })).rejects.toThrow(/slab/);
     expect(await docs.listQuotes(new Types.ObjectId().toString())).toEqual([]);
+    // One quote by id, as the list shows it; not another org's, and not a non-id.
+    expect(await docs.getQuote(orgId, String(q2._id))).toMatchObject({ number: 'QT/2026-27/0002', customerName: expect.any(String), expired: false });
+    await expect(docs.getQuote(new Types.ObjectId().toString(), String(q2._id))).rejects.toThrow(/Quote not found/);
+    await expect(docs.getQuote(orgId, 'not-an-id')).rejects.toThrow(/not found/i);
   });
 });
 
@@ -141,11 +145,18 @@ describe('orders and challans', () => {
 
     const [order] = (await docs.listOrders(orgId)) as Array<{ lines: Array<{ invoicedQty: number; deliveredQty: number }>; status: string }>;
     expect(order.lines.map((l) => [l.invoicedQty, l.deliveredQty])).toEqual([[60, 0], [0, 5]]);
+    // By id, the same progress the list shows.
+    const one = (await docs.getOrder(orgId, made.id)) as { lines: Array<{ invoicedQty: number; deliveredQty: number }> };
+    expect(one.lines.map((l) => [l.invoicedQty, l.deliveredQty])).toEqual([[60, 0], [0, 5]]);
+    await expect(docs.getOrder(new Types.ObjectId().toString(), made.id)).rejects.toThrow(/Sales order not found/);
 
     // The rest of both lines invoiced: the order closes.
     await docs.invoiceOrder(orgId, ACTOR, made.id, [{ orderLine: 0, qty: 40 }, { orderLine: 1, qty: 5 }]);
     expect(((await docs.listOrders(orgId))[0] as { status: string }).status).toBe('closed');
-    const pdf = await docs.pdf(orgId, 'challan', String((await docs.listChallans(orgId) as Array<{ _id: Types.ObjectId }>)[0]._id));
+    const challanId = String((await docs.listChallans(orgId) as Array<{ _id: Types.ObjectId }>)[0]._id);
+    expect(await docs.getChallan(orgId, challanId)).toMatchObject({ reason: 'supply', customerName: expect.any(String) });
+    await expect(docs.getChallan(new Types.ObjectId().toString(), challanId)).rejects.toThrow(/Challan not found/);
+    const pdf = await docs.pdf(orgId, 'challan', challanId);
     expect(pdf.content.toString('latin1')).toContain('DELIVERY CHALLAN');
   });
 });

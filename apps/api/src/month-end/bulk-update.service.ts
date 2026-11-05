@@ -203,8 +203,8 @@ export class BulkUpdateService {
       narration: `Reclassification from ${from.name} to ${to.name}`,
       reason,
       lines: net > 0
-        ? [{ accountId: toId, debitPaise: amount, creditPaise: 0 }, { accountId: fromId, debitPaise: 0, creditPaise: amount }]
-        : [{ accountId: fromId, debitPaise: amount, creditPaise: 0 }, { accountId: toId, debitPaise: 0, creditPaise: amount }],
+        ? [{ accountId: toId, debitPaise: amount, creditPaise: 0, projectId }, { accountId: fromId, debitPaise: 0, creditPaise: amount, projectId }]
+        : [{ accountId: fromId, debitPaise: amount, creditPaise: 0, projectId }, { accountId: toId, debitPaise: 0, creditPaise: amount, projectId }],
       sources: refs.map((r) => ({ journalId: r.journalId, index: r.index })),
     });
     return { proposalId: String(proposal._id), amountPaise: amount, direction: net > 0 ? 'debit' : 'credit', date, period, lines: chosen.length, projectId };

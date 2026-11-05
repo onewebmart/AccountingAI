@@ -53,8 +53,9 @@ export class PurchaseDocsService {
   }
 
   /** Each PO with its lines' ordered, received and billed quantities. */
-  async listPos(orgId: string): Promise<Array<Record<string, unknown>>> {
-    const pos = await this.poModel.find({ orgId }).sort({ date: -1, number: -1 }).limit(300).lean().exec();
+  async listPos(orgId: string, id?: string): Promise<Array<Record<string, unknown>>> {
+    if (id !== undefined && !Types.ObjectId.isValid(id)) throw new NotFoundException('Purchase order not found');
+    const pos = await this.poModel.find(id === undefined ? { orgId } : { orgId, _id: new Types.ObjectId(id) }).sort({ date: -1, number: -1 }).limit(300).lean().exec();
     const vendors = await this.vendorModel.find({ orgId, _id: { $in: pos.map((p) => p.vendorId) } }, { name: 1 }).lean().exec();
     const name = new Map(vendors.map((v) => [String(v._id), v.name]));
     const progress = await this.progress(orgId, pos.map((p) => String(p._id)));
@@ -62,6 +63,13 @@ export class PurchaseDocsService {
       const pr = progress.get(String(p._id))!;
       return { ...p, vendorName: name.get(String(p.vendorId)) ?? 'Unknown', lines: p.lines.map((l, i) => ({ ...l, receivedQty: pr.received.get(i) ?? 0, billedQty: pr.billed.get(i) ?? 0 })) };
     });
+  }
+
+  /** One PO, with what has been received and billed against each line. */
+  async getPo(orgId: string, id: string) {
+    const [po] = await this.listPos(orgId, id);
+    if (!po) throw new NotFoundException('Purchase order not found');
+    return po;
   }
 
   /** Emails the PO to the vendor when there is mail to send it; marks it sent either way. */

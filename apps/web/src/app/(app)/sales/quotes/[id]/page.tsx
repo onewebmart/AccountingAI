@@ -10,7 +10,7 @@ import { PageHeader, Section, DetailGrid } from '@/components/page/page-shell';
 import { notify } from '@/components/page/notifier';
 import { api } from '@/lib/api';
 import { formatPaise } from '@/lib/gst';
-import { errorText, openPdf, shortDate, useQuotes } from '@/components/sales/sales-data';
+import { errorText, openPdf, shortDate, useQuote } from '@/components/sales/sales-data';
 import { DocStatusChip } from '@/components/sales/status';
 import { AmountsList, DocLinesTable } from '@/components/sales/doc-view';
 
@@ -21,7 +21,7 @@ export default function QuotePage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const queryClient = useQueryClient();
-  const quotes = useQuotes();
+  const quote = useQuote(id);
 
   const act = useMutation({
     mutationFn: (action: Action) => api.post<{ emailed?: boolean; kind?: 'sales_order' | 'invoice'; id?: string }>(`/orders/quotes/${id}/${action}`, {}),
@@ -42,14 +42,14 @@ export default function QuotePage() {
     onError: (e) => notify(errorText(e), 'error'),
   });
 
-  if (quotes.isError) return <QueryError error={quotes.error} onRetry={() => void quotes.refetch()} />;
-  if (quotes.isLoading) return <p className="text-caption text-ink-400">Loading…</p>;
-  const q = (quotes.data ?? []).find((x) => x._id === id);
+  if (quote.isError) return <QueryError error={quote.error} onRetry={() => void quote.refetch()} />;
+  if (quote.isLoading) return <p className="text-caption text-ink-400">Loading…</p>;
+  const q = quote.data;
   if (!q) {
     return (
       <div>
         <PageHeader title="Quote not found" back={{ href: '/sales/quotes', label: 'Quotes' }} />
-        <p className="text-body text-ink-500">It may belong to another organisation, or be older than the latest 300 quotes.</p>
+        <p className="text-body text-ink-500">There is no such quote in this organisation.</p>
       </div>
     );
   }

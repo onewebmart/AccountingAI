@@ -4,6 +4,7 @@
  *  ✓ Attaches to this org's own record, stored once by hash under the org's prefix
  *  ✓ Refuses another org's record, an unknown record type, and file types we do not keep
  *  ✓ Lists, links and removes; removal hides it and both are audited on the record
+ *  ✓ Lists every live file in the org for the documents library, an expense's receipt included
  */
 import 'reflect-metadata';
 import mongoose, { Model, Types } from 'mongoose';
@@ -23,6 +24,8 @@ import { Customer, CustomerSchema } from '../sales/schemas/customer.schema';
 import { PurchaseBill, PurchaseBillSchema } from '../purchase/schemas/purchase-bill.schema';
 import { Vendor, VendorSchema } from '../purchase/schemas/vendor.schema';
 import { PartyPayment, PartyPaymentSchema } from '../payments/schemas/party-payment.schema';
+import { DirectExpense, DirectExpenseSchema } from '../direct-expenses/schemas/direct-expense.schema';
+import { User, UserSchema } from '../tenancy/schemas/user.schema';
 
 const ACTOR = new Types.ObjectId().toString();
 const stored = new Map<string, Buffer>();
@@ -36,6 +39,8 @@ let moduleRef: TestingModule;
 let attachments: AttachmentsService;
 let audit: Model<{ action: string; entityId: string; after: Record<string, unknown> }>;
 let customers: Model<{ _id: Types.ObjectId }>;
+let users: Model<{ _id: Types.ObjectId }>;
+let expenses: Model<{ _id: Types.ObjectId }>;
 
 beforeAll(async () => {
   moduleRef = await Test.createTestingModule({
@@ -51,6 +56,8 @@ beforeAll(async () => {
         { name: PurchaseBill.name, schema: PurchaseBillSchema },
         { name: Vendor.name, schema: VendorSchema },
         { name: PartyPayment.name, schema: PartyPaymentSchema },
+        { name: DirectExpense.name, schema: DirectExpenseSchema },
+        { name: User.name, schema: UserSchema },
       ]),
     ],
     providers: [AttachmentsService, AuditService, { provide: StorageService, useValue: storage }],
@@ -58,6 +65,8 @@ beforeAll(async () => {
   attachments = moduleRef.get(AttachmentsService);
   audit = moduleRef.get(getModelToken(AuditLog.name));
   customers = moduleRef.get(getModelToken(Customer.name));
+  users = moduleRef.get(getModelToken(User.name));
+  expenses = moduleRef.get(getModelToken(DirectExpense.name));
 }, 60_000);
 
 afterAll(async () => {
@@ -97,5 +106,23 @@ describe('attachments', () => {
     await expect(attachments.add(orgId, ACTOR, { entityType: 'User', entityId: String(rao._id), fileName: 'a.pdf', mimeType: 'application/pdf', buffer: pdf })).rejects.toThrow(/can be attached to/);
     await expect(attachments.add(orgId, ACTOR, { entityType: 'Customer', entityId: String(rao._id), fileName: 'run.exe', mimeType: 'application/octet-stream', buffer: pdf })).rejects.toThrow(/Attach a PDF/);
     await expect(attachments.list(other, 'Customer', String(rao._id))).resolves.toEqual([]);
+  });
+
+  it('lists every live file in the org, with its record and who added it', async () => {
+    const orgId = new Types.ObjectId().toString();
+    const [asha] = await users.create([{ email: `asha.${orgId}@example.in`, name: 'Asha Rao' }]);
+    const [rao] = await customers.create([{ orgId, name: 'Rao Traders' }]);
+    // A stand-in expense: only that it is this org's record matters here.
+    const expenseId = new Types.ObjectId();
+    await expenses.collection.insertOne({ _id: expenseId, orgId });
+
+    const rates = await attachments.add(orgId, String(asha._id), { entityType: 'Customer', entityId: String(rao._id), fileName: 'Rates.pdf', mimeType: 'application/pdf', buffer: pdf });
+    const receipt = await attachments.add(orgId, String(asha._id), { entityType: 'DirectExpense', entityId: String(expenseId), fileName: 'Fuel receipt.jpg', mimeType: 'image/jpeg', buffer: Buffer.from('jpeg bytes') });
+    await attachments.remove(orgId, ACTOR, rates.id);
+
+    expect(await attachments.listAll(orgId)).toEqual([
+      expect.objectContaining({ id: receipt.id, fileName: 'Fuel receipt.jpg', entityType: 'DirectExpense', entityId: String(expenseId), uploadedByName: 'Asha Rao' }),
+    ]);
+    expect(await attachments.listAll(new Types.ObjectId().toString())).toEqual([]);
   });
 });

@@ -366,7 +366,7 @@ function RecurringJournalTab({ onToast }: { onToast: (m: string) => void }) {
   return (
     <section className="max-w-xl space-y-3 rounded-xl border border-line-200 bg-surface-card p-4">
       <h3 className="text-h3 font-display text-ink-900">New recurring journal</h3>
-      <p className="text-caption text-ink-500">A provision or allocation that repeats. On each date it is drafted into the review queue; it never posts by itself. Bills and invoices that repeat are on the <Link className="underline" href="/recurring">Recurring</Link> page.</p>
+      <p className="text-caption text-ink-500">A provision or allocation that repeats. On each date it is drafted into the review queue; it never posts by itself. Invoices that repeat are under <Link className="underline" href="/sales/recurring-invoices">Recurring Invoices</Link>, bills under <Link className="underline" href="/purchases/recurring-bills">Recurring Bills</Link>.</p>
       <div><label className={label}>Name</label><input className={field} placeholder="Director salary provision" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
       <div className="grid grid-cols-3 gap-3">
         <div><label className={label}>Every</label><select className={field} value={form.frequency} onChange={(e) => setForm({ ...form, frequency: e.target.value })}><option value="monthly">Month</option><option value="quarterly">Quarter</option><option value="yearly">Year</option></select></div>
