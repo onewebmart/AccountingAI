@@ -1,10 +1,14 @@
 import { Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
+  ArrayMinSize,
   IsArray,
   IsBoolean,
   IsIn,
   IsInt,
   IsISO8601,
+  IsMongoId,
+  IsNumber,
   IsOptional,
   IsString,
   Length,
@@ -14,6 +18,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { TDS_SECTION_CODES } from '../../gl/tds';
+import { UQC_CODES } from '../../items/hsn';
 import { AmountsPaiseDto, LineItemDto } from '../../sales/dto/sales.dto';
 
 /**
@@ -245,4 +250,84 @@ export class CreateDebitNoteDto {
   @IsInt({ message: 'taxableValuePaise must be an integer number of paise' })
   @Min(1)
   taxableValuePaise: number;
+}
+
+/** One line of a bill typed line by line; the server works out its amount and tax. */
+export class BillLineDto {
+  @IsOptional()
+  @IsMongoId()
+  itemId?: string | null;
+
+  @IsString()
+  @Length(1, 500)
+  description: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(0, 8)
+  hsnSac?: string | null;
+
+  @IsOptional()
+  @IsIn([...UQC_CODES, null])
+  uqc?: string | null;
+
+  /** Up to three decimals: 2.5 kg. */
+  @IsNumber({ maxDecimalPlaces: 3 }, { message: 'qty is a number, to three decimals at most' })
+  @Min(0.001)
+  qty: number;
+
+  @IsInt({ message: 'ratePaise must be an integer number of paise' })
+  @Min(0)
+  ratePaise: number;
+
+  @IsIn([0, 3, 5, 12, 18, 28, 40], { message: 'taxRatePct must be a GST slab' })
+  taxRatePct: number;
+
+  @IsOptional()
+  @IsMongoId()
+  projectId?: string | null;
+}
+
+/** POST /purchase/bills/from-lines — a draft bill priced on the server from its lines. */
+export class CreateBillFromLinesDto {
+  @IsMongoId({ message: 'vendorId is required — pick an existing vendor' })
+  vendorId: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(0, 40)
+  billNumber?: string | null;
+
+  @IsISO8601({}, { message: 'billDate must be a date like 2026-08-25' })
+  billDate: string;
+
+  @IsOptional()
+  @IsISO8601({}, { message: 'dueDate must be a date like 2026-09-09' })
+  dueDate?: string | null;
+
+  @IsArray()
+  @ArrayMinSize(1, { message: 'Add at least one line.' })
+  @ArrayMaxSize(200)
+  @ValidateNested({ each: true })
+  @Type(() => BillLineDto)
+  lines: BillLineDto[];
+
+  @IsOptional()
+  @IsString()
+  @Length(0, 1000)
+  notes?: string | null;
+
+  @IsOptional()
+  @IsBoolean()
+  isReverseCharge?: boolean;
+
+  @IsOptional()
+  @IsIn([...TDS_SECTION_CODES, 'none'])
+  tdsSection?: string;
+
+  @IsOptional()
+  @IsInt({ message: 'tdsRateBps is whole basis points: 100 = 1%' })
+  @Min(0)
+  @Max(10000)
+  tdsRateBps?: number;
 }

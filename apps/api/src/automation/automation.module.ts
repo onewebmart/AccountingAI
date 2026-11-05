@@ -25,6 +25,7 @@ import { AutomationController } from './automation.controller';
  */
 import { MonthEndModule } from '../month-end/month-end.module';
 import { ReportsModule } from '../reports/reports.module';
+import { DirectExpensesModule } from '../direct-expenses/direct-expenses.module';
 @Module({
   imports: [
     MongooseModule.forFeature([
@@ -42,6 +43,7 @@ import { ReportsModule } from '../reports/reports.module';
     PurchaseModule, // PurchaseBillsService drafts recurring bills
     MonthEndModule, // recurring journals go to the review queue; the daily month-end sweep
     ReportsModule, // scheduled report emails go out in the daily sweep
+    DirectExpensesModule, // recurring expenses are drafted as expenses; it imports only the ledger and approvals, so no cycle
   ],
   controllers: [AutomationController],
   providers: [

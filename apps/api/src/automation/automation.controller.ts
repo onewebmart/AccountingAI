@@ -93,11 +93,34 @@ class CreateRecurringJournalDto {
   @IsOptional() @IsString() @Length(0, 500) notes?: string | null;
 }
 
+/** An expense paid from bank or cash each period, drafted for a person to post. */
+class CreateRecurringExpenseDto {
+  @IsString() @Length(1, 120) name: string;
+  /** The vendor paid, when they are one in the books. */
+  @IsOptional() @IsMongoId() partyId?: string;
+  @IsIn(['monthly', 'quarterly', 'yearly']) frequency: 'monthly' | 'quarterly' | 'yearly';
+  @IsInt() @Min(1) @Max(31) dayOfMonth: number;
+  @Matches(DATE, { message: 'startDate must be a date like 2026-10-01' }) startDate: string;
+  @IsOptional() @Matches(DATE, { message: 'endDate must be a date like 2027-03-31' }) endDate?: string | null;
+  @IsMongoId({ message: 'Pick the expense account.' }) expenseAccountId: string;
+  @IsMongoId({ message: 'Pick the bank or cash account it is paid from.' }) paidThroughAccountId: string;
+  @IsInt({ message: 'taxablePaise must be whole paise' }) @Min(1) taxablePaise: number;
+  @IsOptional() @IsIn([0, 3, 5, 12, 18, 28, 40]) gstRatePct?: number;
+  @IsOptional() @IsBoolean() interState?: boolean;
+  @IsOptional() @IsBoolean() claimable?: boolean;
+  @IsOptional() @IsString() @Length(0, 15) vendorGstin?: string | null;
+  @IsOptional() @IsString() @Length(0, 120) reference?: string | null;
+  @IsOptional() @IsMongoId() projectId?: string | null;
+  @IsOptional() @IsString() @Length(0, 500) notes?: string | null;
+}
+
 const RIGHT: Record<RecurringKind, Permission> = {
   bill: Permission.MANAGE_PURCHASE,
   invoice: Permission.MANAGE_SALES,
   // A recurring journal is drafted for review; making one is a poster's call.
   journal: Permission.POST_JOURNAL,
+  // A recurring expense drafts; posting it still needs posting rights.
+  expense: Permission.MANAGE_PURCHASE,
 };
 
 @UseGuards(JwtAuthGuard, PermissionGuard)
@@ -134,6 +157,17 @@ export class AutomationController {
     return this.recurring.create(req.user.orgId, req.user.sub, { ...body, kind: 'journal' });
   }
 
+  @Post('recurring/expenses')
+  @RequirePermission(Permission.MANAGE_PURCHASE)
+  createExpense(@Request() req: AuthRequest, @Body() body: CreateRecurringExpenseDto) {
+    const { expenseAccountId, paidThroughAccountId, taxablePaise, gstRatePct, interState, claimable, vendorGstin, reference, projectId, ...rest } = body;
+    return this.recurring.create(req.user.orgId, req.user.sub, {
+      ...rest,
+      kind: 'expense',
+      expense: { expenseAccountId, paidThroughAccountId, taxablePaise, gstRatePct, interState, claimable, vendorGstin, reference, projectId },
+    });
+  }
+
   /** Pause, resume or end. Checked against the template's own kind. */
   @Post('recurring/:id/:action')
   @RequirePermission(Permission.VIEW_REPORTS)
@@ -149,7 +183,7 @@ export class AutomationController {
   @Post('recurring-run')
   @RequirePermission(Permission.VIEW_REPORTS)
   run(@Request() req: AuthRequest) {
-    const kinds = (['bill', 'invoice', 'journal'] as const).filter((k) => hasPermission(req.user.role as UserRole, RIGHT[k]));
+    const kinds = (['bill', 'invoice', 'journal', 'expense'] as const).filter((k) => hasPermission(req.user.role as UserRole, RIGHT[k]));
     if (kinds.length === 0) throw new ForbiddenException('Your role cannot create bills or invoices.');
     return this.recurring.runDue(req.user.orgId, undefined, req.user.sub, [...kinds]);
   }

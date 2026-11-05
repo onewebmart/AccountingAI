@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { AdjustmentsService } from '../month-end/adjustments.service';
+import { DirectExpensesService } from '../direct-expenses/direct-expenses.service';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { AuditService } from '../gl/audit.service';
@@ -42,6 +43,18 @@ export interface CreateRecurringInput {
   }>;
   isReverseCharge?: boolean;
   notes?: string | null;
+  /** Expenses: what each one is booked to and paid from. partyId, when given, is the vendor. */
+  expense?: {
+    expenseAccountId: string;
+    paidThroughAccountId: string;
+    taxablePaise: number;
+    gstRatePct?: number;
+    interState?: boolean;
+    claimable?: boolean;
+    vendorGstin?: string | null;
+    reference?: string | null;
+    projectId?: string | null;
+  };
 }
 
 export interface RecurringRun {
@@ -50,7 +63,7 @@ export interface RecurringRun {
 }
 
 /**
- * Recurring bills and invoices.
+ * Recurring bills, invoices, journals and expenses.
  *
  * Each due date drafts the document — never posts it. Posting is a person's
  * call (Invariant 4 in spirit: the ledger moves when a human says so), and a
@@ -69,10 +82,13 @@ export class RecurringService {
     private audit: AuditService,
     // Optional so specs that build this by hand need not wire month-end.
     @Optional() private adjustments?: AdjustmentsService,
+    // Optional for the same reason: recurring expenses need the direct-expenses module.
+    @Optional() private directExpenses?: DirectExpensesService,
   ) {}
 
   async create(orgId: string, actorId: string, input: CreateRecurringInput): Promise<RecurringTemplateDocument> {
     if (input.kind === 'journal') return this.createJournal(orgId, actorId, input);
+    if (input.kind === 'expense') return this.createExpense(orgId, actorId, input);
     const a = input.amountsPaise;
     if (!a) throw new BadRequestException('A recurring bill or invoice needs its amounts.');
     if (!input.partyId) throw new BadRequestException('Pick the vendor or customer.');
@@ -156,11 +172,41 @@ export class RecurringService {
     return template;
   }
 
+  /**
+   * An expense paid from the bank each period (a subscription, a fixed fee),
+   * drafted on its date for a person to post. Checked now as the expense
+   * itself will be: an expense account, a bank or cash account, a GST slab.
+   */
+  private async createExpense(orgId: string, actorId: string, input: CreateRecurringInput): Promise<RecurringTemplateDocument> {
+    if (!this.directExpenses) throw new BadRequestException('Recurring expenses need the expenses module.');
+    const e = input.expense;
+    if (!e) throw new BadRequestException('A recurring expense needs its accounts and amount.');
+    if (!input.name?.trim()) throw new BadRequestException('Give it a name, like "Software subscription".');
+    if (!DATE.test(input.startDate)) throw new BadRequestException('startDate must be a date like 2026-10-01');
+    if (input.endDate && (!DATE.test(input.endDate) || input.endDate < input.startDate)) throw new BadRequestException('endDate must be a date on or after startDate');
+    if (!Number.isInteger(input.dayOfMonth) || input.dayOfMonth < 1 || input.dayOfMonth > 31) throw new BadRequestException('dayOfMonth must be 1 to 31; 31 means the last day of the month');
+    const checked = await this.directExpenses.check(orgId, { date: input.startDate, vendorId: input.partyId || null, ...e });
+    const nextRunDate = firstOccurrence(input.startDate, input.dayOfMonth, input.frequency);
+    if (input.endDate && nextRunDate > input.endDate) throw new BadRequestException(`The first one would fall on ${nextRunDate}, after the end date.`);
+    const amountsPaise = { taxableValue: checked.taxablePaise, cgst: checked.cgstPaise, sgst: checked.sgstPaise, igst: checked.igstPaise, cess: 0, total: checked.totalPaise };
+    const template = await this.templateModel.create({
+      orgId, kind: 'expense', name: input.name.trim(), partyId: checked.vendorId, frequency: input.frequency, dayOfMonth: input.dayOfMonth,
+      startDate: input.startDate, endDate: input.endDate ?? null, nextRunDate, amountsPaise,
+      expense: {
+        expenseAccountId: checked.expenseAccountId, paidThroughAccountId: checked.paidThroughAccountId, taxablePaise: checked.taxablePaise, gstRatePct: checked.gstRatePct,
+        interState: checked.interState, claimable: checked.claimable, vendorGstin: checked.vendorGstin, reference: checked.reference, projectId: checked.projectId,
+      },
+      notes: input.notes?.trim() || null, status: 'active', createdBy: actorId,
+    });
+    await this.audit.record({ orgId, entityType: 'RecurringTemplate', entityId: template._id.toString(), action: 'CREATE', performedBy: actorId, after: { kind: 'expense', name: template.name, frequency: template.frequency, nextRunDate, totalPaise: amountsPaise.total } });
+    return template;
+  }
+
   async list(orgId: string) {
     const templates = await this.templateModel.find({ orgId }).sort({ status: 1, nextRunDate: 1 }).lean().exec();
     const ids = (kind: RecurringKind) => templates.filter((t) => t.kind === kind).map((t) => t.partyId);
     const [vendors, customers] = await Promise.all([
-      this.vendorModel.find({ orgId, _id: { $in: ids('bill') } }).lean().exec(),
+      this.vendorModel.find({ orgId, _id: { $in: [...ids('bill'), ...ids('expense')].filter(Boolean) } }).lean().exec(),
       this.customerModel.find({ orgId, _id: { $in: ids('invoice') } }).lean().exec(),
     ]);
     const names = new Map([...vendors, ...customers].map((p) => [p._id.toString(), p.name]));
@@ -180,6 +226,9 @@ export class RecurringService {
       amountsPaise: t.amountsPaise,
       journalLines: t.journalLines ?? [],
       isReverseCharge: t.isReverseCharge,
+      expense: t.expense
+        ? { ...t.expense, expenseAccountId: String(t.expense.expenseAccountId), paidThroughAccountId: String(t.expense.paidThroughAccountId), projectId: t.expense.projectId ? String(t.expense.projectId) : null }
+        : null,
       status: t.status,
       draftedCount: t.generated.length,
       lastDraftedOn: t.generated.at(-1)?.documentDate ?? null,
@@ -244,7 +293,7 @@ export class RecurringService {
     orgId: string,
     today = todayIst(),
     actorId = 'system:recurring',
-    kinds: RecurringKind[] = ['bill', 'invoice', 'journal'],
+    kinds: RecurringKind[] = ['bill', 'invoice', 'journal', 'expense'],
   ): Promise<RecurringRun> {
     const run: RecurringRun = { drafted: [], failed: [] };
     const due = await this.templateModel
@@ -289,7 +338,7 @@ export class RecurringService {
     return run;
   }
 
-  /** Bill or invoice: which rights a change to this template needs. */
+  /** Bill, invoice, journal or expense: which rights a change to this template needs. */
   async kindOf(orgId: string, id: string): Promise<RecurringKind> {
     if (!Types.ObjectId.isValid(id)) throw new NotFoundException('Recurring template not found');
     const template = await this.templateModel.findOne({ _id: id, orgId }, { kind: 1 }).lean().exec();
@@ -319,6 +368,17 @@ export class RecurringService {
       });
       return proposal._id as Types.ObjectId;
     }
+    if (t.kind === 'expense') {
+      if (!this.directExpenses || !t.expense) throw new Error('Recurring expenses need the expenses module.');
+      const e = t.expense;
+      // A draft, dated the occurrence, for a person to check and post. Never posted here.
+      const expense = await this.directExpenses.create(orgId, actorId, {
+        date, vendorId: t.partyId ? t.partyId.toString() : null, expenseAccountId: e.expenseAccountId.toString(), paidThroughAccountId: e.paidThroughAccountId.toString(),
+        taxablePaise: e.taxablePaise, gstRatePct: e.gstRatePct, interState: e.interState, claimable: e.claimable, vendorGstin: e.vendorGstin, reference: e.reference,
+        notes: t.notes ? `${t.name} — ${t.notes}` : t.name, projectId: e.projectId ? e.projectId.toString() : null, recurringTemplateId: t._id.toString(),
+      });
+      return expense._id as Types.ObjectId;
+    }
     const common = {
       orgId,
       actorId,
@@ -342,7 +402,7 @@ export class RecurringService {
   }
 
   private async party(orgId: string, kind: RecurringKind, partyId: string) {
-    if (kind === 'journal') return;
+    if (kind === 'journal' || kind === 'expense') return;
     if (!Types.ObjectId.isValid(partyId)) throw new BadRequestException('partyId is not a valid id');
     const found =
       kind === 'bill'

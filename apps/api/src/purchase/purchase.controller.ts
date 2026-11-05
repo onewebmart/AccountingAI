@@ -15,7 +15,8 @@ import { PermissionGuard } from '../auth/guards/permission.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { VendorsService } from './vendors.service';
 import { PurchaseBillsService } from './purchase-bills.service';
-import { CreateVendorDto, CreateBillDto, PayBillDto, CreateDebitNoteDto, UpdateVendorDto } from './dto/purchase.dto';
+import { CreateVendorDto, CreateBillDto, CreateBillFromLinesDto, PayBillDto, CreateDebitNoteDto, UpdateVendorDto } from './dto/purchase.dto';
+import { BillsFromLinesService } from './bills-from-lines.service';
 import { DebitNotesService } from './debit-notes.service';
 import { ItemsService } from '../items/items.service';
 
@@ -31,6 +32,7 @@ export class PurchaseController {
     private readonly billsService: PurchaseBillsService,
     private readonly debitNotesService: DebitNotesService,
     private readonly items: ItemsService,
+    private readonly fromLines: BillsFromLinesService,
   ) {}
 
   // ── Vendors ───────────────────────────────────────────────────────────────
@@ -85,6 +87,13 @@ export class PurchaseController {
   async createBill(@Request() req: AuthRequest, @Body() body: CreateBillDto) {
     const lineItems = await this.items.resolveLines(req.user.orgId, body.lineItems, 'purchase');
     return this.billsService.create({ ...body, lineItems, orgId: req.user.orgId, actorId: req.user.sub });
+  }
+
+  /** A draft bill typed line by line: item, HSN/SAC, quantity, rate, GST slab, project. Priced here. */
+  @Post('bills/from-lines')
+  @RequirePermission(Permission.MANAGE_PURCHASE)
+  createBillFromLines(@Request() req: AuthRequest, @Body() body: CreateBillFromLinesDto) {
+    return this.fromLines.create(req.user.orgId, req.user.sub, body);
   }
 
   @Get('bills/:id')

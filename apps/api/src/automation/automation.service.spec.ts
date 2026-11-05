@@ -6,6 +6,7 @@
  *  ✓ An end date ends the template; resuming skips the paused months
  *  ✓ A failed draft hands its date back for tomorrow, with the reason
  *  ✓ A recurring invoice drafts, and takes its serial when posted
+ *  ✓ A recurring expense drafts a draft expense once on its date, never posted; it pays only from bank or cash
  *  ✓ The ladder is off until switched on, sends each rung once, and jumps to the latest rung
  *  ✓ A customer with no email or phone is reported, not skipped silently
  *  ✓ Chasing one invoice works with the ladder off, but not twice in a day nor once paid
@@ -41,6 +42,9 @@ import { AuditLog, AuditLogSchema } from '../gl/schemas/audit-log.schema';
 import { LedgerAccount, LedgerAccountSchema } from '../gl/schemas/ledger-account.schema';
 import { MESSAGING_PROVIDER } from '../crm/messaging/messaging.provider.interface';
 import { MockMessagingProvider } from '../crm/messaging/mock-messaging.provider';
+import { DirectExpensesService } from '../direct-expenses/direct-expenses.service';
+import { DirectExpense, DirectExpenseSchema } from '../direct-expenses/schemas/direct-expense.schema';
+import { Project, ProjectSchema } from '../projects/schemas/project.schema';
 
 const ACTOR = new Types.ObjectId().toString();
 const queue = { add: jest.fn().mockResolvedValue(undefined) };
@@ -55,6 +59,9 @@ let bills: Model<{ status: string; billDate: string; dueDate: string | null; rec
 let invoices: Model<{ status: string; invoiceNumber: string | null; recurringTemplateId: unknown }>;
 let templates: Model<{ status: string; nextRunDate: string | null; lastError: string | null; generated: unknown[] }>;
 let reminderModel: Model<{ rung: string; status: string; isMock: boolean; to: string; channel: string }>;
+let expenseModel: Model<{ status: string; date: string; recurringTemplateId: unknown; journalId: unknown }>;
+let journalModel: Model<unknown>;
+let accountsSvc: AccountsService;
 
 beforeAll(async () => {
   moduleRef = await Test.createTestingModule({
@@ -74,6 +81,8 @@ beforeAll(async () => {
         { name: Counter.name, schema: CounterSchema },
         { name: AuditLog.name, schema: AuditLogSchema },
         { name: LedgerAccount.name, schema: LedgerAccountSchema },
+        { name: DirectExpense.name, schema: DirectExpenseSchema },
+        { name: Project.name, schema: ProjectSchema },
       ]),
     ],
     providers: [
@@ -84,6 +93,7 @@ beforeAll(async () => {
       PostingService,
       AccountsService,
       AuditService,
+      DirectExpensesService,
       { provide: MESSAGING_PROVIDER, useClass: MockMessagingProvider },
       { provide: getQueueToken(BOOKS_AUTOMATION_QUEUE), useValue: queue },
     ],
@@ -99,6 +109,12 @@ beforeAll(async () => {
   templates = moduleRef.get(getModelToken(RecurringTemplate.name));
   reminderModel = moduleRef.get(getModelToken(PaymentReminder.name));
   await reminderModel.init();
+  expenseModel = moduleRef.get(getModelToken(DirectExpense.name));
+  journalModel = moduleRef.get(getModelToken(Journal.name));
+  accountsSvc = moduleRef.get(AccountsService);
+  // Expenses are numbered and saved inside a transaction: the collections exist first.
+  await expenseModel.init();
+  await moduleRef.get<Model<unknown>>(getModelToken(Counter.name)).init();
 }, 60_000);
 
 afterAll(async () => {
@@ -193,6 +209,56 @@ describe('recurring invoices', () => {
 
     await invoicesSvc.post(run.drafted[0].documentId, orgId, ACTOR);
     expect((await invoices.findById(run.drafted[0].documentId).lean().exec())?.invoiceNumber).toBe('INV/2026-27/0001');
+  });
+});
+
+describe('recurring expenses', () => {
+  async function chart(orgId: string) {
+    await accountsSvc.seedDefaults(orgId);
+    const all = await accountsSvc.list(orgId);
+    return (name: string) => String(all.find((a) => a.name === name)!._id);
+  }
+
+  it('drafts a draft expense once on its date, for a person to post', async () => {
+    const { orgId, vendorId } = await org();
+    const id = await chart(orgId);
+    const template = await recurring.create(orgId, ACTOR, {
+      kind: 'expense', name: 'Accounting software', partyId: vendorId, frequency: 'monthly', dayOfMonth: 5, startDate: '2026-10-01',
+      expense: { expenseAccountId: id('Telephone & Internet'), paidThroughAccountId: id('Bank Accounts'), taxablePaise: 150000, gstRatePct: 18, claimable: true },
+    });
+    expect(template.toObject()).toMatchObject({ kind: 'expense', nextRunDate: '2026-10-05', amountsPaise: { taxableValue: 150000, cgst: 13500, sgst: 13500, total: 177000 } });
+
+    expect((await recurring.runDue(orgId, '2026-10-04')).drafted).toHaveLength(0);
+    const run = await recurring.runDue(orgId, '2026-10-05');
+    expect(run.drafted).toEqual([expect.objectContaining({ kind: 'expense', name: 'Accounting software', documentDate: '2026-10-05' })]);
+    expect((await recurring.runDue(orgId, '2026-10-05')).drafted).toHaveLength(0);
+
+    const drafted = await expenseModel.find({ orgId }).lean().exec();
+    expect(drafted).toHaveLength(1);
+    expect(drafted[0]).toMatchObject({
+      number: 'EXP/2026-27/0001', status: 'draft', date: '2026-10-05', taxablePaise: 150000, cgstPaise: 13500, sgstPaise: 13500, totalPaise: 177000,
+      claimable: true, vendorGstin: '27AAACR5055K1Z5', notes: 'Accounting software', journalId: null, createdBy: 'system:recurring',
+    });
+    expect(String(drafted[0].recurringTemplateId)).toBe(String(template._id));
+    expect(String((drafted[0] as unknown as { vendorId: unknown }).vendorId)).toBe(vendorId);
+    // Drafted, never posted: the ledger has not moved.
+    expect(await journalModel.countDocuments({ orgId })).toBe(0);
+
+    const listed = (await recurring.list(orgId)).find((t) => t._id === String(template._id))!;
+    expect(listed).toMatchObject({ kind: 'expense', partyName: 'Landlord LLP', totalPaise: 177000, draftedCount: 1, nextRunDate: '2026-11-05' });
+    expect(listed.expense).toMatchObject({ expenseAccountId: id('Telephone & Internet'), paidThroughAccountId: id('Bank Accounts') });
+  });
+
+  it('pays only from a bank or cash account, and needs no vendor', async () => {
+    const { orgId } = await org();
+    const id = await chart(orgId);
+    const base = { kind: 'expense' as const, name: 'Office cleaning', frequency: 'monthly' as const, dayOfMonth: 1, startDate: '2026-10-01' };
+    await expect(recurring.create(orgId, ACTOR, { ...base, expense: { expenseAccountId: id('Repairs & Maintenance'), paidThroughAccountId: id('Rent'), taxablePaise: 300000 } })).rejects.toThrow(/bank or cash/);
+    const ok = await recurring.create(orgId, ACTOR, { ...base, expense: { expenseAccountId: id('Repairs & Maintenance'), paidThroughAccountId: id('Cash in Hand'), taxablePaise: 300000 } });
+    expect(ok.partyId).toBeNull();
+    const run = await recurring.runDue(orgId, '2026-10-01');
+    expect(run.drafted).toHaveLength(1);
+    expect((await expenseModel.findById(run.drafted[0].documentId).lean().exec())?.status).toBe('draft');
   });
 });
 
