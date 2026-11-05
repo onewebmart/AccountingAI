@@ -184,10 +184,29 @@ ai-accounting-platform/
 
 ## Build phases
 
-See `AI_ACCOUNTING_BUILD_PLAYBOOK_MONGODB.md` for the full 19-phase build playbook.
+The core platform (tenancy, auth, roles, the ledger and the document-to-proposal pipeline) follows the build playbook in [docs/AI_ACCOUNTING_BUILD_PLAYBOOK_MONGODB.md](docs/AI_ACCOUNTING_BUILD_PLAYBOOK_MONGODB.md). On top of it, the nine phases of the [end-to-end workflow and AI plan](docs/END_TO_END_WORKFLOW_AND_AI_PLAN.md) are built:
 
-| Done | Phase | Description |
-|------|-------|-------------|
+| Done | Phase | What it added |
+|------|-------|---------------|
+| ✅ | 1 | Finish what was half-built: party and account editing, opening balances by hand, TDS screens, the audit trail, transfers with AI detection, invoice PDF and email, AI duplicate, fraud and blocked-ITC checks on bills |
+| ✅ | 2 | Money in and out: advances, one receipt across many invoices with AI allocation, refunds, vendor bank details and MSME, payment runs with an AI suggestion, Razorpay links and the customer portal |
+| ✅ | 3 | Capture from everywhere: bills by email and WhatsApp, attachments on any record, the Setu account-aggregator bank feed |
+| ✅ | 4 | Compliance: item master with AI HSN/SAC, e-invoice and e-way bill through a GSP with an AI pre-check, GST filing, GSTR-2B and ITC rules, GSTR-9, Form 26Q and the 26AS match |
+| ✅ | 5 | Month-end: recurring journals, accruals and prepaids, the fixed-asset register and depreciation, the month-end assistant |
+| ✅ | 6 | Orders and approvals: quotes drafted from a message, sales orders and challans, purchase orders, goods received and the 3-way match, approval policies with maker-checker and a risk score, expense claims |
+| ✅ | 7 | Stock: moves and weighted-average valuation, line-to-item linking, reorders, the opening and closing stock entries |
+| ✅ | 8 | Reports and answers: management reports, comparisons and budgets, any report as PDF or CSV and by scheduled email, the AI monthly narrative, Ask your books |
+| ✅ | 9 | Projects and currencies: projects and timesheets with invoices drafted from time, foreign-currency documents with realised and unrealised exchange, exports under LUT in the returns |
+
+**Not done yet**
+- A real GSP: e-invoice, e-way bill and GST filing run end to end against a mock adapter only.
+- Outgoing WhatsApp and SMS: payment reminders and CRM messages go through a test provider. Invoice email over SMTP is real.
+- Exports with payment of IGST, and e-invoices for exports: exports are supported under LUT only.
+- Form 27Q and the FVU file for 26Q; GSTR-9 is computed but not filed.
+- Stock in more than one warehouse; credit and debit notes as stock moves (returns are entered as adjustments).
+- Exchange rates are entered by hand; there is no RBI or FBIL feed.
+
+------|-------|-------------|
 | ✅ | 0 | Foundation — monorepo, scaffold, CLAUDE.md, design tokens |
 | ⬜ | 1 | Tenancy & isolation |
 | ⬜ | 2 | Auth & 2FA |
