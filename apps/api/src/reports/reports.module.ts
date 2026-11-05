@@ -6,6 +6,7 @@ import { withOrg } from '../database/tenant.plugin';
 import { OcrModule } from '../ocr/ocr.module';
 import { AiSuggestion, AiSuggestionSchema } from '../ai-suggestions/schemas/ai-suggestion.schema';
 import { Journal, JournalSchema } from '../gl/schemas/journal.schema';
+import { ImportBatch, ImportBatchSchema } from '../migration/schemas/import-batch.schema';
 import { LedgerAccount, LedgerAccountSchema } from '../gl/schemas/ledger-account.schema';
 import { GlModule } from '../gl/gl.module';
 import { MailModule } from '../mail/mail.module';
@@ -48,6 +49,7 @@ export class ReportAiProcessor extends WorkerHost {
   imports: [
     MongooseModule.forFeature([
       { name: Journal.name, schema: JournalSchema },
+      { name: ImportBatch.name, schema: ImportBatchSchema }, // read only: which vouchers were opening balances
       { name: LedgerAccount.name, schema: LedgerAccountSchema },
       { name: SalesInvoice.name, schema: SalesInvoiceSchema },
       { name: CreditNote.name, schema: CreditNoteSchema },

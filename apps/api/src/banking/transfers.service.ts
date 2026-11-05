@@ -6,6 +6,7 @@ import { AccountsService } from '../gl/accounts.service';
 import { AuditService } from '../gl/audit.service';
 import { financialYearOf, PostingService } from '../gl/posting.service';
 import { LedgerAccount, LedgerAccountDocument, SystemAccountKey } from '../gl/schemas/ledger-account.schema';
+import { MONEY_NAME } from '../gl/money-accounts';
 import { BankAccount, BankAccountDocument } from './schemas/bank-account.schema';
 import { BankStatementLine, BankStatementLineDocument } from './schemas/bank-statement-line.schema';
 import { withOrg } from '../database/tenant.plugin';
@@ -18,8 +19,6 @@ const CASH_OUT = /\b(ATM|ATW|NWD|CASH ?WDL|CASH WITHDRAWAL|CASH WD|SELF CHQ|SELF
 const CASH_IN = /\b(CASH DEP|CASH DEPOSIT|BY CASH|CDM|CASH CREDIT BY)\b/i;
 /** A payment gateway paying out what it collected, as narrations say it. */
 const GATEWAY_IN = /\b(RAZORPAY|RZP|PAYU|CASHFREE|CCAVENUE|BILLDESK|PAYTM PAYMENTS? SETTLE|STRIPE)\b/i;
-/** Asset ledgers that hold money, beside the Bank and Cash ones the chart starts with. */
-const MONEY_NAME = /\b(bank|cash|petty|wallet|imprest|current a\/?c|savings a\/?c)\b/i;
 
 export interface MoneyLedger {
   _id: string;

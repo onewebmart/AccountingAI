@@ -1,9 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { AccountType, JournalStatus } from '@ai-accounting/shared';
 import { Journal, JournalDocument } from '../gl/schemas/journal.schema';
 import { LedgerAccount, LedgerAccountDocument } from '../gl/schemas/ledger-account.schema';
+import { isMoneyAccount } from '../gl/money-accounts';
+import { ImportBatch, ImportBatchDocument } from '../migration/schemas/import-batch.schema';
 
 // ── Account classification ─────────────────────────────────────────────────
 
@@ -122,9 +124,13 @@ export interface DashboardSummary {
 export interface CashFlowReport {
   financialYear: string;
   period: string | null;
+  /** Bank and cash at the start: brought forward, and the opening balances entered. */
+  openingCashPaise: number;
   cashInflowsPaise: number;
   cashOutflowsPaise: number;
   netCashFlowPaise: number;
+  /** Bank and cash at the end: opening plus what came in, less what went out. */
+  closingCashPaise: number;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -135,6 +141,8 @@ export class ReportsService {
     @InjectModel(Journal.name) private journalModel: Model<JournalDocument>,
     @InjectModel(LedgerAccount.name)
     private accountModel: Model<LedgerAccountDocument>,
+    // Read only: which vouchers were opening balances. Absent where reports are built without it.
+    @Optional() @InjectModel(ImportBatch.name) private batchModel?: Model<ImportBatchDocument>,
   ) {}
 
   // ── Internal: load posted journals for a financial year (optionally filtered by period) ──
@@ -505,19 +513,49 @@ export class ReportsService {
     financialYear: string,
     period?: string | null,
   ): Promise<CashFlowReport> {
-    const journals = await this.loadJournals(orgId, financialYear, period);
+    const [journals, accounts, openingIds] = await Promise.all([
+      this.loadJournals(orgId, financialYear, period),
+      this.accountModel.find({ orgId }).select('name type isGroup systemKey').lean().exec(),
+      this.openingJournalIds(orgId),
+    ]);
+    const byId = new Map(accounts.map((a) => [a._id.toString(), a]));
+    // A line moves money when its account is a bank or cash account, whatever
+    // the voucher type or wording. A line whose account no longer resolves falls
+    // back to its description, as the other reports fall back to names.
+    const isMoney = (line: { accountId?: unknown; description?: string | null }) => {
+      const account = line.accountId ? byId.get(String(line.accountId)) : undefined;
+      if (account) return isMoneyAccount(account);
+      const desc = (line.description || '').toLowerCase();
+      return desc.includes('bank') || desc.includes('cash');
+    };
+    const net = (lines: Array<{ debitPaise: number; creditPaise: number }>) => lines.reduce((s, l) => s + l.debitPaise - l.creditPaise, 0);
 
+    // Money held before the range: earlier years, and for a month, the months before it.
+    const before = await this.journalModel
+      .find({
+        orgId,
+        status: JournalStatus.POSTED,
+        $or: period ? [{ financialYear: { $lt: financialYear } }, { financialYear, date: { $lt: `${period}-01` } }] : [{ financialYear: { $lt: financialYear } }],
+      })
+      .select('lines')
+      .lean()
+      .exec();
+    let openingCashPaise = before.reduce((s, j) => s + net(j.lines.filter(isMoney)), 0);
     let cashInflowsPaise = 0;
     let cashOutflowsPaise = 0;
 
     for (const j of journals) {
-      for (const line of j.lines) {
-        const desc = (line.description || '').toLowerCase();
-        const isBankOrCash = desc.includes('bank') || desc.includes('cash');
-        if (!isBankOrCash) continue;
-        // Bank/Cash debited → money coming IN (receipts from customers)
+      const money = j.lines.filter(isMoney);
+      if (money.length === 0) continue;
+      // Opening balances are where the books start, not money that came in.
+      if (openingIds.has(j._id.toString())) {
+        openingCashPaise += net(money);
+        continue;
+      }
+      // Bank to cash, or one bank to another: nothing came in or went out.
+      if (money.length === j.lines.length) continue;
+      for (const line of money) {
         cashInflowsPaise += line.debitPaise;
-        // Bank/Cash credited → money going OUT (payments to vendors)
         cashOutflowsPaise += line.creditPaise;
       }
     }
@@ -525,9 +563,18 @@ export class ReportsService {
     return {
       financialYear,
       period: period ?? null,
+      openingCashPaise,
       cashInflowsPaise,
       cashOutflowsPaise,
       netCashFlowPaise: cashInflowsPaise - cashOutflowsPaise,
+      closingCashPaise: openingCashPaise + cashInflowsPaise - cashOutflowsPaise,
     };
+  }
+
+  /** The vouchers that brought in opening balances, from the imports that posted them. */
+  private async openingJournalIds(orgId: string): Promise<Set<string>> {
+    if (!this.batchModel) return new Set();
+    const batches = await this.batchModel.find({ orgId, status: 'committed', journalId: { $ne: null } }).select('journalId').lean().exec();
+    return new Set(batches.map((b) => String(b.journalId)));
   }
 }

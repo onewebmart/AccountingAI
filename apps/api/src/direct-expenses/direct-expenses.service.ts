@@ -6,6 +6,7 @@ import { AuditService } from '../gl/audit.service';
 import { AccountsService } from '../gl/accounts.service';
 import { PostingService, financialYearOf } from '../gl/posting.service';
 import { LedgerAccount, LedgerAccountDocument, SystemAccountKey } from '../gl/schemas/ledger-account.schema';
+import { MONEY_NAME } from '../gl/money-accounts';
 import { ApprovalsService } from '../approvals/approvals.service';
 import { Vendor, VendorDocument } from '../purchase/schemas/vendor.schema';
 import { Project, ProjectDocument } from '../projects/schemas/project.schema';
@@ -14,8 +15,6 @@ import { DirectExpense, DirectExpenseDocument, DirectExpenseStatus } from './sch
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 export const GST_SLABS = [0, 3, 5, 12, 18, 28, 40] as const;
-/** Asset ledgers that hold money, by name: the same test bank transfers use. */
-const MONEY_NAME = /\b(bank|cash|petty|wallet|imprest|current a\/?c|savings a\/?c)\b/i;
 
 export interface DirectExpenseInput {
   date: string;

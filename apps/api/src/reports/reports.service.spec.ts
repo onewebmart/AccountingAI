@@ -26,6 +26,7 @@ import { Counter, CounterSchema } from '../gl/schemas/counter.schema';
 import { AuditLog, AuditLogSchema } from '../gl/schemas/audit-log.schema';
 import { PostingService, financialYearOf } from '../gl/posting.service';
 import { LedgerAccount, LedgerAccountSchema } from '../gl/schemas/ledger-account.schema';
+import { ImportBatch, ImportBatchSchema } from '../migration/schemas/import-batch.schema';
 import { AccountType, VoucherType } from '@ai-accounting/shared';
 
 const ORG_ID = new Types.ObjectId().toString();
@@ -74,6 +75,7 @@ beforeAll(async () => {
         { name: Counter.name, schema: CounterSchema },
         { name: AuditLog.name, schema: AuditLogSchema },
         { name: LedgerAccount.name, schema: LedgerAccountSchema },
+        { name: ImportBatch.name, schema: ImportBatchSchema },
       ]),
     ],
     providers: [ReportsService, PostingService],
@@ -440,6 +442,43 @@ describe('getCashFlow', () => {
     expect(cf.cashInflowsPaise).toBe(500000);
     expect(cf.cashOutflowsPaise).toBe(300000);
     expect(cf.netCashFlowPaise).toBe(200000);
+  });
+
+  it('counts bank and cash by account, not by wording; opening balances open the year; transfers move nothing', async () => {
+    const orgId = new Types.ObjectId().toString();
+    const accounts = moduleRef.get<Model<unknown>>(getModelToken(LedgerAccount.name));
+    const batches = moduleRef.get<Model<unknown>>(getModelToken(ImportBatch.name));
+    const made = await accounts.create([
+      { orgId, name: 'Bank Accounts', code: '1100', type: AccountType.ASSETS, systemKey: 'BANK' },
+      { orgId, name: 'Cash in Hand', code: '1110', type: AccountType.ASSETS, systemKey: 'CASH' },
+      { orgId, name: "Owner's Capital", code: '3100', type: AccountType.CAPITAL },
+      { orgId, name: 'Salaries & Wages', code: '6110', type: AccountType.EXPENSE },
+      { orgId, name: 'Bank Charges', code: '6190', type: AccountType.EXPENSE },
+      { orgId, name: 'Accounts Receivable', code: '1200', type: AccountType.ASSETS },
+    ]);
+    const [bank, cash, capital, salaries, charges, receivable] = made.map((a) => String((a as { _id: unknown })._id));
+    const post = (date: string, narration: string, lines: Array<[string, string, number, number]>, voucherType = VoucherType.JOURNAL) =>
+      postingSvc.post({
+        orgId, voucherType, financialYear: FY, date, narration, postedBy: ACTOR_ID,
+        lines: lines.map(([accountId, description, debitPaise, creditPaise]) => ({ accountId, description, debitPaise, creditPaise })),
+      });
+
+    const opening = await post('2025-04-01', 'Opening balances entered by hand', [[bank, 'Bank', 1_000_000, 0], [cash, 'Cash', 50_000, 0], [capital, 'Capital', 0, 1_050_000]]);
+    await batches.create({ orgId, source: 'manual', status: 'committed', journalId: opening._id, createdBy: ACTOR_ID });
+    // A journal voucher whose words never say "bank" still moves money.
+    await post('2025-04-30', 'Salaries for April', [[salaries, 'Salaries for April', 200_000, 0], [bank, 'Salaries for April', 0, 200_000]]);
+    // An expense named "Bank Charges" is not money coming in.
+    await post('2025-05-31', 'Account charges', [[charges, 'Bank Charges', 5_900, 0], [bank, 'HDFC charges', 0, 5_900]], VoucherType.PAYMENT);
+    await post('2025-06-10', 'Customer paid', [[bank, 'NEFT', 300_000, 0], [receivable, 'Receipt', 0, 300_000]], VoucherType.RECEIPT);
+    // Cash taken out of the bank: in and out of our own accounts.
+    await post('2025-06-15', 'Cash withdrawn', [[cash, 'Cash', 20_000, 0], [bank, 'Bank', 0, 20_000]], VoucherType.CONTRA);
+
+    const year = await svc.getCashFlow(orgId, FY);
+    expect(year).toMatchObject({ openingCashPaise: 1_050_000, cashInflowsPaise: 300_000, cashOutflowsPaise: 205_900, netCashFlowPaise: 94_100, closingCashPaise: 1_144_100 });
+
+    // A month opens with everything before it.
+    const june = await svc.getCashFlow(orgId, FY, '2025-06');
+    expect(june).toMatchObject({ openingCashPaise: 1_050_000 - 205_900, cashInflowsPaise: 300_000, cashOutflowsPaise: 0, closingCashPaise: 1_144_100 });
   });
 });
 
