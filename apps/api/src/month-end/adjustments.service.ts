@@ -27,6 +27,11 @@ export interface AdjustmentInput {
   assets?: Array<{ assetId: string; amountPaise: number; from: string; to: string }>;
   /** One per kind, source and period: a second draft for the same month is refused. */
   unique?: boolean;
+  /**
+   * The posted lines a bulk reclassification moves, by journal and line
+   * index, so the same line is not moved twice while one is live.
+   */
+  sources?: Array<{ journalId: string; index: number }>;
 }
 
 /** The last day of a month: 2026-11 → 2026-11-30. */
@@ -107,7 +112,10 @@ export class AdjustmentsService {
         })),
         financialYear: financialYearOf(input.date),
         narration: input.narration.slice(0, 300),
-        adjustment: { kind: input.kind, refId: input.refId, period: input.period, reason: input.reason, reverseOn: input.reverseOn ?? null, assets: input.assets ?? [] },
+        adjustment: {
+          kind: input.kind, refId: input.refId, period: input.period, reason: input.reason, reverseOn: input.reverseOn ?? null, assets: input.assets ?? [],
+          ...(input.sources?.length ? { sources: input.sources } : {}),
+        },
         ...(key ? { adjustmentKey: key } : {}),
       });
       await this.audit.record({

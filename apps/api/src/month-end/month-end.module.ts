@@ -12,6 +12,7 @@ import { AssetsService } from './assets.service';
 import { AssistantService } from './assistant.service';
 import { MonthEndSweepService } from './month-end-sweep.service';
 import { MonthEndController } from './month-end.controller';
+import { BulkUpdateService } from './bulk-update.service';
 
 /** Recurring journals' drafting, accruals and prepaids, the asset register, and the month-end assistant. */
 @Module({
@@ -26,7 +27,7 @@ import { MonthEndController } from './month-end.controller';
     GlModule, // PostingService, AccountsService, AuditService, the chart and journals
   ],
   controllers: [MonthEndController],
-  providers: [AdjustmentsService, SchedulesService, AssetsService, AssistantService, MonthEndSweepService],
+  providers: [AdjustmentsService, SchedulesService, AssetsService, AssistantService, MonthEndSweepService, BulkUpdateService],
   exports: [AdjustmentsService, MonthEndSweepService, AssetsService],
 })
 export class MonthEndModule {}

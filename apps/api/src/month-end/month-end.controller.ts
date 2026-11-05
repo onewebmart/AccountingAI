@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Param, Post, Query, Request, UseGuards } from '@nestjs/common';
-import { IsIn, IsInt, IsMongoId, IsOptional, IsString, Length, Matches, Max, Min } from 'class-validator';
+import { Type } from 'class-transformer';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsIn, IsInt, IsMongoId, IsOptional, IsString, Length, Matches, Max, Min, ValidateNested } from 'class-validator';
 import { Permission } from '@ai-accounting/shared';
 import { RequirePermission } from '../auth/decorators';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -8,6 +9,7 @@ import { todayIst } from '../automation/schedule';
 import { AssetsService } from './assets.service';
 import { AssistantService } from './assistant.service';
 import { SchedulesService } from './schedules.service';
+import { BULK_LINE_CAP, BulkUpdateService } from './bulk-update.service';
 import { CATEGORIES } from './depreciation';
 
 interface AuthRequest {
@@ -61,6 +63,30 @@ class DraftDto {
   @Matches(PERIOD) through: string;
 }
 
+class BulkLinesQuery {
+  @IsMongoId({ message: 'Choose an account.' }) accountId: string;
+  @IsOptional() @Matches(DATE, { message: 'from must look like 2026-04-01' }) from?: string;
+  @IsOptional() @Matches(DATE, { message: 'to must look like 2026-11-30' }) to?: string;
+  @IsOptional() @IsString() @Length(0, 100) text?: string;
+}
+
+class BulkLineRef {
+  @IsMongoId() journalId: string;
+  @IsInt() @Min(0) index: number;
+}
+
+class BulkProposeDto {
+  @IsMongoId() fromAccountId: string;
+  @IsMongoId() toAccountId: string;
+  @IsArray()
+  @ArrayMinSize(1, { message: 'Choose at least one line to move.' })
+  @ArrayMaxSize(BULK_LINE_CAP)
+  @ValidateNested({ each: true })
+  @Type(() => BulkLineRef)
+  lines: BulkLineRef[];
+  @IsOptional() @IsString() @Length(0, 300) reason?: string | null;
+}
+
 /**
  * Month-end: the assistant, the asset register and the schedules. Every
  * entry made here goes to the review queue; posting is Approve & post there.
@@ -72,6 +98,7 @@ export class MonthEndController {
     private readonly assistant: AssistantService,
     private readonly assets: AssetsService,
     private readonly schedules: SchedulesService,
+    private readonly bulk: BulkUpdateService,
   ) {}
 
   @Get('assistant')
@@ -150,5 +177,18 @@ export class MonthEndController {
   @RequirePermission(Permission.POST_JOURNAL)
   stop(@Request() req: AuthRequest, @Param('id') id: string) {
     return this.schedules.stop(req.user.orgId, req.user.sub, id);
+  }
+
+  // Bulk update: posted lines on one account, moved to another by one reclass in the review queue.
+  @Get('bulk-update/lines')
+  @RequirePermission(Permission.VIEW_REPORTS)
+  bulkLines(@Request() req: AuthRequest, @Query() q: BulkLinesQuery) {
+    return this.bulk.lines(req.user.orgId, q);
+  }
+
+  @Post('bulk-update/propose')
+  @RequirePermission(Permission.POST_JOURNAL)
+  bulkPropose(@Request() req: AuthRequest, @Body() body: BulkProposeDto) {
+    return this.bulk.propose(req.user.orgId, req.user.sub, body);
   }
 }
