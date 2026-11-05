@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Field, FormPage, PageHeader, Section, inputClass } from '@/components/page/page-shell';
@@ -12,8 +11,20 @@ import { formatPaise } from '@/lib/gst';
 import { useWorkspace } from '@/lib/use-workspace';
 import { AmountsSummary, BillLineEditor, billLinesToApi, emptyBillLine, foreignLinesToApi, previewAmounts, type BillEditLine } from '@/components/purchases/bill-lines';
 import { TDS_SECTIONS, errorText, formatMinor, parseMinor, todayIso, useVendors } from '@/components/purchases/purchase-data';
+import { DocumentEntry, EntryActions, PartyFound, scanLines, useDocumentEntry, usePrefill } from '@/components/documents/document-entry';
 
 interface Currency { code: string; name: string; digits: number }
+
+type Params = { vendorId?: string; document?: string };
+
+/** Opened from a scanned bill (?document=), the file shows beside the form, which starts filled from it. */
+export default function NewBillPage({ searchParams }: { searchParams: Params }) {
+  return (
+    <DocumentEntry documentId={searchParams.document} key={searchParams.document ?? ''}>
+      <NewBillForm searchParams={searchParams} />
+    </DocumentEntry>
+  );
+}
 
 /**
  * A bill typed line by line. In rupees it is priced on the server from its
@@ -21,9 +32,9 @@ interface Currency { code: string; name: string; digits: number }
  * reverse-charge IGST for imported services. Either way it is saved as a
  * draft, to check and then post to the ledger.
  */
-export default function NewBillPage({ searchParams }: { searchParams: { vendorId?: string } }) {
-  const router = useRouter();
+function NewBillForm({ searchParams }: { searchParams: Params }) {
   const qc = useQueryClient();
+  const entry = useDocumentEntry();
   const vendors = useVendors();
   const workspace = useWorkspace();
   const currencies = useQuery({ queryKey: ['currency', 'currencies'], queryFn: () => api.get<Currency[]>('/currency/currencies'), retry: false });
@@ -44,6 +55,17 @@ export default function NewBillPage({ searchParams }: { searchParams: { vendorId
 
   const vendor = (vendors.data ?? []).find((v) => v._id === vendorId);
   const foreign = currency !== 'INR' ? (currencies.data ?? []).find((c) => c.code === currency) ?? null : null;
+
+  // From a scan: what was read, for the person to check. A vendor chosen in the link wins.
+  usePrefill((x) => {
+    setVendorId((v) => v || x.vendor?.id || '');
+    if (x.number) setBillNumber(x.number.slice(0, 40));
+    if (x.date) setBillDate(x.date);
+    if (x.dueDate && (!x.date || x.dueDate >= x.date)) setDueDate(x.dueDate);
+    if (x.isReverseCharge) setReverseCharge(true);
+    const read = scanLines(x);
+    if (read.length) setLines(read.map((l) => ({ ...emptyBillLine(), ...l })));
+  });
 
   // A vendor who bills in a currency of their own starts the bill in it.
   useEffect(() => {
@@ -112,7 +134,9 @@ export default function NewBillPage({ searchParams }: { searchParams: { vendorId
       void qc.invalidateQueries({ queryKey: ['purchase'] });
       void qc.invalidateQueries({ queryKey: ['currency'] });
       notify('Bill saved');
-      router.push(`/purchases/bills/${bill._id}`);
+      // From a scan: the file is kept with the bill first. Otherwise, straight to the bill.
+      const label = billNumber.trim() ? `Bill ${billNumber.trim()}` : `Bill from ${vendor?.name ?? 'the vendor'}`;
+      return entry.finish({ entityType: 'PurchaseBill', entityId: bill._id, label }, `/purchases/bills/${bill._id}`);
     },
     onError: (e) => setProblem(errorText(e, "Couldn't save the bill. Try again.")),
   });
@@ -131,6 +155,7 @@ export default function NewBillPage({ searchParams }: { searchParams: { vendorId
         actions={
           <>
             <Button type="submit" disabled={save.isPending}>{save.isPending ? 'Saving…' : 'Save bill'}</Button>
+            <EntryActions busy={save.isPending} />
             <Button type="button" variant="secondary" asChild>
               <Link href="/purchases/bills">Cancel</Link>
             </Button>
@@ -138,9 +163,10 @@ export default function NewBillPage({ searchParams }: { searchParams: { vendorId
         }
       >
         <Section title="Bill">
+          <PartyFound kind="vendor" chosen={!!vendorId} selectId="bill-vendor" />
           <div className="grid gap-4 md:grid-cols-3">
             <Field label="Vendor" required className="md:col-span-2" hint={vendors.data?.length === 0 ? <Link href="/purchases/vendors/new" className="underline">Add a vendor first</Link> : vendor?.gstin ? <span className="font-mono">{vendor.gstin}</span> : vendor ? 'Not registered for GST' : undefined}>
-              <select className={inputClass} value={vendorId} onChange={(e) => setVendorId(e.target.value)}>
+              <select id="bill-vendor" className={inputClass} value={vendorId} onChange={(e) => setVendorId(e.target.value)}>
                 <option value="">{vendors.isLoading ? 'Loading…' : 'Choose a vendor…'}</option>
                 {(vendors.data ?? []).map((v) => (
                   <option key={v._id} value={v._id}>{v.name}{v.gstin ? ` · ${v.gstin}` : ''}</option>
@@ -206,7 +232,7 @@ export default function NewBillPage({ searchParams }: { searchParams: { vendorId
         </Section>
 
         <Section title="Lines" description={foreign ? `Prices in ${foreign.code}; converted to rupees once, at the rate.` : 'Pick an item to fill a line, or type it. The server works out the tax.'}>
-          <BillLineEditor lines={lines} onChange={setLines} foreign={foreign ? { currency: foreign.code, digits: foreign.digits } : null} />
+          <BillLineEditor lines={lines} onChange={setLines} foreign={foreign ? { currency: foreign.code, digits: foreign.digits } : null} showAccount />
           <div className="mt-4 border-t border-line-100 pt-4">
             {foreign ? (
               <div className="ml-auto w-full max-w-xs text-body">

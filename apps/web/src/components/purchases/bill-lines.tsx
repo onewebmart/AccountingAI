@@ -5,7 +5,7 @@ import { ItemSelect } from '@/components/items/item-picker';
 import { ProjectSelect, useProjects } from '@/components/projects/project-select';
 import { formatPaise } from '@/lib/gst';
 import { parseRupees } from '@/lib/money';
-import { GST_SLABS, formatMinor, parseMinor, type Amounts } from './purchase-data';
+import { GST_SLABS, formatMinor, parseMinor, useAccounts, type Amounts, type LedgerAccountRow } from './purchase-data';
 
 /** One line of a bill or purchase order as typed: text until it is sent. */
 export interface BillEditLine {
@@ -17,9 +17,21 @@ export interface BillEditLine {
   rate: string;
   taxRatePct: number;
   projectId: string;
+  /** The account the line is booked to; empty for the item's, or Purchases. Bills only. */
+  accountId?: string;
 }
 
-export const emptyBillLine = (): BillEditLine => ({ itemId: '', description: '', hsnSac: '', qty: '1', rate: '', taxRatePct: 18, projectId: '' });
+export const emptyBillLine = (): BillEditLine => ({ itemId: '', description: '', hsnSac: '', qty: '1', rate: '', taxRatePct: 18, projectId: '', accountId: '' });
+
+const MONEY_NAME = /\b(bank|cash|petty|wallet|imprest|current a\/?c|savings a\/?c)\b/i;
+/** What a bill line may be booked to, as the API allows: an expense, or an asset bought. */
+export function bookableForBill(a: LedgerAccountRow): boolean {
+  if (a.isGroup || !a.isActive) return false;
+  if (a.type === 'EXPENSE') return true;
+  if (a.type !== 'ASSETS') return false;
+  if (a.systemKey) return a.systemKey === 'PREPAID_EXPENSES' || a.systemKey === 'INVENTORY';
+  return !MONEY_NAME.test(a.name);
+}
 
 const isBlank = (l: BillEditLine) => !l.description.trim() && !l.rate.trim() && !l.itemId;
 
@@ -36,7 +48,7 @@ function readQty(text: string): number | null {
  * Blank rows are left out. Says which line it cannot read.
  */
 export function billLinesToApi(lines: BillEditLine[]):
-  | { ok: true; lines: Array<{ itemId: string | null; description: string; hsnSac: string | null; qty: number; ratePaise: number; taxRatePct: number; projectId: string | null }> }
+  | { ok: true; lines: Array<{ itemId: string | null; description: string; hsnSac: string | null; qty: number; ratePaise: number; taxRatePct: number; projectId: string | null; accountId?: string }> }
   | { ok: false; problem: string } {
   const out = [];
   const typed = lines.filter((l) => !isBlank(l));
@@ -48,7 +60,8 @@ export function billLinesToApi(lines: BillEditLine[]):
     if (qty === null) return { ok: false, problem: `${at}: the quantity is more than nothing, to three decimals at most.` };
     const ratePaise = parseRupees(l.rate || '0');
     if (ratePaise === null || ratePaise < 0) return { ok: false, problem: `${at}: enter the rate in rupees, like 1,250.50.` };
-    out.push({ itemId: l.itemId || null, description: l.description.trim(), hsnSac: l.hsnSac.trim() || null, qty, ratePaise, taxRatePct: l.taxRatePct, projectId: l.projectId || null });
+    // Sent only when chosen: purchase orders share these lines and take no account.
+    out.push({ itemId: l.itemId || null, description: l.description.trim(), hsnSac: l.hsnSac.trim() || null, qty, ratePaise, taxRatePct: l.taxRatePct, projectId: l.projectId || null, ...(l.accountId ? { accountId: l.accountId } : {}) });
   }
   return { ok: true, lines: out };
 }
@@ -106,13 +119,19 @@ export function BillLineEditor({
   onChange,
   foreign,
   showProject = true,
+  showAccount = false,
 }: {
   lines: BillEditLine[];
   onChange: (lines: BillEditLine[]) => void;
   foreign?: { currency: string; digits: number } | null;
   showProject?: boolean;
+  /** An account per line: a bill's rent to Rent, a laptop to Computers. */
+  showAccount?: boolean;
 }) {
   const projects = useProjects();
+  const chart = useAccounts();
+  const withAccount = showAccount && !foreign;
+  const bookable = (chart.data ?? []).filter(bookableForBill).sort((a, b) => a.code.localeCompare(b.code));
   const withProject = showProject && (projects.data?.length ?? 0) > 0;
   const set = (i: number, patch: Partial<BillEditLine>) => onChange(lines.map((l, n) => (n === i ? { ...l, ...patch } : l)));
   const amountOf = (l: BillEditLine) => {
@@ -133,6 +152,7 @@ export function BillLineEditor({
               <th className={`${head} w-20`}>Qty</th>
               <th className={`${head} w-28`}>Rate {foreign ? `(${foreign.currency})` : '(₹)'}</th>
               {!foreign && <th className={`${head} w-20`}>GST</th>}
+              {withAccount && <th className={`${head} w-44`}>Account</th>}
               {withProject && <th className={`${head} w-40`}>Project</th>}
               <th className={`${head} w-28 text-right`}>Amount</th>
               <th className="w-8" />
@@ -145,15 +165,18 @@ export function BillLineEditor({
                   <ItemSelect
                     className={cell}
                     value={l.itemId}
+                    side="purchase"
                     onPick={(item) => {
                       if (!item) return set(i, { itemId: '' });
                       set(i, {
                         itemId: item._id,
-                        description: l.description.trim() ? l.description : item.name,
+                        description: l.description.trim() ? l.description : item.purchaseDescription || item.name,
                         hsnSac: item.hsnSac ?? l.hsnSac,
                         taxRatePct: item.gstRatePct != null && (GST_SLABS as readonly number[]).includes(item.gstRatePct) ? item.gstRatePct : l.taxRatePct,
                         // A price on the item fills an empty rate; one already typed stays. Rupees only.
                         rate: !foreign && !l.rate.trim() && item.purchasePricePaise != null ? String(item.purchasePricePaise / 100) : l.rate,
+                        // The item's own expense account, unless one is already chosen.
+                        accountId: l.accountId || item.expenseAccountId || '',
                       });
                     }}
                   />
@@ -175,6 +198,16 @@ export function BillLineEditor({
                     <select className={cell} value={l.taxRatePct} onChange={(e) => set(i, { taxRatePct: Number(e.target.value) })} aria-label={`Line ${i + 1} GST rate`}>
                       {GST_SLABS.map((r) => (
                         <option key={r} value={r}>{r}%</option>
+                      ))}
+                    </select>
+                  </td>
+                )}
+                {withAccount && (
+                  <td className="px-1.5 py-1">
+                    <select className={cell} value={l.accountId ?? ''} onChange={(e) => set(i, { accountId: e.target.value })} aria-label={`Line ${i + 1} account`}>
+                      <option value="">{l.itemId ? 'The item’s account' : 'Purchases'}</option>
+                      {bookable.map((a) => (
+                        <option key={a._id} value={a._id}>{a.name}</option>
                       ))}
                     </select>
                   </td>

@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Field, FormPage, PageHeader, Section, inputClass } from '@/components/page/page-shell';
@@ -11,11 +10,23 @@ import { api } from '@/lib/api';
 import { useWorkspace } from '@/lib/use-workspace';
 import { AmountsSummary, BillLineEditor, billLinesToApi, emptyBillLine, previewAmounts, type BillEditLine } from '@/components/purchases/bill-lines';
 import { errorText, todayIso, useVendors } from '@/components/purchases/purchase-data';
+import { DocumentEntry, EntryActions, PartyFound, scanLines, useDocumentEntry, usePrefill } from '@/components/documents/document-entry';
+
+type Params = { vendorId?: string; document?: string };
+
+/** Opened from a scan (?document=), the file shows beside the form, which starts filled from it. */
+export default function NewPurchaseOrderPage({ searchParams }: { searchParams: Params }) {
+  return (
+    <DocumentEntry documentId={searchParams.document} key={searchParams.document ?? ''}>
+      <NewPurchaseOrderForm searchParams={searchParams} />
+    </DocumentEntry>
+  );
+}
 
 /** A purchase order to a vendor. It posts nothing: goods are received against it, and the bill matched to it. */
-export default function NewPurchaseOrderPage({ searchParams }: { searchParams: { vendorId?: string } }) {
-  const router = useRouter();
+function NewPurchaseOrderForm({ searchParams }: { searchParams: Params }) {
   const qc = useQueryClient();
+  const entry = useDocumentEntry();
   const vendors = useVendors();
   const workspace = useWorkspace();
   const [vendorId, setVendorId] = useState(searchParams.vendorId ?? '');
@@ -24,6 +35,14 @@ export default function NewPurchaseOrderPage({ searchParams }: { searchParams: {
   const [lines, setLines] = useState<BillEditLine[]>([emptyBillLine()]);
   const [notes, setNotes] = useState('');
   const [problem, setProblem] = useState<string | null>(null);
+
+  // From a scan: the vendor, the date and the lines read. A vendor chosen in the link wins.
+  usePrefill((x) => {
+    setVendorId((v) => v || x.vendor?.id || '');
+    if (x.date) setDate(x.date);
+    const read = scanLines(x);
+    if (read.length) setLines(read.map((l) => ({ ...emptyBillLine(), ...l })));
+  });
 
   const vendor = (vendors.data ?? []).find((v) => v._id === vendorId);
   const ours = workspace.data?.org.gstin?.slice(0, 2) ?? null;
@@ -48,7 +67,7 @@ export default function NewPurchaseOrderPage({ searchParams }: { searchParams: {
     onSuccess: (po) => {
       void qc.invalidateQueries({ queryKey: ['orders'] });
       notify(`Purchase order ${po.number} raised`);
-      router.push(`/purchases/orders/${po._id}`);
+      return entry.finish({ entityType: 'PurchaseOrder', entityId: po._id, label: `Purchase order ${po.number}` }, `/purchases/orders/${po._id}`);
     },
     onError: (e) => setProblem(errorText(e, "Couldn't raise the purchase order.")),
   });
@@ -65,6 +84,7 @@ export default function NewPurchaseOrderPage({ searchParams }: { searchParams: {
         actions={
           <>
             <Button type="submit" disabled={raise.isPending}>{raise.isPending ? 'Saving…' : 'Raise purchase order'}</Button>
+            <EntryActions busy={raise.isPending} />
             <Button type="button" variant="secondary" asChild>
               <Link href="/purchases/orders">Cancel</Link>
             </Button>
@@ -72,9 +92,10 @@ export default function NewPurchaseOrderPage({ searchParams }: { searchParams: {
         }
       >
         <Section title="Order">
+          <PartyFound kind="vendor" chosen={!!vendorId} selectId="po-vendor" />
           <div className="grid gap-4 md:grid-cols-3">
             <Field label="Vendor" required className="md:col-span-3">
-              <select className={inputClass} value={vendorId} onChange={(e) => setVendorId(e.target.value)}>
+              <select id="po-vendor" className={inputClass} value={vendorId} onChange={(e) => setVendorId(e.target.value)}>
                 <option value="">{vendors.isLoading ? 'Loading…' : 'Choose a vendor…'}</option>
                 {(vendors.data ?? []).map((v) => (
                   <option key={v._id} value={v._id}>{v.name}{v.gstin ? ` · ${v.gstin}` : ''}</option>

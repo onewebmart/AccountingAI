@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { FormPage, PageHeader } from '@/components/page/page-shell';
@@ -10,18 +9,50 @@ import { notify } from '@/components/page/notifier';
 import { api, ApiError } from '@/lib/api';
 import { ExpenseFields, emptyExpense, expenseBody, useInterState, type ExpenseFormValue } from '@/components/purchases/expense-form';
 import { errorText } from '@/components/purchases/purchase-data';
+import { DocumentEntry, EntryActions, PartyFound, gstSlab, rupeesOf, scanTaxRate, scanTaxable, useDocumentEntry, usePrefill } from '@/components/documents/document-entry';
+
+/** Opened from a scanned receipt or bill (?document=), the file shows beside the form, which starts filled from it. */
+export default function NewExpensePage({ searchParams }: { searchParams: { document?: string } }) {
+  return (
+    <DocumentEntry documentId={searchParams.document} key={searchParams.document ?? ''}>
+      <NewExpenseForm />
+    </DocumentEntry>
+  );
+}
 
 /**
  * A new expense. Save expense keeps it a draft; Save and post saves it and
  * posts the payment voucher at once (a payment approval policy may hold
  * the posting: the draft is saved either way).
  */
-export default function NewExpensePage() {
-  const router = useRouter();
+function NewExpenseForm() {
   const qc = useQueryClient();
+  const entry = useDocumentEntry();
   const [value, setValue] = useState<ExpenseFormValue>(emptyExpense);
   const [problem, setProblem] = useState<string | null>(null);
   const interState = useInterState(value);
+
+  // From a scan: the amount before tax, its one GST rate, who was paid and the receipt number.
+  usePrefill((x) => {
+    const taxable = scanTaxable(x);
+    const rates = [...new Set(x.lines.filter((l) => l.taxRatePct > 0).map((l) => gstSlab(l.taxRatePct)))];
+    const rate = rates.length === 1 ? rates[0] : scanTaxRate(x);
+    const a = x.amountsPaise;
+    setValue((v) => ({
+      ...v,
+      date: x.date ?? v.date,
+      vendorId: v.vendorId || x.vendor?.id || '',
+      amount: taxable > 0 ? rupeesOf(taxable) : v.amount,
+      gstRatePct: rate,
+      // The tax heads charged say where the supplier is: IGST from another state.
+      interState: a && a.igst > 0 ? true : a && a.cgst + a.sgst > 0 ? false : null,
+      // Input credit needs the supplier's GSTIN on the invoice.
+      claimable: rate > 0 && !!x.party.gstin,
+      vendorGstin: x.party.gstin ?? '',
+      reference: x.number ? x.number.slice(0, 120) : v.reference,
+      notes: v.notes || (x.lines[0]?.description ?? '').trim().slice(0, 1000),
+    }));
+  });
 
   const save = useMutation({
     mutationFn: async (andPost: boolean) => {
@@ -45,7 +76,7 @@ export default function NewExpensePage() {
       } else if (held) notify(`Expense ${created.number} saved. ${held}`, 'info');
       else if (failed) notify(`Expense ${created.number} saved as a draft, not posted: ${failed}`, 'error');
       else notify(`Expense ${created.number} saved`);
-      router.push(`/purchases/expenses/${created._id}`);
+      return entry.finish({ entityType: 'DirectExpense', entityId: created._id, label: `Expense ${created.number}` }, `/purchases/expenses/${created._id}`);
     },
     onError: (e) => setProblem(errorText(e, "Couldn't save the expense.")),
   });
@@ -65,11 +96,16 @@ export default function NewExpensePage() {
             <Button type="button" variant="secondary" disabled={save.isPending} onClick={() => { setProblem(null); save.mutate(true); }}>
               {save.isPending && save.variables ? 'Posting…' : 'Save and post'}
             </Button>
+            <EntryActions busy={save.isPending} />
             <Button type="button" variant="ghost" asChild><Link href="/purchases/expenses">Cancel</Link></Button>
           </>
         }
       >
-        <ExpenseFields value={value} onChange={(p) => setValue((v) => ({ ...v, ...p }))} />
+        <ExpenseFields
+          value={value}
+          onChange={(p) => setValue((v) => ({ ...v, ...p }))}
+          notice={<PartyFound kind="vendor" chosen={!!value.vendorId} selectId="expense-vendor" />}
+        />
       </FormPage>
     </div>
   );

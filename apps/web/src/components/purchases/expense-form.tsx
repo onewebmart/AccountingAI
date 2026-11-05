@@ -97,7 +97,14 @@ export function expenseBody(v: ExpenseFormValue, interState: boolean) {
  * What was paid, for what, and from where. The GST is claimed to input
  * credit, or added to the cost when it cannot be (no GSTIN, or blocked).
  */
-export function ExpenseFields({ value, onChange, withDate = true, title = 'Expense' }: { value: ExpenseFormValue; onChange: (patch: Partial<ExpenseFormValue>) => void; withDate?: boolean; title?: string }) {
+export function ExpenseFields({ value, onChange, withDate = true, title = 'Expense', notice }: {
+  value: ExpenseFormValue;
+  onChange: (patch: Partial<ExpenseFormValue>) => void;
+  withDate?: boolean;
+  title?: string;
+  /** Above the fields: a scan's vendor not yet in the books. */
+  notice?: React.ReactNode;
+}) {
   const vendors = useVendors();
   const expenseAccounts = useExpenseAccounts();
   const paidThrough = usePaidThroughAccounts();
@@ -108,6 +115,7 @@ export function ExpenseFields({ value, onChange, withDate = true, title = 'Expen
   return (
     <>
       <Section title={title}>
+        {notice}
         <div className="grid gap-4 md:grid-cols-3">
           {withDate && (
             <Field label="Date" required>
@@ -127,7 +135,7 @@ export function ExpenseFields({ value, onChange, withDate = true, title = 'Expen
             </select>
           </Field>
           <Field label="Vendor" hint="Optional: who was paid, when they are in your vendors.">
-            <select className={inputClass} value={value.vendorId} onChange={(e) => onChange({ vendorId: e.target.value, interState: null })}>
+            <select id="expense-vendor" className={inputClass} value={value.vendorId} onChange={(e) => onChange({ vendorId: e.target.value, interState: null })}>
               <option value="">No vendor</option>
               {(vendors.data ?? []).map((x) => <option key={x._id} value={x._id}>{x.name}</option>)}
             </select>

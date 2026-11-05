@@ -12,6 +12,8 @@ import { notify } from '@/components/page/notifier';
 import { errorText, shortDate } from '@/components/accountant/common';
 import { api } from '@/lib/api';
 import { formatPaise } from '@/lib/gst';
+import { AddToMenu } from '@/components/documents/add-to-menu';
+import { EnteredAsLink, canAddTo, type EnteredAs } from '@/components/documents/document-entry';
 
 /** An upload, as GET /documents lists it. */
 interface ApiDocument {
@@ -26,6 +28,8 @@ interface ApiDocument {
   sizeBytes: number;
   uploadedAt: string;
   source?: { channel: 'upload' | 'email' | 'whatsapp'; from: string | null };
+  /** Entered by hand from "Add to" as this record. */
+  enteredAs?: EnteredAs | null;
 }
 /** A file kept against a record, as GET /attachments lists them all. */
 interface ApiAttachment {
@@ -38,7 +42,7 @@ interface ApiAttachment {
   uploadedByName: string;
 }
 
-type Status = 'reading' | 'ready' | 'posted' | 'rejected' | 'duplicate' | 'failed' | 'attached';
+type Status = 'reading' | 'ready' | 'posted' | 'entered' | 'rejected' | 'duplicate' | 'failed' | 'attached';
 interface Row {
   key: string;
   id: string;
@@ -53,12 +57,16 @@ interface Row {
   sizeBytes: number | null;
   proposalId: string | null;
   record: { href: string | null; label: string } | null;
+  /** A read upload not yet entered: "Add to" opens a form filled from it. */
+  addTo: boolean;
+  enteredAs: EnteredAs | null;
 }
 
 const STATUS: Record<Status, { label: string; tone: 'pending' | 'success' | 'neutral' | 'error' }> = {
   reading: { label: 'Reading…', tone: 'pending' },
   ready: { label: 'Ready to review', tone: 'pending' },
   posted: { label: 'Posted', tone: 'success' },
+  entered: { label: 'Entered', tone: 'success' },
   rejected: { label: 'Rejected', tone: 'neutral' },
   duplicate: { label: 'Duplicate?', tone: 'error' },
   failed: { label: "Couldn't read", tone: 'error' },
@@ -82,6 +90,10 @@ const RECORDS: Record<string, { label: string; href: (id: string) => string | nu
   Vendor: { label: 'Vendor', href: (id) => `/purchases/vendors/${id}` },
   ExpenseClaim: { label: 'Expense claim', href: (id) => `/purchases/claims/${id}` },
   DirectExpense: { label: 'Expense', href: (id) => `/purchases/expenses/${id}` },
+  PurchaseOrder: { label: 'Purchase order', href: (id) => `/purchases/orders/${id}` },
+  DebitNote: { label: 'Debit note', href: () => '/purchases/vendor-credits' },
+  Quote: { label: 'Quote', href: (id) => `/sales/quotes/${id}` },
+  SalesOrder: { label: 'Sales order', href: (id) => `/sales/orders/${id}` },
 };
 
 function uploadStatus(s: ApiDocument['status']): Status {
@@ -107,12 +119,14 @@ export default function DocumentsPage() {
 
   const rows: Row[] = [
     ...(docs.data?.data ?? []).map((d): Row => {
-      const st = uploadStatus(d.status);
+      // Entered by hand: its AI proposal was closed, so it reads as entered, not rejected.
+      const st = d.enteredAs ? 'entered' : uploadStatus(d.status);
       const via = d.source && d.source.channel !== 'upload' ? `via ${d.source.channel === 'email' ? 'email' : 'WhatsApp'}` : '';
       return {
         key: `d:${d._id}`, id: d._id, source: 'upload', name: d.originalName, type: d.documentType ?? 'unknown', status: st, at: d.uploadedAt,
         detail: [d.vendor, d.invoiceNumber, via].filter(Boolean).join(' · '), amountPaise: d.totalAmountPaise, sizeBytes: d.sizeBytes, proposalId: d.proposalId,
         record: st === 'ready' ? { href: '/review', label: 'Review' } : st === 'posted' && d.proposalId ? { href: null, label: 'Open voucher' } : st === 'failed' || st === 'duplicate' || st === 'reading' ? { href: '/inbox', label: 'Inbox' } : null,
+        addTo: canAddTo(d.status, d.enteredAs), enteredAs: d.enteredAs ?? null,
       };
     }),
     ...(files.data ?? []).map((a): Row => {
@@ -123,6 +137,7 @@ export default function DocumentsPage() {
         detail: `${rec?.label ?? a.entityType} · attached by ${a.uploadedByName}`, amountPaise: null, sizeBytes: a.sizeBytes, proposalId: null,
         // A record with no page of its own (a payment) has no link; its file still opens.
         record: rec && href ? { href, label: `Open ${rec.label.toLowerCase()}` } : null,
+        addTo: false, enteredAs: null,
       };
     }),
   ].sort((x, y) => y.at.localeCompare(x.at));
@@ -163,6 +178,7 @@ export default function DocumentsPage() {
   return (
     <div>
       <PageHeader
+        guide="documents"
         title="Documents"
         subtitle="Every file in the books: bills, invoices, statements and receipts sent to the inbox, and files kept against invoices, bills, vouchers, expenses, claims and parties."
         actions={<Button asChild><Link href="/inbox">Upload in the inbox</Link></Button>}
@@ -174,7 +190,7 @@ export default function DocumentsPage() {
         filters={{
           value: status,
           onChange: setStatus,
-          options: [['all', 'All'], ['ready', 'Ready to review'], ['posted', 'Posted'], ['attached', 'Attached'], ['reading', 'Reading'], ['duplicate', 'Duplicate?'], ['failed', "Couldn't read"], ['rejected', 'Rejected']],
+          options: [['all', 'All'], ['ready', 'Ready to review'], ['posted', 'Posted'], ['entered', 'Entered'], ['attached', 'Attached'], ['reading', 'Reading'], ['duplicate', 'Duplicate?'], ['failed', "Couldn't read"], ['rejected', 'Rejected']],
         }}
       >
         <select className="h-10 rounded-md border border-line-200 bg-white px-3 text-body text-ink-900" value={type} onChange={(e) => setType(e.target.value)} aria-label="Type">
@@ -190,6 +206,7 @@ export default function DocumentsPage() {
         <p className="flex items-center gap-2 py-10 text-caption text-ink-400"><Loader2 size={14} className="animate-spin" /> Loading documents…</p>
       ) : shown.length === 0 ? (
         <EmptyState
+          guide={rows.length ? undefined : 'documents'}
           title={rows.length ? 'No document matches' : 'No documents yet'}
           body={rows.length ? 'Change the search, status or type.' : 'Upload bills, invoices and statements in the inbox, or attach files to a record.'}
         />
@@ -222,6 +239,8 @@ export default function DocumentsPage() {
                   <td className={td}><StatusChip tone={STATUS[r.status].tone}>{STATUS[r.status].label}</StatusChip></td>
                   <td className={`${td} whitespace-nowrap text-right text-caption`}>
                     <span className="flex items-center justify-end gap-3">
+                      {r.enteredAs && <EnteredAsLink enteredAs={r.enteredAs} />}
+                      {r.addTo && <AddToMenu documentId={r.id} fileName={r.name} />}
                       <button type="button" className="inline-flex items-center gap-1 font-medium text-ink-600 hover:text-ink-900 hover:underline disabled:opacity-50" disabled={busy === r.key} onClick={() => void openFile(r)}>
                         <ExternalLink size={12} /> {busy === r.key ? 'Opening…' : 'Open file'}
                       </button>

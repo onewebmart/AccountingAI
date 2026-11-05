@@ -16,10 +16,13 @@ import {
   X, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
 import { SentInPanel, formatPhone } from '@/components/inbox/sent-in-panel';
+import { GuideButton, ModuleGuide } from '@/components/guide/module-guide';
+import { AddToMenu } from '@/components/documents/add-to-menu';
+import { EnteredAsLink, canAddTo, type EnteredAs } from '@/components/documents/document-entry';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type DocStatus = 'reading' | 'ready' | 'posted' | 'duplicate' | 'failed';
+type DocStatus = 'reading' | 'ready' | 'posted' | 'entered' | 'duplicate' | 'failed';
 type DocType = 'purchase_invoice' | 'sales_invoice' | 'bank_statement' | 'receipt' | 'unknown';
 
 interface InboxDoc {
@@ -38,6 +41,10 @@ interface InboxDoc {
   failureReason?: string;
   /** Sent in by email or WhatsApp rather than uploaded, and by whom. */
   source?: { channel: 'upload' | 'email' | 'whatsapp'; from: string | null };
+  /** Read and not yet entered: "Add to" opens a form filled from it. */
+  addTo?: boolean;
+  /** Entered by hand from "Add to" as this record. */
+  enteredAs?: EnteredAs | null;
 }
 
 // ── API response shape ────────────────────────────────────────────────────────
@@ -69,6 +76,7 @@ interface ApiDocument {
   /** Why the pipeline gave up, when it did. */
   failureReason?: string;
   source?: { channel: 'upload' | 'email' | 'whatsapp'; from: string | null };
+  enteredAs?: EnteredAs | null;
 }
 
 // ── Status mapping ────────────────────────────────────────────────────────────
@@ -104,10 +112,13 @@ function mapApiDoc(doc: ApiDocument): InboxDoc {
     amountPaise: doc.totalAmountPaise ?? null,
     confidence: doc.confidence ?? null,
     ocrTier: doc.ocrTier ?? null,
-    status: mapApiStatus(doc.status),
+    // Entered by hand: its AI proposal was closed, so it reads as entered, not as failed.
+    status: doc.enteredAs ? 'entered' : mapApiStatus(doc.status),
     duplicateOf: doc.duplicateOfName ?? doc.duplicateOf,
     failureReason: doc.failureReason,
     source: doc.source,
+    addTo: canAddTo(doc.status, doc.enteredAs),
+    enteredAs: doc.enteredAs ?? null,
   };
 }
 
@@ -144,6 +155,13 @@ function StatusChip({ status, duplicateOf }: { status: DocStatus; duplicateOf?: 
     return (
       <span className="inline-flex items-center gap-1.5 text-caption font-medium text-success-fg bg-success-bg border border-success-fg/30 rounded-full px-2.5 py-0.5">
         <CheckCircle2 size={11} /> Posted
+      </span>
+    );
+  }
+  if (status === 'entered') {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-caption font-medium text-success-fg bg-success-bg border border-success-fg/30 rounded-full px-2.5 py-0.5">
+        <CheckCircle2 size={11} /> Entered
       </span>
     );
   }
@@ -370,13 +388,16 @@ export default function InboxPage() {
         <h1 className="text-h1 font-display text-ink-900">
           Inbox
         </h1>
-        {readyCount > 0 && (
-          <Button variant="primary" asChild>
-            <Link href="/review">
-              Review {readyCount} document{readyCount !== 1 ? 's' : ''} <ChevronRight size={15} />
-            </Link>
-          </Button>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          <GuideButton guide="inbox" />
+          {readyCount > 0 && (
+            <Button variant="primary" asChild>
+              <Link href="/review">
+                Review {readyCount} document{readyCount !== 1 ? 's' : ''} <ChevronRight size={15} />
+              </Link>
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Dropzone */}
@@ -423,7 +444,10 @@ export default function InboxPage() {
           </p>
           <p className="text-body text-ink-500">Drop a document above to begin.</p>
         </div>
-      ) : (
+      ) : null}
+      {/* Before the first document arrives, show how the inbox works. */}
+      {!isLoading && !isError && docs.length === 0 && <ModuleGuide guide="inbox" />}
+      {(isLoading && optimisticDocs.length === 0) || filtered.length === 0 ? null : (
         <div className="rounded-xl border border-line-200 bg-surface-card overflow-hidden">
           <table className="w-full text-left">
             <thead>
@@ -479,29 +503,33 @@ export default function InboxPage() {
                       <StatusChip status={doc.status} duplicateOf={doc.duplicateOf} />
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
-                      {doc.status === 'ready' && (
-                        <Button variant="secondary" size="sm" asChild>
-                          <Link href="/review">Review <ChevronRight size={13} /></Link>
-                        </Button>
-                      )}
-                      {doc.status === 'duplicate' && (
-                        <button
-                          onClick={() => dismissDuplicate(doc.id)}
-                          className="inline-flex items-center gap-1 text-caption text-ink-400 hover:text-error-fg transition-colors"
-                        >
-                          <X size={13} /> Skip
-                        </button>
-                      )}
-                      {doc.status === 'failed' && (
-                        <button
-                          onClick={() => retryMutation.mutate(doc.id)}
-                          disabled={retryMutation.isPending}
-                          className="inline-flex items-center gap-1 text-caption text-saffron-700 transition-colors hover:underline disabled:opacity-50"
-                        >
-                          <RefreshCw size={13} />
-                          {retryMutation.isPending ? 'Retrying…' : 'Try again'}
-                        </button>
-                      )}
+                      <div className="flex items-center gap-2">
+                        {doc.enteredAs && <EnteredAsLink enteredAs={doc.enteredAs} />}
+                        {doc.addTo && <AddToMenu documentId={doc.id} fileName={doc.fileName} />}
+                        {doc.status === 'ready' && (
+                          <Button variant="secondary" size="sm" asChild>
+                            <Link href="/review">Review <ChevronRight size={13} /></Link>
+                          </Button>
+                        )}
+                        {doc.status === 'duplicate' && (
+                          <button
+                            onClick={() => dismissDuplicate(doc.id)}
+                            className="inline-flex items-center gap-1 text-caption text-ink-400 hover:text-error-fg transition-colors"
+                          >
+                            <X size={13} /> Skip
+                          </button>
+                        )}
+                        {doc.status === 'failed' && (
+                          <button
+                            onClick={() => retryMutation.mutate(doc.id)}
+                            disabled={retryMutation.isPending}
+                            className="inline-flex items-center gap-1 text-caption text-saffron-700 transition-colors hover:underline disabled:opacity-50"
+                          >
+                            <RefreshCw size={13} />
+                            {retryMutation.isPending ? 'Retrying…' : 'Try again'}
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                   {doc.status === 'failed' && (

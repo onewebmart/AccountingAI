@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -14,6 +13,7 @@ import { ProjectSelect } from '@/components/projects/project-select';
 import { api } from '@/lib/api';
 import { formatPaise } from '@/lib/gst';
 import { parseRupees } from '@/lib/money';
+import { DocumentEntry, EntryActions, scanSummary, useDocumentEntry, usePrefill } from '@/components/documents/document-entry';
 
 interface Line { accountId: string; description: string; debit: string; credit: string; projectId: string }
 const blank = (): Line => ({ accountId: '', description: '', debit: '', credit: '', projectId: '' });
@@ -25,14 +25,29 @@ const amount = (v: string) => {
   return p === null || p < 0 ? null : p;
 };
 
-export default function NewManualJournalPage() {
-  const router = useRouter();
+/** Opened from a scan (?document=), the file shows beside the journal: its date and narration come from it, the accounts from the person. */
+export default function NewManualJournalPage({ searchParams }: { searchParams: { document?: string } }) {
+  return (
+    <DocumentEntry documentId={searchParams.document} key={searchParams.document ?? ''}>
+      <NewManualJournal />
+    </DocumentEntry>
+  );
+}
+
+function NewManualJournal() {
   const qc = useQueryClient();
+  const entry = useDocumentEntry();
   const [date, setDate] = useState(todayIso());
   const [narration, setNarration] = useState('');
   const [lines, setLines] = useState<Line[]>([blank(), blank()]);
   const [error, setError] = useState<string | null>(null);
   const [held, setHeld] = useState<string | null>(null);
+
+  // From a scan: the date, and a narration naming the document. Which accounts move is the person's call.
+  usePrefill((x) => {
+    if (x.date) setDate(x.date);
+    setNarration((n) => n || scanSummary(x).slice(0, 300));
+  });
 
   const set = (i: number, patch: Partial<Line>) => setLines((all) => all.map((l, n) => (n === i ? { ...l, ...patch } : l)));
   const used = lines.filter((l) => l.accountId || l.debit.trim() || l.credit.trim() || l.description.trim());
@@ -60,7 +75,7 @@ export default function NewManualJournalPage() {
       void qc.invalidateQueries({ queryKey: ['journals'] });
       void qc.invalidateQueries({ queryKey: ['gl', 'accounts'] });
       notify('Journal posted');
-      router.push(`/accountant/manual-journals/${j._id}`);
+      return entry.finish({ entityType: 'Journal', entityId: j._id, label: `Journal ${j.voucherNumber}` }, `/accountant/manual-journals/${j._id}`);
     },
     onError: (err) => {
       if (isApprovalHold(err)) {
@@ -78,6 +93,9 @@ export default function NewManualJournalPage() {
         <PageHeader title="Sent for approval" back={{ href: '/accountant/manual-journals', label: 'Manual journals' }} />
         <Notice tone="pending">{held}</Notice>
         <p className="text-body text-ink-600">The journal posts, exactly as entered, once it is approved. Nothing is in the ledger until then.</p>
+        {entry.active && (
+          <p className="text-body text-ink-600">The scan stays in Documents, not yet entered: attach it to the journal from its page once it is approved.</p>
+        )}
         <div className="flex gap-2">
           <Button asChild><Link href="/approvals">Open approvals</Link></Button>
           <Button variant="secondary" onClick={() => { setHeld(null); setLines([blank(), blank()]); setNarration(''); }}>New journal</Button>
@@ -99,6 +117,8 @@ export default function NewManualJournalPage() {
         actions={
           <>
             <Button type="submit" disabled={post.isPending || debit === 0 || difference !== 0}>{post.isPending ? 'Posting…' : 'Post journal'}</Button>
+            {/* Like Post journal, it waits for a balanced entry; Skip for now does not. */}
+            <EntryActions busy={post.isPending} nextLabel="Post and next" nextDisabled={debit === 0 || difference !== 0} />
             <Button type="button" variant="secondary" asChild><Link href="/accountant/manual-journals">Cancel</Link></Button>
             <span className="ml-auto font-mono text-body tabular-nums text-ink-700">
               Dr {formatPaise(debit)} · Cr {formatPaise(credit)}
