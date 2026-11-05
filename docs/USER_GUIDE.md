@@ -153,6 +153,10 @@ Inbox and Review show how many documents are waiting.
 - a bell that lights up when entries wait in Review;
 - your profile menu, with Settings and **Sign out**.
 
+**How it works.** Every section has a **How it works** button at the top: a chart of how a document moves through that section, what you can do there, and the steps, in English or हिंदी (switch at the top of the guide; your choice is remembered). A list with nothing in it yet shows the same guide underneath.
+
+**Ask your books.** The round button at the bottom right of every page opens a small chat: type a question such as "Who owes me money?" and get the answer with the report rows behind it. It only reads your books; nothing changes.
+
 **The Dashboard** shows the things to act on today:
 - **Ask your books:** type a question such as "Who owes me money?" and get the answer with the report rows behind it.
 - **The month in words:** a short summary of the month, from the books.
@@ -190,7 +194,10 @@ The table shows each document's status:
 - **Ready to review**: click **Review**.
 - **Posted**
 - **Duplicate?**: AiBooks has seen this exact file before.
-- **Couldn't read**: click **Try again**.
+- **Couldn't read**: the reason is shown (for example, the AI service has no credit left). Click **Try again** once it is sorted.
+- **Entered**: you entered it by hand as a record (see below); the link opens that record.
+
+**Add to: enter a document as a record yourself.** On a document that has been read (or could not be), **Add to** offers New bill, New expense, New purchase order, New vendor credit, New customer, New vendor, New manual journal, New quote, New sales order and New invoice. The form opens beside the file, filled with what the AI read: the party, GSTIN, number, dates and lines. If the vendor or customer is not in your books yet, **Add new vendor** (or customer) makes them from the scan and brings you back. Check each field against the file, then save as usual: the file is kept with the record, and the AI's version of the same document is closed, so it is never in the books twice. **Save and next** moves to the next document; **Skip for now** leaves this one.
 
 The confidence column shows how sure the reading is: green at 85% and above, amber at 70% and above. A document from an unknown sender is marked **Unknown sender**; check it is genuine before approving.
 
@@ -251,18 +258,25 @@ What policies can cover: posting a purchase bill, paying bills (single or in a p
 
 ### Add a customer
 1. **Sales → Customers**, then **New customer** (or the **+** beside Customers).
-2. Enter the name, the **GSTIN** (leave it blank if unregistered), the state, email and phone.
-   - With a GSTIN, the state is read from it.
-   - Without one, pick the state. It is the place of supply on your GSTR-1.
+2. Only the **Display name** is required. Fill in what you have:
+   - **Customer type** (Business or Individual), the primary contact (salutation, first and last name), **Company name**, email, work phone and mobile, and language. **Display name** offers the company name or the contact's name, or type your own.
+   - **GSTIN**: type it, or click **Prefill**. AiBooks reads the state, PAN and the kind of business from the GSTIN itself, and says if another customer already has it. The legal name and address come from the GST portal only once a GST provider is connected. Without a GSTIN, pick the state: it is the place of supply on your GSTR-1.
+   - **Other details:** PAN, currency, **Payment terms** (Due on receipt, Net 15, Net 30… or end of month; new invoices take their due date from it), portal access, website, department and designation, and an opening balance (company admins).
+   - **Address:** billing and shipping (**Copy billing address**). **Contact persons:** as many as you need. **Remarks:** notes for yourself.
 3. Click **Save customer**.
 
 The customer's page shows their details, what they owe, any advance they have paid, and their invoices, with **New invoice** and **Record receipt**. Files you keep against the customer (a rate agreement, say) go in its attachments. **Edit** changes the details.
 
 ### Raise an invoice
 1. **Sales → Invoices**, then **New invoice**.
-2. Under **Customer and dates**, pick the customer, the date and the due date. Leave the number blank to number it automatically. The form says whether the sale is within your state (CGST and SGST) or across states (IGST), from the customer's state.
-3. Add a line for each thing sold: pick an **Item** (it fills the description, HSN/SAC, rate and GST %), or type them, with the quantity. Pick a **Project** on a line if the sale belongs to one. **Totals** adds it up as you go.
-4. Click **Save invoice**. **It is saved as a draft** and you land on its page. The server works out the tax, so the figures you see are the ones that post.
+2. Pick the **Customer** (search by name, company, GSTIN or phone; **+ New customer** if they are not there yet). The form says whether the sale is within your state (CGST and SGST) or across states (IGST).
+3. The **Invoice#** is given automatically when it posts; click the cog to type your own. Add the **Order number**, the invoice date, **Terms** (the customer's, to start with) and the **Due date** that follows from them, a **Salesperson**, a **Project** and a **Subject** the customer will see.
+4. Add a line for each thing sold: pick an **Item** (it fills the description, HSN/SAC, rate and GST %), or type them, with the quantity. **Add items in bulk** adds several at once.
+5. Under the lines:
+   - **Discount**, as a percent or in rupees. It comes off before tax, spread across the lines, so GST is charged on the discounted value, as the law asks.
+   - **Adjustment**, for rounding: up to ₹99.99 either way, after tax, posted to Round Off. A bigger reduction is a discount.
+   - **Customer notes** ("Thanks for your business."), **Terms & conditions**, and files to attach.
+6. Click **Save invoice**. **It is saved as a draft** and you land on its page. The server works out the tax, so the figures you see are the ones that post.
 5. Check it, then click **Post to ledger**. Only now does it reach the books (**Posted to ledger**).
 
 For a customer abroad, choose the currency on the form: it becomes an export invoice under your LUT, with no GST, and asks for the shipping bill for goods. See [Foreign currency](#13-foreign-currency).
@@ -287,12 +301,14 @@ AiBooks checks the invoice before it goes to the IRP and lists what to fix first
 ### Get paid
 - **One invoice:** click **Mark paid** on a posted invoice. Check the amount (change it for a part payment) and the date, then click **Record receipt**.
 - **One payment across many invoices:** **Sales → Payments Received**, then **Record receipt**.
-  1. Pick the customer, the amount, the date, and **Bank** or **Cash**.
-  2. Optionally add the reference (UTR, cheque number, or the invoice numbers it pays).
-  3. Click **Suggest allocation** to let AiBooks spread it across the open invoices: it reads the reference, finds an exact combination, or takes the oldest first.
-  4. Adjust it, including any **TDS** the customer deducted, then click **Record receipt**.
+  1. Pick the customer, the amount received, the date, the **Payment mode**, and the bank or cash account under **Deposit to**.
+  2. If the bank kept a fee, enter it under **Bank charges**: the customer is still credited with the whole amount, the bank with the rest, and the fee goes to Bank Charges.
+  3. Optionally add the reference (UTR, cheque number, or the invoice numbers it pays).
+  4. If the customer deducted TDS, set **TDS deducted?** to **Yes** and enter it on each invoice.
+  5. Click **Suggest allocation** to let AiBooks spread it across the unpaid invoices: it reads the reference, finds an exact combination, or takes the oldest first. Narrow the list with **Filter by date range**, or start again with **Clear applied amount**.
+  6. Add any notes (internal) and files, then click **Record receipt**.
 
-  Anything left over is held as an advance.
+  The receipt is numbered when it is recorded (RCT/2026-27/0001, in order, with no gaps). The summary shows what was used and what is in excess; anything in excess is held as an advance. Click a receipt's number in the list to see its notes, charges and files.
 - **Online:** **Payment link** on a posted invoice creates a Razorpay payment link and copies it for you to send. When the customer pays, the invoice shows it; confirm it to record the receipt.
 
 **Payments Received** lists every receipt. A foreign-currency invoice is received from [Foreign currency](#13-foreign-currency), at the rate that day.
@@ -303,10 +319,12 @@ At the foot of **Payments Received**, **Advances and credits — customers** lis
 - **Refund** records paying it back.
 
 ### Credit notes
-For goods returned, a discount, or a mistake on a posted invoice:
-1. Click **Credit note** on the invoice's page, or **Sales → Credit Notes**, then **New credit note**, and choose the posted invoice.
-2. Enter the taxable value to take off; the tax follows the invoice's proportions.
-3. Give a reason (for example "Two cartons returned") and the date.
+For goods returned, a discount, or a mistake on a posted invoice. GST needs every credit note to name the invoice it corrects, so you always choose one.
+1. Click **Credit note** on the invoice's page, or **Sales → Credit Notes**, then **New credit note**.
+2. Choose **Line by line** (the usual way) or **Taxable value only**.
+   - **Line by line:** pick the customer and the invoice (**Copy the invoice's lines** fills them), then keep the lines being credited, each with its income account, quantity, rate and GST %. A discount works as on invoices. It is taxed as the invoice was, and it cannot take back more than the invoice has left.
+   - **Taxable value only:** enter the value to take off; the tax follows the invoice's proportions.
+3. Give a reason (for example "Two cartons returned"), the date, and any reference, subject or notes.
 4. Click **Post credit note**.
 
 It posts straight away. Any amount beyond what is owed becomes the customer's credit. **Credit Notes** lists them all.
@@ -320,23 +338,23 @@ The strip on **Invoices** shows what customers owe by how late it is: not yet du
 
 What comes before an invoice or a bill. **None of it posts.** An order becomes a draft invoice or bill, which you post from its page.
 
-Each has a list, a **New** page, and a record page with its actions. Every form has the same line editor: pick an item (it fills the line, at this customer's last price), or type the description, quantity, rate and GST %.
+Each has a list, a **New** page, and a record page with its actions. They share the invoice's form: the customer, a number given automatically (or your own, with the cog), a **Reference#**, the dates, a **Salesperson** and a **Subject**; the same lines, **Discount** and **Adjustment**; and **Customer notes** and **Terms & conditions**. A discount or adjustment on a quote or order is carried onto the invoice made from it.
 
 ### Quotes (Sales → Quotes)
-- **New quote:** pick the customer and **Valid until**, add lines, then click **Save quote**.
+- **New quote:** pick the customer, the date and the **Expiry date**, a project if it is for one, add lines, then click **Save quote**.
 - **Draft from a message** (on the Quotes list): paste the customer's email or WhatsApp message, pick the customer, and click **Draft quote**. AiBooks reads the items and quantities, at the customer's last prices. Check every line before sending.
 - On the quote's page, **Send quote** emails the PDF. Then mark it **Accepted** or **Declined**.
 - From an accepted quote, choose **Make order** or **Make invoice**; you are taken to what it made.
 - **No answer after a week** (on the Quotes list) lists sent quotes to chase, with **Copy follow-up**.
 
 ### Sales orders (Sales → Sales Orders)
-- **New sales order** (with the customer's PO number), then **Save sales order**.
+- **New sales order:** the customer's PO number as **Reference#**, the **Expected shipment date**, **Payment terms** and **Delivery method**, then **Save sales order**.
 - Its page shows each line as ordered, invoiced and delivered.
 - **Invoice part of it**: choose the quantities, then **Make draft invoice**. Bill all of it or part of it; you cannot bill more than was ordered.
 - **Close** or **Cancel order** when you will not bill it further.
 
 ### Delivery challans (Sales → Delivery Challans)
-For goods that move without an invoice: on approval, job work, or supply invoiced later. Click **New challan**, give the reason and vehicle number, then **Issue challan**. On its page, mark it **Returned** when goods come back.
+For goods that move without an invoice. Click **New challan**, pick the **Challan type** (supply of liquid gas whose quantity is not known yet, job work, supply on approval, supply invoiced later, or others), add the lines and vehicle number, then **Issue challan**. On its page, mark it **Returned** when goods sent on approval or for job work come back.
 
 ### Purchase orders and goods received (Purchases → Purchase Orders)
 1. **New purchase order:** pick the vendor and the needed-by date, then **Raise purchase order**.
@@ -355,7 +373,8 @@ For goods that move without an invoice: on approval, job work, or supply invoice
 
 ### Add a vendor
 1. **Purchases → Vendors**, then **New vendor** (or the **+** beside Vendors).
-2. Enter the name and **GSTIN** (optional), then click **Save vendor**.
+2. The form is the customer's (only the display name is required; **Prefill** reads the state, PAN and kind of business from the GSTIN), with a **Bank details** tab, and the **TDS section** and **MSME** under Other details.
+3. Click **Save vendor**.
 
 The vendor's page shows their details, what you owe them, and their bills, with **New bill** and **Record payment**. Under **Payment details**:
 - **Bank account.** If a vendor asks to change where they are paid, confirm it with them on a number you already have, not one from the email asking for the change.
@@ -366,7 +385,7 @@ The vendor's page shows their details, what you owe them, and their bills, with 
 - **Typed:**
   1. **Purchases → Bills**, then **New bill**.
   2. Pick the vendor and enter the vendor's bill number and the dates.
-  3. Add a line for each thing bought: item, description, HSN/SAC, quantity, rate, GST % and project, as on an invoice.
+  3. Add a line for each thing bought: item, description, HSN/SAC, quantity, rate, GST % and project, as on an invoice. **Account** says where the line is booked: the item's account, or Purchases, unless you pick another (Rent for a rent bill, Professional Fees for your CA, Computers & IT Equipment for a laptop the business keeps).
   4. Click **Save bill**. It is a draft.
   5. On its page, click **Post to ledger**. If an approval policy covers it, it goes for approval first.
 
@@ -387,7 +406,7 @@ Posting makes one payment voucher: the expense (and input GST, when claimed) deb
 
 ### Pay
 - **One bill:** on the bill's page, under **Record payment**, enter the amount and date, then **Record payment**.
-- **One payment across many bills:** **Purchases → Payments Made**, then **Record payment**. It works like a receipt; see [Get paid](#get-paid).
+- **One payment across many bills:** **Purchases → Payments Made**, then **Record payment**. It works like a receipt (see [Get paid](#get-paid)), with three differences: you choose the account under **Paid through**; **Bank charges** are paid on top of the amount; and there is no TDS step, because TDS on a bill is withheld when the bill is posted. Payments are numbered PMT/2026-27/0001.
 - **Payments Made** lists payments to vendors. Switch to **All payment vouchers** to see every payment voucher, single-bill payments and payment runs included.
 - **Payment runs** (**Purchases → Payment Runs**), to pay many vendors at once:
   1. Set **Pay on** and optionally a **Cash limit**.
@@ -430,14 +449,16 @@ AiBooks flags lines that need a look under **What the policy flagged**: missing 
 
 ## 10. Items
 
-**Items → Items**: what you sell and buy. Pick an item on an invoice or bill line and its HSN/SAC code, unit, rate and account fill in. The GSTR-1 HSN summary groups by them.
+**Items** in the sidebar (with **Stock** as a tab at the top of the page): what you sell and buy. Pick an item on an invoice or bill line and its HSN/SAC code, unit, rate and account fill in. The GSTR-1 HSN summary groups by them.
 
 To add one:
 1. Click **New item**.
-2. Fill in the **Name**, **Code**, **Goods** or **Service**, **HSN or SAC code**, **Unit**, **GST rate**, **Sale price** and **Purchase price**. Optionally set the income and expense accounts; they default to Sales and Purchases.
+2. Fill in the **Name**, **Code / SKU**, **Goods** or **Service**, the **Unit** (search the GST units, such as "KGS - kilogram"; a service has none), the **HSN or SAC code** and the **GST rate**.
 3. Not sure of the code? Click **Suggest code**. AiBooks checks your past invoices and bills, then its rules, then asks AI, and shows the code with its reason and how sure it is. Click **Use this code**, or **Dismiss**.
-4. For goods, **Count in stock** is on unless you turn it off (for consumables nobody counts). Set **Reorder at** and **Order this many** if you want reorder alerts.
-5. Click **Create item**.
+4. **Sales information** (tick it if you sell the item): the selling price, the **Account** its sales go to (picked for you: Sales Revenue for goods, Service Revenue for a service) and a description.
+5. **Purchase information** (tick it if you buy the item): the cost price, the **Account** (Purchases, picked for you; an asset account such as Computers & IT Equipment for things the business keeps), the description bills should carry, and a **Preferred vendor**. An item that is only sold is not offered on bills, and one only bought is not offered on invoices.
+6. **Inventory**, for goods: **Track stock for this item** is on unless you turn it off (for consumables nobody counts). Set the **Reorder level** and **Reorder quantity** for reorder alerts.
+7. Click **Save item**.
 
 Archive an item you no longer use. It stays on old documents.
 
@@ -579,8 +600,9 @@ For rent, subscriptions, retainers and anything else that comes round again. **N
 
 ### Recurring invoices (Sales → Recurring Invoices)
 1. Click **New recurring invoice**.
-2. Pick the customer, add the lines, and set how often (monthly, quarterly or yearly), the day, the start and end dates, and when each invoice is due.
-3. Click **Save schedule**.
+2. Pick the customer and give the schedule a **Profile name**. Add the order number, lines, discount and adjustment as on an invoice.
+3. Set **Repeat every** (week, 2 weeks, month, 2 months, quarter, 6 months or year), **Start on**, and an end date or **Never expires**, with the payment terms, salesperson and subject.
+4. Click **Save schedule**.
 
 ### Recurring bills (Purchases → Recurring Bills)
 **New recurring bill**: the vendor, the amount before tax, GST, how often, the day, the dates and when it is due. Then **Save recurring bill**. Each one is drafted as a bill.
