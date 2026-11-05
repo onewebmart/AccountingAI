@@ -87,6 +87,23 @@ export class UpdateItemDto {
   @IsNumber()
   @Min(0)
   reorderQty?: number | null;
+
+  @IsOptional()
+  @IsString()
+  @Length(0, 1000)
+  purchaseDescription?: string | null;
+
+  @IsOptional()
+  @IsMongoId()
+  preferredVendorId?: string | null;
+
+  @IsOptional()
+  @IsBoolean()
+  forSale?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  forPurchase?: boolean;
 }
 
 export class CreateItemDto extends UpdateItemDto {

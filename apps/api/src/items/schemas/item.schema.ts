@@ -43,6 +43,13 @@ export class Item {
   /** Where its purchases are debited; the Purchases account when not set. */
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'LedgerAccount', default: null }) expenseAccountId: Types.ObjectId | null;
   @Prop({ type: String, default: null }) description: string | null;
+  /** What a purchase line says, when it is not the sales description. */
+  @Prop({ type: String, default: null }) purchaseDescription: string | null;
+  /** The vendor it is usually bought from. */
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Vendor', default: null }) preferredVendorId: Types.ObjectId | null;
+  /** Sold, bought, or both: an item is offered on the documents of the side it is on. */
+  @Prop({ type: Boolean, default: true }) forSale: boolean;
+  @Prop({ type: Boolean, default: true }) forPurchase: boolean;
   /** Goods are counted in stock unless this is off (a consumable nobody counts). */
   @Prop({ type: Boolean, default: true }) trackStock: boolean;
   /** Buy more at or under this many; none set, the sales rate decides. */

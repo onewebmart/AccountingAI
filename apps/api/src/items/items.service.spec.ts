@@ -156,6 +156,21 @@ describe('the item master', () => {
     const change = await audit.findOne({ orgId: o, entityType: 'Item', action: 'UPDATE' }).sort({ _id: 1 }).lean().exec();
     expect(change).toMatchObject({ before: { hsnSac: '998311' }, after: { hsnSac: '998312', hsnSource: 'rule' } });
 
+    // A form sends every field, some empty: an empty one keeps its value rather than wiping it.
+    const repriced = await items.update(o, ACTOR, String(item._id), { name: undefined, kind: undefined, salePricePaise: 2000000 });
+    expect(repriced.toObject()).toMatchObject({ name: 'Strategy workshop', kind: 'service', salePricePaise: 2000000, hsnSac: '998311' });
+
+    // Bought from a vendor of ours, with its own purchase wording; sold, bought, or both, never neither.
+    const vendors = moduleRef.get<Model<{ _id: Types.ObjectId }>>(getModelToken(Vendor.name));
+    const [mill] = await vendors.create([{ orgId: o, name: 'Shree Ganesh Paper Mills' }]);
+    const [elsewhere] = await vendors.create([{ orgId: org(), name: 'Another org vendor' }]);
+    const paper = await items.create(o, ACTOR, { name: 'A4 paper', kind: 'goods', purchaseDescription: 'A4 75 gsm, 500 sheets', preferredVendorId: String(mill._id), forSale: true, forPurchase: true });
+    expect(paper.toObject()).toMatchObject({ purchaseDescription: 'A4 75 gsm, 500 sheets', forSale: true, forPurchase: true });
+    expect(String(paper.preferredVendorId)).toBe(String(mill._id));
+    await expect(items.create(o, ACTOR, { name: 'Pens', kind: 'goods', preferredVendorId: String(elsewhere._id) })).rejects.toThrow(/No such vendor/);
+    await expect(items.create(o, ACTOR, { name: 'Pens', kind: 'goods', forSale: false, forPurchase: false })).rejects.toThrow(/sold, bought, or both/);
+    expect((await items.update(o, ACTOR, String(paper._id), { forSale: false })).toObject()).toMatchObject({ forSale: false, forPurchase: true, purchaseDescription: 'A4 75 gsm, 500 sheets' });
+
     // Another org sees none of it, even asking without a filter.
     expect(await withOrg(org(), () => items.list(org()))).toEqual([]);
     expect((await items.list(o, { q: 'strategy' })).map((i) => i.name)).toEqual(['Strategy workshop']);

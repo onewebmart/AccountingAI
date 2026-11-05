@@ -12,6 +12,7 @@ import { AiSuggestion, AiSuggestionDocument } from '../ai-suggestions/schemas/ai
 import { UsageMeterService } from '../ocr/usage-meter.service';
 import { Item, ItemDocument } from './schemas/item.schema';
 import { Project, ProjectDocument } from '../projects/schemas/project.schema';
+import { Vendor, VendorDocument } from '../purchase/schemas/vendor.schema';
 import { HsnGuess, ITEM_GST_RATES, ItemKind, UQC_CODES, hsnProblem, nameKey, ruleGuess } from './hsn';
 import { HSN_MODEL, HsnModel, readHsnAnswer } from './hsn-model';
 
@@ -29,6 +30,10 @@ export interface ItemInput {
   incomeAccountId?: string | null;
   expenseAccountId?: string | null;
   description?: string | null;
+  purchaseDescription?: string | null;
+  preferredVendorId?: string | null;
+  forSale?: boolean;
+  forPurchase?: boolean;
   trackStock?: boolean;
   reorderLevel?: number | null;
   reorderQty?: number | null;
@@ -77,6 +82,7 @@ export class ItemsService {
     private usageMeter: UsageMeterService,
     private audit: AuditService,
     @Optional() @InjectModel(Project.name) private projectModel?: Model<ProjectDocument>,
+    @Optional() @InjectModel(Vendor.name) private vendorModel?: Model<VendorDocument>,
   ) {}
 
   async list(orgId: string, opts: { q?: string; includeArchived?: boolean } = {}) {
@@ -109,7 +115,9 @@ export class ItemsService {
   async update(orgId: string, actorId: string, id: string, input: ItemInput) {
     const item = await this.findById(orgId, id);
     const before = this.snapshot(item);
-    const fields = await this.checked(orgId, { ...this.inputOf(item), ...input, hsnSource: input.hsnSac === undefined ? undefined : input.hsnSource }, input.kind ?? item.kind);
+    // Only what was sent changes: a field left out keeps its value, rather than arriving empty and wiping it.
+    const sent = Object.fromEntries(Object.entries(input).filter(([, v]) => v !== undefined)) as ItemInput;
+    const fields = await this.checked(orgId, { ...this.inputOf(item), ...sent, hsnSource: input.hsnSac === undefined ? undefined : input.hsnSource }, input.kind ?? item.kind);
     // A code the person typed over a suggestion is theirs now.
     if (input.hsnSac === undefined) delete (fields as Partial<typeof fields>).hsnSource;
     item.set(fields);
@@ -287,6 +295,15 @@ export class ItemsService {
     }
     const incomeAccountId = await this.checkedAccount(orgId, input.incomeAccountId, [AccountType.INCOME], 'income');
     const expenseAccountId = await this.checkedAccount(orgId, input.expenseAccountId, [AccountType.EXPENSE, AccountType.ASSETS], 'expense or asset');
+    const forSale = input.forSale !== false;
+    const forPurchase = input.forPurchase !== false;
+    if (!forSale && !forPurchase) throw new BadRequestException('An item is sold, bought, or both.');
+    let preferredVendorId: Types.ObjectId | null = null;
+    if (input.preferredVendorId) {
+      const vendor = Types.ObjectId.isValid(input.preferredVendorId) && this.vendorModel ? await this.vendorModel.findOne({ _id: input.preferredVendorId, orgId }).select('_id').lean().exec() : null;
+      if (!vendor) throw new BadRequestException('No such vendor.');
+      preferredVendorId = vendor._id as Types.ObjectId;
+    }
     return {
       name,
       nameKey: nameKey(name),
@@ -301,6 +318,10 @@ export class ItemsService {
       incomeAccountId,
       expenseAccountId,
       description: input.description?.trim() || null,
+      purchaseDescription: input.purchaseDescription?.trim() || null,
+      preferredVendorId,
+      forSale,
+      forPurchase,
       trackStock: kind === 'goods' && input.trackStock !== false,
       reorderLevel: kind === 'goods' && input.reorderLevel != null && input.reorderLevel >= 0 ? input.reorderLevel : null,
       reorderQty: kind === 'goods' && input.reorderQty != null && input.reorderQty > 0 ? input.reorderQty : null,
@@ -330,6 +351,10 @@ export class ItemsService {
       incomeAccountId: item.incomeAccountId ? String(item.incomeAccountId) : null,
       expenseAccountId: item.expenseAccountId ? String(item.expenseAccountId) : null,
       description: item.description,
+      purchaseDescription: item.purchaseDescription ?? null,
+      preferredVendorId: item.preferredVendorId ? String(item.preferredVendorId) : null,
+      forSale: item.forSale !== false,
+      forPurchase: item.forPurchase !== false,
       trackStock: item.trackStock,
       reorderLevel: item.reorderLevel,
       reorderQty: item.reorderQty,
@@ -349,6 +374,9 @@ export class ItemsService {
       purchasePricePaise: item.purchasePricePaise,
       incomeAccountId: item.incomeAccountId ? String(item.incomeAccountId) : null,
       expenseAccountId: item.expenseAccountId ? String(item.expenseAccountId) : null,
+      preferredVendorId: item.preferredVendorId ? String(item.preferredVendorId) : null,
+      forSale: item.forSale !== false,
+      forPurchase: item.forPurchase !== false,
       isActive: item.isActive,
     };
   }

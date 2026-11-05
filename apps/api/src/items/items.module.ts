@@ -8,6 +8,7 @@ import { SalesInvoice, SalesInvoiceSchema } from '../sales/schemas/sales-invoice
 import { PurchaseBill, PurchaseBillSchema } from '../purchase/schemas/purchase-bill.schema';
 import { AiSuggestion, AiSuggestionSchema } from '../ai-suggestions/schemas/ai-suggestion.schema';
 import { Item, ItemSchema } from './schemas/item.schema';
+import { Vendor, VendorSchema } from '../purchase/schemas/vendor.schema';
 import { HSN_QUEUE, ItemsService } from './items.service';
 import { HsnSuggestionProcessor } from './items.processor';
 import { ItemsController } from './items.controller';
@@ -18,6 +19,7 @@ import { GeminiHsnModel, HSN_MODEL } from './hsn-model';
   imports: [
     MongooseModule.forFeature([
       { name: Item.name, schema: ItemSchema },
+      { name: Vendor.name, schema: VendorSchema }, // read only: an item's preferred vendor
       { name: Project.name, schema: ProjectSchema },
       { name: AiSuggestion.name, schema: AiSuggestionSchema },
       // Read for the codes this org already used on its lines.
