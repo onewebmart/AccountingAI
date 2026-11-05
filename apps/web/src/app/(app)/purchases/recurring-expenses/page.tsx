@@ -11,6 +11,7 @@ export default function RecurringExpensesPage() {
   return (
     <div>
       <PageHeader
+        guide="recurringExpenses"
         title="Recurring expenses"
         subtitle={<>A subscription, a fixed fee, paid straight from the bank. Each is drafted on its date at 6:30, ready to check and post on <Link href="/purchases/expenses" className="underline">Expenses</Link>. Nothing posts on its own.</>}
         actions={
@@ -20,7 +21,7 @@ export default function RecurringExpensesPage() {
           </>
         }
       />
-      <RecurringTable kind="expense" empty="Nothing repeats yet. Add a subscription or a fixed monthly fee, and its expense drafts itself." />
+      <RecurringTable kind="expense" guide="recurringExpenses" empty="Nothing repeats yet. Add a subscription or a fixed monthly fee, and its expense drafts itself." />
     </div>
   );
 }

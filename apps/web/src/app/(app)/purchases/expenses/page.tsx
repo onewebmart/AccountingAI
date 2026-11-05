@@ -29,6 +29,7 @@ export default function ExpensesPage() {
   return (
     <div>
       <PageHeader
+        guide="expenses"
         title="Expenses"
         subtitle="Paid on the spot from bank or cash: a courier, fuel, a subscription on the card. Drafts until you post them."
         actions={
@@ -46,6 +47,7 @@ export default function ExpensesPage() {
       />
       {expenses.data && all.length === 0 ? (
         <EmptyState
+          guide="expenses"
           title="No expenses yet"
           body="Record what was paid straight from the bank or cash. A bill to pay later goes under Bills instead."
           action={<Button asChild><Link href="/purchases/expenses/new">New expense</Link></Button>}

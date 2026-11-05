@@ -11,6 +11,7 @@ import { ReportTable, ReportTableView } from '@/components/reports/report-table-
 import { AskBox } from '@/components/reports/ask-box';
 import { BudgetsEditor } from '@/components/reports/budgets-editor';
 import { NarrativeCard } from '@/components/reports/narrative-card';
+import { GuideButton } from '@/components/guide/module-guide';
 
 type Tab = 'reports' | 'budgets' | 'schedules';
 interface CatalogEntry { key: string; title: string; params: 'range' | 'today' | 'year'; group: string }
@@ -188,10 +189,13 @@ function ManagementReports() {
   const TABS: Array<{ id: Tab; label: string }> = [{ id: 'reports', label: 'Reports' }, { id: 'budgets', label: 'Budgets' }, { id: 'schedules', label: 'Scheduled emails' }];
   return (
     <div className="space-y-6">
-      <div>
-        <Link href="/reports" className="inline-flex items-center gap-1 text-caption text-ink-500 hover:underline"><ChevronLeft size={13} /> Reports</Link>
-        <h1 className="text-h1 font-display text-ink-900">Management reports</h1>
-        <p className="text-body text-ink-500">Sales, purchases, expenses and profit by month and by party, compared and budgeted, from posted entries only.</p>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <Link href="/reports" className="inline-flex items-center gap-1 text-caption text-ink-500 hover:underline"><ChevronLeft size={13} /> Reports</Link>
+          <h1 className="text-h1 font-display text-ink-900">Management reports</h1>
+          <p className="text-body text-ink-500">Sales, purchases, expenses and profit by month and by party, compared and budgeted, from posted entries only.</p>
+        </div>
+        <GuideButton guide="managementReports" />
       </div>
       <div className="grid gap-4 lg:grid-cols-2">
         <AskBox />

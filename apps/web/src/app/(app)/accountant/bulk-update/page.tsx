@@ -106,6 +106,7 @@ export default function BulkUpdatePage() {
   return (
     <div className="space-y-5">
       <PageHeader
+        guide="bulkUpdate"
         title="Bulk update"
         subtitle="Find posted lines booked to the wrong account and move them in one entry. The original vouchers are never edited: the move is a reclassification you approve in the review queue."
       />

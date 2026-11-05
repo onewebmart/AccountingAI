@@ -117,6 +117,7 @@ function ChartOfAccounts() {
   return (
     <div>
       <PageHeader
+        guide="chartOfAccounts"
         title="Chart of accounts"
         subtitle="The groups and ledger accounts your books are kept in."
         actions={<Button asChild><Link href="/accountant/chart-of-accounts/new"><Plus size={14} /> New account</Link></Button>}

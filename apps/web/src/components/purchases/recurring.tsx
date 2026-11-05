@@ -9,6 +9,8 @@ import { notify } from '@/components/page/notifier';
 import { api } from '@/lib/api';
 import { formatPaise } from '@/lib/gst';
 import { errorText, shortDate } from './purchase-data';
+import { ModuleGuide } from '@/components/guide/module-guide';
+import type { GuideKey } from '@/components/guide/keys';
 
 export type Frequency = 'monthly' | 'quarterly' | 'yearly';
 
@@ -66,7 +68,7 @@ export function DraftDueButton({ where }: { where: string }) {
 }
 
 /** The schedules of one kind, with pause, resume and end. */
-export function RecurringTable({ kind, empty }: { kind: 'bill' | 'expense'; empty: string }) {
+export function RecurringTable({ kind, empty, guide }: { kind: 'bill' | 'expense'; empty: string; guide?: GuideKey }) {
   const qc = useQueryClient();
   const templates = useTemplates();
   const setStatus = useMutation({
@@ -80,6 +82,7 @@ export function RecurringTable({ kind, empty }: { kind: 'bill' | 'expense'; empt
   const rows = (templates.data ?? []).filter((t) => t.kind === kind);
 
   return (
+    <>
     <TableCard>
       <table className="w-full">
         <thead className="border-b border-line-200 bg-surface-sink">
@@ -157,6 +160,9 @@ export function RecurringTable({ kind, empty }: { kind: 'bill' | 'expense'; empt
         </tbody>
       </table>
     </TableCard>
+    {/* Nothing repeats yet: show how a schedule works. */}
+    {guide && templates.data && rows.length === 0 && <ModuleGuide guide={guide} className="mt-5" />}
+    </>
   );
 }
 

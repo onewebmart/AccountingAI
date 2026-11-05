@@ -27,6 +27,7 @@ export default function ClaimsPage() {
   return (
     <div>
       <PageHeader
+        guide="claims"
         title="Employee claims"
         subtitle="What people paid for the business. Someone else approves each claim, an accountant posts it, and the reimbursement clears it."
         actions={<Button asChild><Link href="/purchases/claims/new"><Plus size={14} /> New claim</Link></Button>}
@@ -49,7 +50,7 @@ export default function ClaimsPage() {
         }}
       />
       {claims.data && all.length === 0 ? (
-        <EmptyState title="No claims yet" body="Paid for a taxi, a client lunch or stationery yourself? Claim it here with the receipts." action={<Button asChild><Link href="/purchases/claims/new">New claim</Link></Button>} />
+        <EmptyState guide="claims" title="No claims yet" body="Paid for a taxi, a client lunch or stationery yourself? Claim it here with the receipts." action={<Button asChild><Link href="/purchases/claims/new">New claim</Link></Button>} />
       ) : (
         <TableCard>
           <table className="w-full">

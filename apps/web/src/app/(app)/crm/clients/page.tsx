@@ -22,6 +22,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { GuideButton } from '@/components/guide/module-guide';
 
 function ServicePill({ service }: { service: FirmService }) {
   return (
@@ -81,10 +82,13 @@ export default function ClientsPage() {
               Every client your firm manages, their services and contact details.
             </p>
           </div>
-          <Button onClick={() => setDialogOpen(true)} className="gap-2">
-            <Plus size={16} />
-            Add client
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <GuideButton guide="practiceClients" />
+            <Button onClick={() => setDialogOpen(true)} className="gap-2">
+              <Plus size={16} />
+              Add client
+            </Button>
+          </div>
         </div>
       </FadeIn>
 
@@ -146,6 +150,7 @@ export default function ClientsPage() {
       ) : filtered.length === 0 ? (
         <EmptyState
           icon={<Users size={26} />}
+          guide={clients?.length ? undefined : 'practiceClients'}
           title={clients?.length ? 'No clients match those filters' : 'No clients yet'}
           body={
             clients?.length

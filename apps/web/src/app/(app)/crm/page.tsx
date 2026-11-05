@@ -21,6 +21,7 @@ import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { CountUp, FadeIn, HoverLift, Stagger, StaggerItem } from '@/components/motion/primitives';
+import { GuideButton, ModuleGuide } from '@/components/guide/module-guide';
 
 interface DashboardSummary {
   clients: { total: number; addedThisMonth: number };
@@ -203,14 +204,18 @@ export default function CrmDashboardPage() {
     return (
       <div>
         <FadeIn>
-          <div className="mb-6">
-            <h1 className="font-heading text-h1 text-ink-900">Practice</h1>
-            <p className="mt-1 text-body text-ink-500">
-              The CA-firm side of the product.
-            </p>
+          <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h1 className="font-heading text-h1 text-ink-900">Practice</h1>
+              <p className="mt-1 text-body text-ink-500">
+                The CA-firm side of the product.
+              </p>
+            </div>
+            <GuideButton guide="practiceHome" />
           </div>
         </FadeIn>
         <PracticeSetup />
+        <ModuleGuide guide="practiceHome" className="mt-6" />
       </div>
     );
   }
@@ -240,9 +245,12 @@ export default function CrmDashboardPage() {
   return (
     <div>
       <FadeIn>
-        <div className="mb-6">
-          <h1 className="font-heading text-h1 text-ink-900">Dashboard</h1>
-          <p className="mt-1 text-body text-ink-500">Where your practice stands today.</p>
+        <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h1 className="font-heading text-h1 text-ink-900">Dashboard</h1>
+            <p className="mt-1 text-body text-ink-500">Where your practice stands today.</p>
+          </div>
+          <GuideButton guide="practiceHome" />
         </div>
       </FadeIn>
 

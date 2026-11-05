@@ -9,6 +9,7 @@ import { api, ApiError } from '@/lib/api';
 import { formatPaise } from '@/lib/gst';
 import { parseRupees } from '@/lib/money';
 import { ClosingStockCard } from '@/components/stock/closing-stock-card';
+import { GuideButton } from '@/components/guide/module-guide';
 
 type Tab = 'assistant' | 'assets' | 'schedules' | 'recurring';
 
@@ -404,7 +405,10 @@ export default function MonthEndPage() {
           <h1 className="text-h1 font-display text-ink-900">Month-end</h1>
           <p className="text-body text-ink-500">Adjustments before the books close. Every entry goes to the review queue first.</p>
         </div>
-        <input type="month" className="h-10 rounded-md border border-line-200 bg-white px-3 text-body" value={period} onChange={(e) => e.target.value && setPeriod(e.target.value)} />
+        <div className="flex flex-wrap items-center gap-2">
+          <GuideButton guide="monthEnd" />
+          <input type="month" className="h-10 rounded-md border border-line-200 bg-white px-3 text-body" value={period} onChange={(e) => e.target.value && setPeriod(e.target.value)} />
+        </div>
       </div>
       <div className="flex flex-wrap gap-1 border-b border-line-200">
         {TABS.map((t) => (

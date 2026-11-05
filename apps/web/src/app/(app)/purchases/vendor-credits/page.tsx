@@ -42,6 +42,7 @@ export default function VendorCreditsPage() {
   return (
     <div>
       <PageHeader
+        guide="vendorCredits"
         title="Vendor credits"
         subtitle="Debit notes on bills. What a note takes off a paid bill becomes the vendor's credit, owed back to you."
         actions={
@@ -58,6 +59,7 @@ export default function VendorCreditsPage() {
       />
       {notes.data && all.length === 0 ? (
         <EmptyState
+          guide="vendorCredits"
           title="No debit notes yet"
           body="Raise one from a posted bill when goods come back or the bill was too high."
           action={<Button asChild><Link href="/purchases/vendor-credits/new">New debit note</Link></Button>}

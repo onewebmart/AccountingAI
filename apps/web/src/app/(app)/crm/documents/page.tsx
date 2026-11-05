@@ -33,6 +33,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { GuideButton } from '@/components/guide/module-guide';
 
 interface ChecklistItem {
   key: string;
@@ -355,7 +356,8 @@ export default function DocumentsPage() {
               automatically — you confirm each one before it counts as verified.
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            <GuideButton guide="documentHub" />
             <Button
               variant="secondary"
               className="gap-2"
@@ -415,6 +417,7 @@ export default function DocumentsPage() {
       ) : filtered.length === 0 ? (
         <EmptyState
           icon={<FileText size={26} />}
+          guide={requests?.length ? undefined : 'documentHub'}
           title={requests?.length ? 'Nothing matches that filter' : 'No document requests yet'}
           body={
             requests?.length

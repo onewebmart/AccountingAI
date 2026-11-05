@@ -11,6 +11,7 @@ import { api, downloadFile } from '@/lib/api';
 import { formatPaise } from '@/lib/gst';
 import { parseRupees } from '@/lib/money';
 import { addDaysIso, errorText, shortDate, todayIso, useLedgerRefresh } from '@/components/purchases/purchase-data';
+import { ModuleGuide } from '@/components/guide/module-guide';
 
 interface Candidate {
   billId: string;
@@ -164,7 +165,7 @@ export default function PaymentRunsPage() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title="Payment runs" subtitle="Pay many vendors at once through your bank's bulk-payment file. MSME vendors first." />
+      <PageHeader guide="paymentRuns" title="Payment runs" subtitle="Pay many vendors at once through your bank's bulk-payment file. MSME vendors first." />
 
       <Section title="Plan a payment run" description="MSME vendors first (43B(h)), then late bills, then what falls due by the pay date. A cash limit keeps it to what the bank can spare.">
         <div className="flex flex-wrap items-end gap-3">
@@ -213,6 +214,9 @@ export default function PaymentRunsPage() {
       </Section>
 
       {drafts.map((run) => <DraftRun key={run._id} run={run} />)}
+
+      {/* No run yet: show how a payment run works. */}
+      {runs.data?.length === 0 && !suggest.data && <ModuleGuide guide="paymentRuns" />}
 
       <Section title="Past runs">
         <TableCard>

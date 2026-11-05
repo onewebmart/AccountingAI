@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { api } from '@/lib/api';
+import { GuideButton } from '@/components/guide/module-guide';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -484,14 +485,17 @@ export default function FirmPortalPage() {
   return (
     <div className="min-h-screen bg-[#FFFCF6] p-6 md:p-8">
       {/* Header */}
-      <div className="mb-8">
-        <div className="flex items-center gap-3 mb-1">
-          <div className="h-8 w-8 rounded-lg bg-[#E8590C] flex items-center justify-center">
-            <Building2 className="h-4 w-4 text-white" />
+      <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-3 mb-1">
+            <div className="h-8 w-8 rounded-lg bg-[#E8590C] flex items-center justify-center">
+              <Building2 className="h-4 w-4 text-white" />
+            </div>
+            <h1 className="text-h2 font-bold text-stone-900 font-[Bricolage_Grotesque]">{firmName}</h1>
           </div>
-          <h1 className="text-h2 font-bold text-stone-900 font-[Bricolage_Grotesque]">{firmName}</h1>
+          <p className="text-stone-500 text-body ml-11">Manage your clients and white-label portal settings</p>
         </div>
-        <p className="text-stone-500 text-body ml-11">Manage your clients and white-label portal settings</p>
+        <GuideButton guide="firmBranding" />
       </div>
 
       {/* Tabs */}

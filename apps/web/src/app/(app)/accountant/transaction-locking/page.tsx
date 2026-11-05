@@ -132,6 +132,7 @@ export default function TransactionLockingPage() {
       )}
 
       <PageHeader
+        guide="transactionLocking"
         title="Transaction locking"
         subtitle="Lock a period once its returns are filed, and close each year into retained earnings."
         meta={s ? (s.lockedThrough ? <StatusChip tone="success">Locked through {shortDate(s.lockedThrough)}</StatusChip> : <StatusChip tone="neutral">Nothing locked</StatusChip>) : undefined}

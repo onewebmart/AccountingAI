@@ -8,6 +8,7 @@ import { JournalLineDraft, PostingAccount } from '@/components/review/journal-li
 import { api, ApiError } from '@/lib/api';
 import { QueryError } from '@/components/ui/query-error';
 import { CheckCircle, ChevronLeft, ChevronRight, Loader2, Sparkles } from 'lucide-react';
+import { GuideButton } from '@/components/guide/module-guide';
 
 // ── API response type ─────────────────────────────────────────────────────────
 
@@ -268,6 +269,9 @@ export default function ReviewQueuePage() {
           All caught up.
         </h2>
         <p className="text-body text-ink-500">Nothing to review.</p>
+        <div className="mt-6">
+          <GuideButton guide="review" />
+        </div>
       </div>
     );
   }
@@ -284,14 +288,17 @@ export default function ReviewQueuePage() {
             I&apos;ve pulled the details. Confirm or fix, then post.
           </p>
         </div>
-        <Button
-          variant="secondary"
-          onClick={handleApproveHighConfidence}
-          className="flex items-center gap-2 shrink-0"
-        >
-          <Sparkles size={14} className="text-marigold-400" />
-          Approve all high-confidence
-        </Button>
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <GuideButton guide="review" />
+          <Button
+            variant="secondary"
+            onClick={handleApproveHighConfidence}
+            className="flex items-center gap-2 shrink-0"
+          >
+            <Sparkles size={14} className="text-marigold-400" />
+            Approve all high-confidence
+          </Button>
+        </div>
       </div>
 
       {/* Navigation */}

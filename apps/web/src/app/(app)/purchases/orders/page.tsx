@@ -24,6 +24,7 @@ export default function PurchaseOrdersPage() {
   return (
     <div>
       <PageHeader
+        guide="purchaseOrders"
         title="Purchase orders"
         subtitle="Raise, send, receive against, and bill. A PO never touches the ledger; the bill it becomes does, once posted."
         actions={<Button asChild><Link href="/purchases/orders/new"><Plus size={14} /> New purchase order</Link></Button>}
@@ -36,6 +37,7 @@ export default function PurchaseOrdersPage() {
       />
       {pos.data && all.length === 0 ? (
         <EmptyState
+          guide="purchaseOrders"
           title="No purchase orders yet"
           body="Raise one before you buy: goods received are checked against it, and the bill is matched to both."
           action={<Button asChild><Link href="/purchases/orders/new">New purchase order</Link></Button>}

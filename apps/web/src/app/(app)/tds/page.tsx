@@ -10,6 +10,7 @@ import { currentFinancialYear, recentFinancialYears } from '@/lib/financial-year
 import { formatRupees } from '@/lib/utils';
 import { Form26qPanel } from '@/components/tds/form26q-panel';
 import { Reconcile26asPanel } from '@/components/tds/reconcile-26as-panel';
+import { GuideButton } from '@/components/guide/module-guide';
 
 // ── Shapes from GET /tds/* (paise) ──────────────────────────────────────────
 
@@ -149,17 +150,20 @@ export default function TdsPage() {
           <h1 className="text-h1 font-display text-ink-900">TDS</h1>
           <p className="mt-1 text-body text-ink-500">Tax deducted at source: what you owe the government, what you have paid, and what customers deducted from you.</p>
         </div>
-        <select
-          value={financialYear}
-          onChange={(e) => setFinancialYear(e.target.value)}
-          className="rounded-md border border-line-200 bg-surface-card px-3 py-1.5 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-saffron-600/40"
-        >
-          {recentFinancialYears().map((fy) => (
-            <option key={fy} value={fy}>
-              FY {fy}
-            </option>
-          ))}
-        </select>
+        <div className="flex flex-wrap items-center gap-2">
+          <GuideButton guide="tds" />
+          <select
+            value={financialYear}
+            onChange={(e) => setFinancialYear(e.target.value)}
+            className="rounded-md border border-line-200 bg-surface-card px-3 py-1.5 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-saffron-600/40"
+          >
+            {recentFinancialYears().map((fy) => (
+              <option key={fy} value={fy}>
+                FY {fy}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {/* To deposit */}

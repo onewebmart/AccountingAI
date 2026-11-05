@@ -33,6 +33,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { GuideButton } from '@/components/guide/module-guide';
 
 interface Qualification {
   status: LeadQualificationStatus;
@@ -476,7 +477,8 @@ export default function LeadsPage() {
               is always your call.
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            <GuideButton guide="leads" />
             <Button
               variant="secondary"
               className="gap-2"
@@ -534,6 +536,7 @@ export default function LeadsPage() {
       ) : activeCount === 0 ? (
         <EmptyState
           icon={<TrendingUp size={26} />}
+          guide={leads?.length ? undefined : 'leads'}
           title="No active leads"
           body="Paste in an enquiry and the AI reads it, scores the fit and lists what you still need to ask — before you spend an hour on it."
           action={{ label: 'Add lead', onClick: () => setDialogOpen(true), icon: <Plus size={16} /> }}

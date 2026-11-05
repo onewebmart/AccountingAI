@@ -16,6 +16,7 @@ import { Rule37Watchlist, TwoBExplanations } from '@/components/gst/itc-panels';
 import { Gstr9Panel } from '@/components/gst/gstr9-panel';
 import { toCsv, paiseToCsvAmount, downloadCsvFile } from '@/lib/csv';
 import { GstReturnsPanel } from '@/components/gst/gst-returns-panel';
+import { GuideButton } from '@/components/guide/module-guide';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -371,7 +372,8 @@ export default function GstPage() {
             Returns, registers, reconciliation, and input tax credit.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <GuideButton guide="gst" />
           <select
             value={period}
             onChange={(e) => setPeriod(e.target.value)}

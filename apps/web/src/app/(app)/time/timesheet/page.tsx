@@ -169,6 +169,7 @@ function Timesheet() {
         />
       )}
       <PageHeader
+        guide="timesheet"
         title="Timesheet"
         subtitle="Everyone's time on projects. Your own entries can be changed or removed until they are on an invoice."
         actions={<Button variant="secondary" asChild><Link href="/time/projects">Projects</Link></Button>}
@@ -197,7 +198,7 @@ function Timesheet() {
         {entries.isLoading ? (
           <p className="flex items-center gap-2 py-10 text-caption text-ink-400"><Loader2 size={14} className="animate-spin" /> Loading time…</p>
         ) : rows.length === 0 && !entries.isError ? (
-          <EmptyState title="No time in this range" body="Change the filters, or log time above." />
+          <EmptyState guide={!projectId && !person ? 'timesheet' : undefined} title="No time in this range" body="Change the filters, or log time above." />
         ) : (
           <TableCard>
             <table className="w-full">

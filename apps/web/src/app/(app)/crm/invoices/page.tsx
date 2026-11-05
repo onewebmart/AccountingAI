@@ -36,6 +36,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { GuideButton } from '@/components/guide/module-guide';
 
 interface Invoice {
   _id: string;
@@ -383,7 +384,8 @@ export default function InvoicesPage() {
               before, on the due date, then a week and a fortnight late.
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            <GuideButton guide="fees" />
             <Button
               variant="secondary"
               className="gap-2"
@@ -430,6 +432,7 @@ export default function InvoicesPage() {
       ) : outstanding.length === 0 ? (
         <EmptyState
           icon={<IndianRupee size={26} />}
+          guide={invoices?.length ? undefined : 'fees'}
           title={invoices?.length ? 'Everything is settled' : 'No invoices yet'}
           body={
             invoices?.length

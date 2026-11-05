@@ -44,6 +44,7 @@ export default function ManualJournalsPage() {
   return (
     <div>
       <PageHeader
+        guide="manualJournals"
         title="Manual journals"
         subtitle="Journal vouchers entered by hand. A posted journal is never edited: correct it by reversing it and posting again."
         actions={
@@ -71,6 +72,7 @@ export default function ManualJournalsPage() {
         <p className="flex items-center gap-2 py-10 text-caption text-ink-400"><Loader2 size={14} className="animate-spin" /> Loading journals…</p>
       ) : rows.length === 0 && !q.isError ? (
         <EmptyState
+          guide={q.data?.data.length ? undefined : 'manualJournals'}
           title={q.data?.data.length ? 'No journal matches' : 'No manual journals yet'}
           body={q.data?.data.length ? 'Change the search, status or dates.' : 'Post a journal for an adjustment the documents do not cover: a provision, a correction, an opening entry.'}
           action={!q.data?.data.length ? <Button asChild><Link href="/accountant/manual-journals/new">New journal</Link></Button> : undefined}

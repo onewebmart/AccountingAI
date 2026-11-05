@@ -2,6 +2,8 @@
 
 import { FadeIn } from '@/components/motion/primitives';
 import { Button } from '@/components/ui/button';
+import { ModuleGuide } from '@/components/guide/module-guide';
+import type { GuideKey } from '@/components/guide/keys';
 
 /**
  * The shared empty state.
@@ -15,14 +17,17 @@ export function EmptyState({
   title,
   body,
   action,
+  guide,
 }: {
   icon: React.ReactNode;
   title: string;
   body: string;
   action?: { label: string; onClick: () => void; icon?: React.ReactNode };
+  /** Before anything exists, the section's guide shows under the empty state. */
+  guide?: GuideKey;
 }) {
   return (
-    <FadeIn>
+    <FadeIn className={guide ? 'space-y-5' : undefined}>
       <div className="rounded-xl border border-line-200 bg-surface-card px-6 py-16 text-center">
         <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-honey-100 text-saffron-700">
           {icon}
@@ -36,6 +41,7 @@ export function EmptyState({
           </Button>
         ) : null}
       </div>
+      {guide && <ModuleGuide guide={guide} />}
     </FadeIn>
   );
 }

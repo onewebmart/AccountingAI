@@ -3,6 +3,8 @@
 import Link from 'next/link';
 import { ChevronLeft, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { GuideButton, ModuleGuide } from '@/components/guide/module-guide';
+import type { GuideKey } from '@/components/guide/keys';
 
 /**
  * The parts every page is built from, so lists, forms and records look and
@@ -11,7 +13,7 @@ import { cn } from '@/lib/utils';
  * and an empty state that says what to do next. Forms are pages, not pop-ups.
  */
 
-export function PageHeader({ title, subtitle, actions, back, meta }: {
+export function PageHeader({ title, subtitle, actions, back, meta, guide }: {
   title: React.ReactNode;
   subtitle?: React.ReactNode;
   actions?: React.ReactNode;
@@ -19,6 +21,8 @@ export function PageHeader({ title, subtitle, actions, back, meta }: {
   back?: { href: string; label: string };
   /** Beside the title: a status chip, a number. */
   meta?: React.ReactNode;
+  /** The section's guide: a "How it works" button before the actions. */
+  guide?: GuideKey;
 }) {
   return (
     <div className="mb-6 space-y-2">
@@ -35,7 +39,12 @@ export function PageHeader({ title, subtitle, actions, back, meta }: {
           </div>
           {subtitle && <p className="mt-1 text-body text-ink-500">{subtitle}</p>}
         </div>
-        {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+        {(actions || guide) && (
+          <div className="flex flex-wrap items-center gap-2">
+            {guide && <GuideButton guide={guide} />}
+            {actions}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -96,12 +105,25 @@ export const tdMoney = 'px-3 py-2.5 text-right font-mono tabular-nums text-body 
 /** A clickable row that opens the record. */
 export const rowLink = 'cursor-pointer border-b border-line-100 last:border-0 hover:bg-surface-sink';
 
-export function EmptyState({ title, body, action }: { title: string; body?: string; action?: React.ReactNode }) {
-  return (
+export function EmptyState({ title, body, action, guide }: {
+  title: string;
+  body?: string;
+  action?: React.ReactNode;
+  /** Before anything exists, the section's guide shows under the empty state. */
+  guide?: GuideKey;
+}) {
+  const box = (
     <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-line-200 bg-surface-card px-6 py-14 text-center">
       <p className="text-h3 font-display text-ink-900">{title}</p>
       {body && <p className="mt-1 max-w-md text-body text-ink-500">{body}</p>}
       {action && <div className="mt-4">{action}</div>}
+    </div>
+  );
+  if (!guide) return box;
+  return (
+    <div className="space-y-5">
+      {box}
+      <ModuleGuide guide={guide} />
     </div>
   );
 }
@@ -126,7 +148,8 @@ export function FormPage({ onSubmit, children, actions, error }: {
       }}
     >
       <div className="space-y-5">{children}</div>
-      <div className="fixed bottom-0 left-[260px] right-0 z-30 border-t border-line-200 bg-surface-card/95 backdrop-blur">
+      {/* data-form-bar lets the Ask your books button and the toasts sit above this bar. */}
+      <div data-form-bar="" className="fixed bottom-0 left-[260px] right-0 z-30 border-t border-line-200 bg-surface-card/95 backdrop-blur">
         <div className="mx-auto flex max-w-content flex-wrap items-center gap-3 px-6 py-3">
           {actions}
           {error && <p className="text-caption text-error-fg">{error}</p>}

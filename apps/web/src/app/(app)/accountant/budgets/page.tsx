@@ -9,6 +9,7 @@ export default function BudgetsPage() {
   return (
     <div>
       <PageHeader
+        guide="budgets"
         title="Budgets"
         subtitle={<>A monthly plan for each income and expense account. Compare it with what happened in <Link href="/reports/management?report=budget_vs_actual" className="underline">Management reports</Link>.</>}
       />

@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { api, ApiError } from '@/lib/api';
 import { formatPaise } from '@/lib/gst';
 import { parseRupees } from '@/lib/money';
+import { GuideButton, ModuleGuide } from '@/components/guide/module-guide';
 
 interface Request {
   _id: string;
@@ -147,14 +148,19 @@ export default function ApprovalsPage() {
   const history = (done.data ?? []).filter((r) => r.status !== 'pending').slice(0, 20);
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-h1 font-display text-ink-900">Approvals</h1>
-        <p className="text-body text-ink-500">Bills, payments and vouchers waiting for someone other than their maker. The last approval posts it, in that person&apos;s name.</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-h1 font-display text-ink-900">Approvals</h1>
+          <p className="text-body text-ink-500">Bills, payments and vouchers waiting for someone other than their maker. The last approval posts it, in that person&apos;s name.</p>
+        </div>
+        <GuideButton guide="approvals" />
       </div>
       <section className="space-y-3">
         <h2 className="text-h3 font-display text-ink-900">Waiting</h2>
         {(pending.data ?? []).length === 0 ? <p className="text-body text-ink-500">Nothing is waiting for approval.</p> : <ul className="space-y-3">{pending.data!.map((r) => <RequestCard key={r._id} r={r} onToast={showToast} />)}</ul>}
       </section>
+      {/* Nothing has ever needed approval: show how maker-checker works. */}
+      {pending.data?.length === 0 && done.data?.length === 0 && <ModuleGuide guide="approvals" />}
       {history.length > 0 && (
         <section className="space-y-2">
           <h2 className="text-h3 font-display text-ink-900">Decided</h2>

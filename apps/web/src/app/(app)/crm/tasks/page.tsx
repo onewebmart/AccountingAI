@@ -27,6 +27,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { GuideButton, ModuleGuide } from '@/components/guide/module-guide';
 
 interface Task {
   _id: string;
@@ -413,10 +414,13 @@ export default function TasksPage() {
               themselves — this is for everything else.
             </p>
           </div>
-          <Button className="gap-2" onClick={() => setDialogOpen(true)}>
-            <Plus size={16} />
-            Add task
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <GuideButton guide="tasks" />
+            <Button className="gap-2" onClick={() => setDialogOpen(true)}>
+              <Plus size={16} />
+              Add task
+            </Button>
+          </div>
         </div>
       </FadeIn>
 
@@ -445,17 +449,20 @@ export default function TasksPage() {
           ))}
         </div>
       ) : (tasks ?? []).length === 0 ? (
-        <div className="rounded-xl border border-line-200 bg-surface-card px-6 py-16 text-center">
-          <CheckSquare size={32} className="mx-auto text-ink-400" />
-          <p className="mt-3 font-heading text-h3 text-ink-900">No tasks yet</p>
-          <p className="mx-auto mt-1 max-w-sm text-body text-ink-500">
-            Statutory deadlines and document chases run on their own. Add a task for the work
-            that does not.
-          </p>
-          <Button className="mt-5 gap-2" onClick={() => setDialogOpen(true)}>
-            <Plus size={16} />
-            Add task
-          </Button>
+        <div className="space-y-5">
+          <div className="rounded-xl border border-line-200 bg-surface-card px-6 py-16 text-center">
+            <CheckSquare size={32} className="mx-auto text-ink-400" />
+            <p className="mt-3 font-heading text-h3 text-ink-900">No tasks yet</p>
+            <p className="mx-auto mt-1 max-w-sm text-body text-ink-500">
+              Statutory deadlines and document chases run on their own. Add a task for the work
+              that does not.
+            </p>
+            <Button className="mt-5 gap-2" onClick={() => setDialogOpen(true)}>
+              <Plus size={16} />
+              Add task
+            </Button>
+          </div>
+          <ModuleGuide guide="tasks" />
         </div>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">

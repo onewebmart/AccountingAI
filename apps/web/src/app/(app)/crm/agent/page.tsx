@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { FadeIn } from '@/components/motion/primitives';
+import { GuideButton } from '@/components/guide/module-guide';
 
 interface Conversation {
   _id: string;
@@ -141,12 +142,15 @@ export default function AgentPage() {
   return (
     <div>
       <FadeIn>
-        <div className="mb-6">
-          <h1 className="font-heading text-h1 text-ink-900">Support agent</h1>
-          <p className="mt-1 text-body text-ink-500">
-            Client questions answered automatically from their real records. Anything about fees,
-            anything sensitive, and anything the agent is unsure of comes to you instead.
-          </p>
+        <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h1 className="font-heading text-h1 text-ink-900">Support agent</h1>
+            <p className="mt-1 text-body text-ink-500">
+              Client questions answered automatically from their real records. Anything about fees,
+              anything sensitive, and anything the agent is unsure of comes to you instead.
+            </p>
+          </div>
+          <GuideButton guide="supportAgent" />
         </div>
       </FadeIn>
 

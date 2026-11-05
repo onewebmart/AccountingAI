@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FadeIn } from '@/components/motion/primitives';
+import { GuideButton, ModuleGuide } from '@/components/guide/module-guide';
 
 interface DeadlineClient {
   itemId: string;
@@ -287,7 +288,8 @@ export default function CompliancePage() {
               Clients are reminded 7, 3 and 1 days before.
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            <GuideButton guide="compliance" />
             <Button
               variant="secondary"
               className="gap-2"
@@ -334,6 +336,9 @@ export default function CompliancePage() {
           {((generate.error ?? runReminders.error) as Error).message}
         </p>
       ) : null}
+
+      {/* No deadline on the calendar yet: show how compliance works. */}
+      {!isLoading && groups?.length === 0 && <ModuleGuide guide="compliance" className="mb-6" />}
 
       <Tabs defaultValue="urgent">
         <TabsList className="mb-5">

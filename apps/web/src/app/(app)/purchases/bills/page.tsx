@@ -47,6 +47,7 @@ export default function BillsPage() {
   return (
     <div>
       <PageHeader
+        guide="bills"
         title="Bills"
         subtitle="What vendors have billed you. A bill is a draft until you post it to the ledger."
         actions={
@@ -87,6 +88,7 @@ export default function BillsPage() {
 
       {bills.data && all.length === 0 ? (
         <EmptyState
+          guide="bills"
           title="No bills yet"
           body="Upload a bill to have it read for you, or type one in line by line."
           action={<Button asChild><Link href="/purchases/bills/new">New bill</Link></Button>}

@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { QueryError } from '@/components/ui/query-error';
 import { api } from '@/lib/api';
 import { formatRupees } from '@/lib/utils';
+import { GuideButton } from '@/components/guide/module-guide';
 
 // ── Shapes from GET /audit and /audit/facets ────────────────────────────────
 
@@ -149,11 +150,14 @@ export default function AuditPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="flex items-center gap-2 text-h1 font-display text-ink-900">
-          <ShieldCheck size={24} className="text-ink-500" /> Audit trail
-        </h1>
-        <p className="text-body text-ink-500 mt-1">Every change to your books: who made it, when, and what it was before. Nothing here can be edited.</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="flex items-center gap-2 text-h1 font-display text-ink-900">
+            <ShieldCheck size={24} className="text-ink-500" /> Audit trail
+          </h1>
+          <p className="text-body text-ink-500 mt-1">Every change to your books: who made it, when, and what it was before. Nothing here can be edited.</p>
+        </div>
+        <GuideButton guide="audit" />
       </div>
 
       <div className="flex flex-wrap items-end gap-3 rounded-lg border border-line-200 bg-surface-card p-4">

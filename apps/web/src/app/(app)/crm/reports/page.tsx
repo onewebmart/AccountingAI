@@ -6,6 +6,7 @@ import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { FadeIn } from '@/components/motion/primitives';
+import { GuideButton } from '@/components/guide/module-guide';
 
 interface MonthlyPoint {
   month: string;
@@ -94,9 +95,14 @@ export default function CrmReportsPage() {
 
   if (error || !data) {
     return (
-      <div className="rounded-xl border border-[#C92A2A]/30 bg-[#C92A2A]/5 p-6">
-        <p className="font-medium text-[#C92A2A]">Couldn&apos;t load reports</p>
-        <p className="mt-1 text-body text-ink-500">{(error as Error)?.message}</p>
+      <div className="space-y-4">
+        <div className="flex justify-end">
+          <GuideButton guide="practiceReports" />
+        </div>
+        <div className="rounded-xl border border-[#C92A2A]/30 bg-[#C92A2A]/5 p-6">
+          <p className="font-medium text-[#C92A2A]">Couldn&apos;t load reports</p>
+          <p className="mt-1 text-body text-ink-500">{(error as Error)?.message}</p>
+        </div>
       </div>
     );
   }
@@ -107,11 +113,14 @@ export default function CrmReportsPage() {
   return (
     <div>
       <FadeIn>
-        <div className="mb-6">
-          <h1 className="font-heading text-h1 text-ink-900">Reports</h1>
-          <p className="mt-1 text-body text-ink-500">
-            How the practice is performing over the last six months.
-          </p>
+        <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h1 className="font-heading text-h1 text-ink-900">Reports</h1>
+            <p className="mt-1 text-body text-ink-500">
+              How the practice is performing over the last six months.
+            </p>
+          </div>
+          <GuideButton guide="practiceReports" />
         </div>
       </FadeIn>
 

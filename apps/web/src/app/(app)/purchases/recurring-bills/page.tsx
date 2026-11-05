@@ -11,6 +11,7 @@ export default function RecurringBillsPage() {
   return (
     <div>
       <PageHeader
+        guide="recurringBills"
         title="Recurring bills"
         subtitle={<>Drafted each morning at 6:30, ready to check and post on <Link href="/purchases/bills" className="underline">Bills</Link>. Nothing posts on its own.</>}
         actions={
@@ -20,7 +21,7 @@ export default function RecurringBillsPage() {
           </>
         }
       />
-      <RecurringTable kind="bill" empty="Nothing repeats yet. Add rent or a subscription, and its bill drafts itself each period." />
+      <RecurringTable kind="bill" guide="recurringBills" empty="Nothing repeats yet. Add rent or a subscription, and its bill drafts itself each period." />
     </div>
   );
 }

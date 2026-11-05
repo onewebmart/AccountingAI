@@ -7,6 +7,7 @@ import { Loader2, Plus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { api, ApiError } from '@/lib/api';
 import { formatPaise } from '@/lib/gst';
+import { GuideButton } from '@/components/guide/module-guide';
 
 type Tab = 'documents' | 'invoice' | 'bill' | 'rates' | 'revaluation';
 interface Currency { code: string; name: string; digits: number }
@@ -262,9 +263,12 @@ export default function CurrencyPage() {
   const TABS: Array<[Tab, string]> = [['documents', 'Documents'], ['invoice', 'Export invoice'], ['bill', 'Foreign bill'], ['rates', 'Rates'], ['revaluation', 'Revaluation']];
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-h1 font-display text-ink-900">Foreign currency</h1>
-        <p className="text-body text-ink-500">Invoices and bills in other currencies. The books stay in rupees at each document&apos;s rate; payments book the exchange gain or loss.</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-h1 font-display text-ink-900">Foreign currency</h1>
+          <p className="text-body text-ink-500">Invoices and bills in other currencies. The books stay in rupees at each document&apos;s rate; payments book the exchange gain or loss.</p>
+        </div>
+        <GuideButton guide="foreignCurrency" />
       </div>
       <div className="flex flex-wrap gap-1 border-b border-line-200">
         {TABS.map(([id, l]) => <button key={id} onClick={() => setTab(id)} className={`px-4 py-2 text-body font-medium ${tab === id ? 'border-b-2 border-saffron-600 text-ink-900' : 'text-ink-500 hover:text-ink-900'}`}>{l}</button>)}

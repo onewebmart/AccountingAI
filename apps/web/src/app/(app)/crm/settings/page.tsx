@@ -23,6 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { GuideButton } from '@/components/guide/module-guide';
 
 interface Template {
   key: MessageTemplateKey;
@@ -378,14 +379,17 @@ export default function CrmSettingsPage() {
   return (
     <div>
       <FadeIn>
-        <div className="mb-6">
-          {/* Named for what it does, not where it sits: the app already has a
-              global Settings, and this page is only about client messaging. */}
-          <h1 className="font-heading text-h1 text-ink-900">Messaging</h1>
-          <p className="mt-1 text-body text-ink-500">
-            Every message your firm sends clients — the outbox, the templates behind them, and the
-            delivery adapter carrying them.
-          </p>
+        <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+          <div>
+            {/* Named for what it does, not where it sits: the app already has a
+                global Settings, and this page is only about client messaging. */}
+            <h1 className="font-heading text-h1 text-ink-900">Messaging</h1>
+            <p className="mt-1 text-body text-ink-500">
+              Every message your firm sends clients — the outbox, the templates behind them, and the
+              delivery adapter carrying them.
+            </p>
+          </div>
+          <GuideButton guide="messaging" />
         </div>
       </FadeIn>
 

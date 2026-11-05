@@ -9,6 +9,7 @@ import { api, ApiError } from '@/lib/api';
 import { currentFinancialYear } from '@/lib/financial-year';
 import { formatRupees } from '@/lib/utils';
 import { ManualOpeningForm } from '@/components/migration/manual-opening-form';
+import { GuideButton } from '@/components/guide/module-guide';
 
 // ── Shapes from /migration (paise; debit positive) ──────────────────────────
 
@@ -144,11 +145,14 @@ export default function MigrationPage() {
 
   return (
     <div className="max-w-[1100px] space-y-6">
-      <div>
-        <h1 className="text-h1 font-display text-ink-900">Opening balances</h1>
-        <p className="text-body text-ink-500 mt-1">
-          Bring the chart of accounts, customers, vendors and opening balances over from Tally, Zoho Books or QuickBooks, or type the balances in.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-h1 font-display text-ink-900">Opening balances</h1>
+          <p className="text-body text-ink-500 mt-1">
+            Bring the chart of accounts, customers, vendors and opening balances over from Tally, Zoho Books or QuickBooks, or type the balances in.
+          </p>
+        </div>
+        <GuideButton guide="openingBalances" />
       </div>
 
       <div className="inline-flex rounded-md border border-line-200 bg-surface-card p-1">

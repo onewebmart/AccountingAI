@@ -8,6 +8,7 @@ import { api } from '@/lib/api';
 import { currentFinancialYear, recentFinancialYears } from '@/lib/financial-year';
 import { QueryError } from '@/components/ui/query-error';
 import { FileText, Loader2, RotateCcw, Paperclip, X } from 'lucide-react';
+import { GuideButton, ModuleGuide } from '@/components/guide/module-guide';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -235,16 +236,19 @@ export default function VouchersPage() {
           >
             Vouchers
           </h1>
-          {/* FY selector */}
-          <select
-            value={fy}
-            onChange={(e) => setFy(e.target.value)}
-            className="rounded-md border border-line-200 bg-surface-card px-3 py-2 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-marigold-400"
-          >
-            {FY_OPTIONS.map((f) => (
-              <option key={f} value={f}>FY {f}</option>
-            ))}
-          </select>
+          <div className="flex flex-wrap items-center gap-2">
+            <GuideButton guide="vouchers" />
+            {/* FY selector */}
+            <select
+              value={fy}
+              onChange={(e) => setFy(e.target.value)}
+              className="rounded-md border border-line-200 bg-surface-card px-3 py-2 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-marigold-400"
+            >
+              {FY_OPTIONS.map((f) => (
+                <option key={f} value={f}>FY {f}</option>
+              ))}
+            </select>
+          </div>
         </div>
 
         {/* Filter bar */}
@@ -273,12 +277,15 @@ export default function VouchersPage() {
             <Loader2 size={20} className="animate-spin mr-2" /> Loading vouchers…
           </div>
         ) : filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-24 text-center rounded-xl border border-line-200 bg-surface-card">
-            <FileText size={36} className="text-ink-300 mb-4" />
-            <p className="text-h3 font-display text-ink-900 mb-1">
-              No vouchers yet.
-            </p>
-            <p className="text-body text-ink-500">Approved entries land here.</p>
+          <div className="space-y-5">
+            <div className="flex flex-col items-center justify-center py-24 text-center rounded-xl border border-line-200 bg-surface-card">
+              <FileText size={36} className="text-ink-300 mb-4" />
+              <p className="text-h3 font-display text-ink-900 mb-1">
+                No vouchers yet.
+              </p>
+              <p className="text-body text-ink-500">Approved entries land here.</p>
+            </div>
+            {typeFilter === 'all' && <ModuleGuide guide="vouchers" />}
           </div>
         ) : (
           <div className="rounded-xl border border-line-200 bg-surface-card overflow-hidden">

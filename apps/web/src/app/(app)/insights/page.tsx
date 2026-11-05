@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { currentFinancialYear, recentFinancialYears } from '@/lib/financial-year';
+import { GuideButton, ModuleGuide } from '@/components/guide/module-guide';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -202,7 +203,8 @@ export default function InsightsPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center justify-end gap-3">
+          <GuideButton guide="insights" />
           <select
             value={financialYear}
             onChange={(e) => setFinancialYear(e.target.value)}
@@ -241,7 +243,10 @@ export default function InsightsPage() {
           Failed to load insights. Please try again.
         </p>
       ) : insights.length === 0 ? (
-        <EmptyState />
+        <>
+          <EmptyState />
+          <ModuleGuide guide="insights" />
+        </>
       ) : (
         <div className="space-y-3">
           {insights.map((insight) => (

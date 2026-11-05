@@ -70,7 +70,7 @@ function Rates() {
       </form>
       {rates.isError && <Notice tone="error">{errorText(rates.error)}</Notice>}
       {rates.data?.length === 0 ? (
-        <EmptyState title="No rates yet" body="Save the rate for each currency you invoice or are billed in." />
+        <EmptyState guide="currencyAdjustments" title="No rates yet" body="Save the rate for each currency you invoice or are billed in." />
       ) : (
         <TableCard>
           <table className="w-full">
@@ -177,6 +177,7 @@ export default function CurrencyAdjustmentsPage() {
   return (
     <div className="space-y-5">
       <PageHeader
+        guide="currencyAdjustments"
         title="Currency adjustments"
         subtitle={<>Exchange rates, and revaluing open foreign-currency balances at month-end. Foreign invoices, bills and their payments are under <Link href="/currency" className="underline">Foreign currency</Link>.</>}
       />

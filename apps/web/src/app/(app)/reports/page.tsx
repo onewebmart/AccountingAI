@@ -8,6 +8,7 @@ import Link from 'next/link';
 import { CheckCircle, Download, Send, FileText } from 'lucide-react';
 import { api } from '@/lib/api';
 import { currentFinancialYear, recentFinancialYears } from '@/lib/financial-year';
+import { GuideButton } from '@/components/guide/module-guide';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -483,7 +484,8 @@ export default function ReportsPage() {
             All reports are derived from posted journals only.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <GuideButton guide="reports" />
           <Link href="/reports/management" className="rounded-md border border-line-200 bg-surface-card px-3 py-1.5 text-body font-medium text-ink-900 hover:bg-surface-sink">
             Management reports
           </Link>

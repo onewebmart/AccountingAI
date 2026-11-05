@@ -22,6 +22,7 @@ import {
   ChevronRight,
   LogOut,
 } from 'lucide-react';
+import { GuideButton } from '@/components/guide/module-guide';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -757,13 +758,16 @@ export default function SettingsPage() {
             Configure your organisation, team, and integrations.
           </p>
         </div>
-        <button
-          onClick={() => logout()}
-          className="flex items-center gap-2 rounded-md border border-line-200 bg-surface-card px-3 py-2 text-caption font-medium text-ink-600 hover:text-error-fg hover:border-error-fg transition-colors"
-        >
-          <LogOut size={14} />
-          Sign out
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <GuideButton guide="settings" />
+          <button
+            onClick={() => logout()}
+            className="flex items-center gap-2 rounded-md border border-line-200 bg-surface-card px-3 py-2 text-caption font-medium text-ink-600 hover:text-error-fg hover:border-error-fg transition-colors"
+          >
+            <LogOut size={14} />
+            Sign out
+          </button>
+        </div>
       </div>
 
       {/* Layout: left sub-nav + content */}

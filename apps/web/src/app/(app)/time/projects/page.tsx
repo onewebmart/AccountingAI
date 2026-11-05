@@ -31,6 +31,7 @@ export default function ProjectsPage() {
   return (
     <div className="space-y-4">
       <PageHeader
+        guide="projects"
         title="Projects"
         subtitle="Income and costs come from invoice and bill lines tagged with the project once posted; unbilled hours become a draft invoice."
         actions={
@@ -57,6 +58,7 @@ export default function ProjectsPage() {
           <p className="flex items-center gap-2 py-10 text-caption text-ink-400"><Loader2 size={14} className="animate-spin" /> Loading projects…</p>
         ) : rows.length === 0 && !list.isError ? (
           <EmptyState
+            guide={list.data?.length ? undefined : 'projects'}
             title={list.data?.length ? 'No project matches' : 'No projects yet'}
             body={list.data?.length ? 'Change the search or the status.' : 'Make a project for each piece of customer work, then log time to it.'}
             action={!list.data?.length ? <Button asChild><Link href="/time/projects/new">New project</Link></Button> : undefined}

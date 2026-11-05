@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Upload, CheckCircle, AlertCircle, Minus, Sparkles, Copy, Undo2, EyeOff } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
 import { QueryError } from '@/components/ui/query-error';
+import { GuideButton, ModuleGuide } from '@/components/guide/module-guide';
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -357,9 +358,12 @@ export default function BankingPage() {
   if (accountsQuery.isSuccess && accounts.length === 0) {
     return (
       <div className="space-y-6">
-        <div>
-          <h1 className="text-h1 font-display text-ink-900">Bank reconciliation</h1>
-          <p className="text-body text-ink-500 mt-1">Match your bank statement to your books.</p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="text-h1 font-display text-ink-900">Bank reconciliation</h1>
+            <p className="text-body text-ink-500 mt-1">Match your bank statement to your books.</p>
+          </div>
+          <GuideButton guide="banking" />
         </div>
         <div className="flex flex-col items-center justify-center py-32 text-center">
           <div className="w-16 h-16 rounded-full bg-surface-sink flex items-center justify-center mb-6 border border-line-200">
@@ -371,6 +375,7 @@ export default function BankingPage() {
           <p className="mt-3 text-caption text-ink-400">PDF, CSV or Excel, as your bank gives it.</p>
         </div>
         <BankFeedsCard onToast={showToast} />
+        <ModuleGuide guide="banking" />
         {toastView}
       </div>
     );
@@ -399,6 +404,7 @@ export default function BankingPage() {
           </p>
         </div>
         <div className="flex flex-wrap justify-end gap-2">
+          <GuideButton guide="banking" />
           {latestStatement && canMatch && (
             <Button
               variant="secondary"
