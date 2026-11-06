@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model, Types } from 'mongoose';
+import { ClientSession, Model, Types } from 'mongoose';
 import { ProposedEntryStatus } from '@ai-accounting/shared';
 import { AuditService } from '../gl/audit.service';
 import { PostingService, financialYearOf } from '../gl/posting.service';
@@ -32,6 +32,20 @@ export interface AdjustmentInput {
    * index, so the same line is not moved twice while one is live.
    */
   sources?: Array<{ journalId: string; index: number }>;
+  /** A base-currency adjustment: the currency, the rate entered and what it books. */
+  fx?: FxAdjustment;
+}
+
+/** What a base-currency adjustment revalued, kept on its proposal for the list. */
+export interface FxAdjustment {
+  currency: string;
+  rate: number;
+  notes: string;
+  /** Gain (+) or loss (−) in paise: receivables up and payables down are gains. */
+  gainPaise: number;
+  receivablesPaise: number;
+  payablesPaise: number;
+  documents: number;
 }
 
 /** The last day of a month: 2026-11 → 2026-11-30. */
@@ -63,7 +77,11 @@ export class AdjustmentsService {
     private audit: AuditService,
   ) {}
 
-  async propose(input: AdjustmentInput): Promise<ProposedEntryDocument> {
+  /**
+   * Pass `session` to draft inside a caller's transaction, so several
+   * proposals and their audit entries are made together or not at all.
+   */
+  async propose(input: AdjustmentInput, session?: ClientSession): Promise<ProposedEntryDocument> {
     const lines = input.lines.filter((l) => l.debitPaise > 0 || l.creditPaise > 0);
     for (const l of lines) {
       if (!Number.isInteger(l.debitPaise) || !Number.isInteger(l.creditPaise) || l.debitPaise < 0 || l.creditPaise < 0) {
@@ -78,7 +96,7 @@ export class AdjustmentsService {
 
     const ids = [...new Set(lines.map((l) => l.accountId))];
     if (ids.some((id) => !Types.ObjectId.isValid(id))) throw new BadRequestException('No such account.');
-    const accounts = await this.accountModel.find({ orgId: input.orgId, _id: { $in: ids } }).lean().exec();
+    const accounts = await this.accountModel.find({ orgId: input.orgId, _id: { $in: ids } }).session(session ?? null).lean().exec();
     const byId = new Map(accounts.map((a) => [String(a._id), a]));
     for (const id of ids) {
       const a = byId.get(id);
@@ -90,7 +108,7 @@ export class AdjustmentsService {
     const confidence = Math.max(0, Math.min(1, input.confidence ?? 1));
     const key = input.unique && input.refId && input.period ? `${input.kind}:${input.refId}:${input.period}` : undefined;
     try {
-      const proposal = await this.proposalModel.create({
+      const [proposal] = await this.proposalModel.create([{
         orgId: input.orgId,
         sourceType: 'adjustment',
         status: ProposedEntryStatus.PROPOSED,
@@ -116,13 +134,14 @@ export class AdjustmentsService {
         adjustment: {
           kind: input.kind, refId: input.refId, period: input.period, reason: input.reason, reverseOn: input.reverseOn ?? null, assets: input.assets ?? [],
           ...(input.sources?.length ? { sources: input.sources } : {}),
+          ...(input.fx ? { fx: input.fx } : {}),
         },
         ...(key ? { adjustmentKey: key } : {}),
-      });
+      }], { session });
       await this.audit.record({
         orgId: input.orgId, entityType: 'ProposedEntry', entityId: proposal._id.toString(), action: 'PROPOSE_ADJUSTMENT', performedBy: input.actorId,
-        after: { kind: input.kind, period: input.period, totalPaise: debit, reason: input.reason },
-      });
+        after: { kind: input.kind, period: input.period, date: input.date, totalPaise: debit, reason: input.reason, ...(input.fx ? { fx: input.fx } : {}) },
+      }, session);
       return proposal;
     } catch (err) {
       if ((err as { code?: number }).code === 11000) throw new ConflictException(`This ${input.kind.replace('_', ' ')} is already drafted for ${input.period}: approve or reject the one in the review queue.`);

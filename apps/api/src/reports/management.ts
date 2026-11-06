@@ -170,8 +170,27 @@ export function comparison(
   };
 }
 
-/** Budget against what the books show, per account, over the months chosen. */
-export function budgetVsActual(budget: Map<string, number>, actual: Map<string, number>, accounts: Map<string, AccountMeta>, label: string): ReportTable {
+/** An asset's movement reads debit-positive; a liability's or capital's, credit-positive. */
+export const bsAmount = (type: AccountType, net: number) => (type === AccountType.ASSETS ? net : -net);
+
+/** Each balance-sheet account's movement over the months, read as bsAmount does. */
+export function bsTotals(nets: MonthNet[], accounts: Map<string, AccountMeta>): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const n of nets) {
+    const a = accounts.get(n.accountId);
+    if (a && (a.type === AccountType.ASSETS || a.type === AccountType.LIABILITIES || a.type === AccountType.CAPITAL)) {
+      out.set(n.accountId, (out.get(n.accountId) ?? 0) + bsAmount(a.type, n.net));
+    }
+  }
+  return out;
+}
+
+/**
+ * Budget against what the books show, per account, over the months chosen.
+ * With balanceSheet, the asset, liability and capital accounts the budget
+ * plans follow the profit, set against their movement in those months.
+ */
+export function budgetVsActual(budget: Map<string, number>, actual: Map<string, number>, accounts: Map<string, AccountMeta>, label: string, opts: { balanceSheet?: boolean } = {}): ReportTable {
   const used = new Set([...budget.keys(), ...actual.keys()]);
   const { income, expense } = plAccounts(accounts, used);
   const rows: ReportRow[] = [];
@@ -193,6 +212,15 @@ export function budgetVsActual(budget: Map<string, number>, actual: Map<string, 
   const i = section('Income', income);
   const e = section('Expenses', expense);
   line('Net profit', i.b - e.b, i.a - e.a, 'grand');
+  const notes = ['Accounts with no budget show their actual against nil.'];
+  if (opts.balanceSheet) {
+    const planned = [...budget.keys()].map((id) => accounts.get(id)).filter((a): a is AccountMeta => !!a);
+    for (const [type, title] of [[AccountType.ASSETS, 'Assets'], [AccountType.LIABILITIES, 'Liabilities'], [AccountType.CAPITAL, 'Capital']] as const) {
+      const list = planned.filter((a) => a.type === type).sort(byGroupThenCode);
+      if (list.length) section(title, list);
+    }
+    if (planned.some((a) => !isPl(a))) notes.push('Asset, liability and capital rows set the budget against each account’s movement in the months, from posted entries.');
+  }
   return {
     key: 'budget_vs_actual',
     title: 'Budget against actual',
@@ -206,7 +234,7 @@ export function budgetVsActual(budget: Map<string, number>, actual: Map<string, 
       { key: 'used', label: '% of budget', kind: 'number' },
     ],
     rows,
-    notes: ['Accounts with no budget show their actual against nil.'],
+    notes,
   };
 }
 

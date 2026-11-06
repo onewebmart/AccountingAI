@@ -8,8 +8,10 @@ import { LedgerAccount, LedgerAccountDocument, SystemAccountKey } from '../gl/sc
 import { PeriodLock, PeriodLockDocument } from '../gl/schemas/period-lock.schema';
 import { ProposedEntry, ProposedEntryDocument } from '../proposals/schemas/proposed-entry.schema';
 import { formatVoucherNumber } from '../journals/journals.service';
+import { PostingService } from '../gl/posting.service';
 import { todayIst } from '../automation/schedule';
 import { AdjustmentsService, periodEnd } from './adjustments.service';
+import { VoucherContact, VoucherContactsService } from './voucher-contacts.service';
 
 /** The most lines one search returns, and one reclassification moves. */
 export const BULK_LINE_CAP = 500;
@@ -38,16 +40,56 @@ export interface BulkLine {
   debitPaise: number;
   creditPaise: number;
   projectId: string | null;
+  /** The customer or vendor of the document that posted the voucher, when there is one. */
+  contact: VoucherContact | null;
   /** Set when a reclassification in review, or approved, already moves this line. */
   movedBy: { proposalId: string; status: 'proposed' | 'approved' } | null;
 }
+
+export interface BulkLinesQuery {
+  accountId: string;
+  from?: string;
+  to?: string;
+  text?: string;
+  /** A customer or vendor: only vouchers their documents posted. */
+  contactId?: string;
+  /** The line's amount (its debit or its credit), in paise, at least and at most. */
+  minPaise?: number;
+  maxPaise?: number;
+}
+
+/**
+ * month: one reclassification per calendar month of the lines, each dated at
+ * that month's end, so the monthly P&L moves in the months the lines are in.
+ * single: one for all of them, dated at the end of the latest line's month.
+ */
+export type BulkSplit = 'month' | 'single';
 
 export interface BulkProposeInput {
   fromAccountId: string;
   toAccountId: string;
   lines: Array<{ journalId: string; index: number }>;
   reason?: string | null;
+  /** By default one entry per month when the lines span months, else one. */
+  split?: BulkSplit;
 }
+
+export interface BulkEntry {
+  proposalId: string;
+  /** The month whose lines this entry moves; null for a single entry over several months. */
+  month: string | null;
+  amountPaise: number;
+  direction: 'debit' | 'credit';
+  date: string;
+  period: string;
+  lines: number;
+  projectId: string | null;
+}
+
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const monthName = (m: string) => `${MONTHS[Number(m.slice(5, 7)) - 1]} ${m.slice(0, 4)}`;
+/** The line's amount: its debit or its credit. */
+const amountOf = (l: { debitPaise: number; creditPaise: number }) => l.debitPaise || l.creditPaise;
 
 const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const rupees = (paise: number) =>
@@ -56,9 +98,10 @@ const dayAfter = (date: string) => new Date(Date.parse(`${date}T00:00:00Z`) + 86
 
 /**
  * Bulk update: find posted lines on one account and move them to another.
- * A posted journal is never edited (Invariant 3). The move is one reclass
+ * A posted journal is never edited (Invariant 3). The move is a reclass
  * adjustment in the review queue, Dr the new account and Cr the old one for
- * the net of the lines chosen, and it posts only when a person approves it.
+ * the net of the lines chosen (one per month the lines are in, or one for
+ * all), and it posts only when a person approves it.
  */
 @Injectable()
 export class BulkUpdateService {
@@ -68,35 +111,74 @@ export class BulkUpdateService {
     @InjectModel(PeriodLock.name) private lockModel: Model<PeriodLockDocument>,
     @InjectModel(ProposedEntry.name) private proposalModel: Model<ProposedEntryDocument>,
     private adjustments: AdjustmentsService,
+    private posting: PostingService,
+    private contacts: VoucherContactsService,
   ) {}
+
+  /** The customers and vendors to filter by. */
+  contactList(orgId: string) {
+    return this.contacts.list(orgId);
+  }
 
   /**
    * Posted lines on an account, oldest first: not reversed, not reversals,
-   * not the year-end closing entry. Text matches the narration or the line.
+   * not the year-end closing entry. Text matches the narration or the line;
+   * a contact keeps the lines tagged with them and, on untagged lines, the
+   * vouchers their documents posted; the amount range is on the line's own
+   * debit or credit.
    */
-  async lines(orgId: string, q: { accountId: string; from?: string; to?: string; text?: string }): Promise<{ lines: BulkLine[]; capped: boolean }> {
+  async lines(orgId: string, q: BulkLinesQuery): Promise<{ lines: BulkLine[]; capped: boolean; contact: VoucherContact | null }> {
     const account = await this.account(orgId, q.accountId, 'The account');
     if (q.from && !DATE.test(q.from)) throw new BadRequestException('from must look like 2026-04-01');
     if (q.to && !DATE.test(q.to)) throw new BadRequestException('to must look like 2026-11-30');
     if (q.from && q.to && q.from > q.to) throw new BadRequestException('The start date is after the end date.');
+    const min = q.minPaise ?? null;
+    const max = q.maxPaise ?? null;
+    for (const v of [min, max]) if (v !== null && (!Number.isInteger(v) || v < 0)) throw new BadRequestException('An amount is whole paise, not negative.');
+    if (min !== null && max !== null && min > max) throw new BadRequestException('The smallest amount is more than the largest.');
 
     const text = q.text?.trim().slice(0, 100) || '';
     const match = text ? new RegExp(escapeRegex(text), 'i') : null;
     const filter: Record<string, unknown> = {
       orgId,
       status: JournalStatus.POSTED,
-      'lines.accountId': account._id,
       reversalOf: { $exists: false },
       isClosingEntry: { $ne: true },
     };
+    const inRange = (l: { debitPaise: number; creditPaise: number }) => {
+      const a = amountOf(l);
+      return (min === null || a >= min) && (max === null || a <= max);
+    };
+    if (min !== null || max !== null) {
+      // A line is a debit or a credit: the range is on whichever it is.
+      const range = { $gte: Math.max(1, min ?? 1), ...(max !== null ? { $lte: max } : {}) };
+      filter.lines = { $elemMatch: { accountId: account._id, $or: [{ debitPaise: range }, { creditPaise: range }] } };
+    } else {
+      filter['lines.accountId'] = account._id;
+    }
     if (q.from || q.to) filter.date = { ...(q.from ? { $gte: q.from } : {}), ...(q.to ? { $lte: q.to } : {}) };
-    if (match) filter.$or = [{ narration: match }, { 'lines.description': match }];
+    const and: Array<Record<string, unknown>> = [];
+    if (match) and.push({ $or: [{ narration: match }, { 'lines.description': match }] });
+
+    // A line's contact: the customer or vendor it is tagged with (a manual
+    // journal's line can carry one), else the contact of the document that
+    // posted its voucher.
+    let contact: VoucherContact | null = null;
+    let ofContact: Set<string> | null = null;
+    if (q.contactId) {
+      contact = await this.contacts.contact(orgId, q.contactId);
+      if (!contact) throw new NotFoundException('That is not one of your customers or vendors.');
+      const ids = await this.contacts.journalIdsOf(orgId, q.contactId);
+      ofContact = new Set(ids.map(String));
+      and.push({ $or: [...(ids.length ? [{ _id: { $in: ids } }] : []), { lines: { $elemMatch: { accountId: account._id, 'contact.id': new Types.ObjectId(q.contactId) } } }] });
+    }
+    if (and.length) filter.$and = and;
 
     const journals = await this.journalModel.find(filter).sort({ date: 1, voucherNumber: 1 }).limit(JOURNAL_SCAN_CAP).lean().exec();
     const reversed = await this.reversedIds(orgId, journals.map((j) => j._id));
     const moved = await this.movedLines(orgId);
 
-    const out: BulkLine[] = [];
+    const out: Array<Omit<BulkLine, 'contact'> & { tagged: VoucherContact | null }> = [];
     let capped = journals.length === JOURNAL_SCAN_CAP;
     for (const j of journals) {
       if (reversed.has(String(j._id))) continue;
@@ -104,11 +186,15 @@ export class BulkUpdateService {
       for (const [index, l] of j.lines.entries()) {
         if (String(l.accountId) !== String(account._id)) continue;
         if (match && !narrationHit && !match.test(l.description ?? '')) continue;
+        if (!inRange(l)) continue;
+        const tagged: VoucherContact | null = l.contact?.id ? { id: String(l.contact.id), name: l.contact.name ?? '', kind: l.contact.kind } : null;
+        if (q.contactId && (tagged ? tagged.id !== q.contactId : !ofContact!.has(String(j._id)))) continue;
         if (out.length === BULK_LINE_CAP) {
           capped = true;
           break;
         }
         out.push({
+          tagged,
           journalId: String(j._id),
           index,
           voucherNumber: formatVoucherNumber(j.voucherType, j.financialYear, j.voucherNumber),
@@ -124,7 +210,9 @@ export class BulkUpdateService {
       }
       if (out.length === BULK_LINE_CAP && capped) break;
     }
-    return { lines: out, capped };
+    const untagged = [...new Set(out.filter((l) => !l.tagged).map((l) => l.journalId))];
+    const who = contact || !untagged.length ? null : await this.contacts.contactsOf(orgId, untagged.map((id) => new Types.ObjectId(id)));
+    return { lines: out.map(({ tagged, ...l }) => ({ ...l, contact: tagged ?? contact ?? who?.get(l.journalId) ?? null })), capped, contact };
   }
 
   /**
@@ -154,7 +242,7 @@ export class BulkUpdateService {
     const reversed = await this.reversedIds(orgId, ids);
     const moved = await this.movedLines(orgId);
 
-    const chosen: Array<{ voucher: string; date: string; debitPaise: number; creditPaise: number; projectId: string | null }> = [];
+    const chosen: Array<{ journalId: string; index: number; voucher: string; date: string; debitPaise: number; creditPaise: number; projectId: string | null }> = [];
     for (const r of refs) {
       const j = byId.get(r.journalId);
       if (!j) throw new NotFoundException('A chosen line is not one of your entries.');
@@ -166,48 +254,80 @@ export class BulkUpdateService {
       const line = j.lines[r.index];
       if (!line || String(line.accountId) !== String(from._id)) throw new BadRequestException(`Line ${r.index + 1} of ${voucher} is not on ${from.name}.`);
       if (moved.has(`${r.journalId}:${r.index}`)) throw new ConflictException(`Line ${r.index + 1} of ${voucher} is already in a reclassification: approve or reject that one first.`);
-      chosen.push({ voucher, date: j.date, debitPaise: line.debitPaise, creditPaise: line.creditPaise, projectId: line.projectId ? String(line.projectId) : null });
+      chosen.push({ journalId: r.journalId, index: r.index, voucher, date: j.date, debitPaise: line.debitPaise, creditPaise: line.creditPaise, projectId: line.projectId ? String(line.projectId) : null });
     }
 
     const net = chosen.reduce((s, l) => s + l.debitPaise - l.creditPaise, 0);
     if (net === 0) throw new BadRequestException('The chosen lines net to nothing: there is nothing to move.');
-    const amount = Math.abs(net);
 
-    // Dated at the end of the latest line's month, so the move lands in the
-    // month the lines are in; never after today; after the lock when that
-    // month is closed, as every entry must be.
-    const latest = chosen.reduce((m, l) => (l.date > m ? l.date : m), chosen[0].date);
+    // By month: one entry per month the lines are in, so the monthly P&L
+    // moves where the lines are, not all in the latest month.
+    const months = [...new Set(chosen.map((l) => l.date.slice(0, 7)))].sort();
+    if (input.split && input.split !== 'month' && input.split !== 'single') throw new BadRequestException('split is month or single.');
+    const split: BulkSplit = input.split ?? (months.length > 1 ? 'month' : 'single');
+    const groups = split === 'month' && months.length > 1
+      ? months.map((m) => ({ month: m as string | null, lines: chosen.filter((l) => l.date.startsWith(m)) }))
+      : [{ month: months.length === 1 ? months[0] : null, lines: chosen }];
+
     const today = todayIst();
-    let date = periodEnd(latest.slice(0, 7));
-    if (date > today) date = today;
     const lock = await this.lockModel.findOne({ orgId }).lean().exec();
-    if (lock?.lockedThrough && date <= lock.lockedThrough) date = today > lock.lockedThrough ? today : dayAfter(lock.lockedThrough);
-    const period = date.slice(0, 7);
+    // Dated at the end of the month the lines are in (the latest line's, for
+    // one entry), never after today. When that month is locked, the first
+    // day after the lock: the nearest the books still allow.
+    const dateFor = (latest: string) => {
+      let date = periodEnd(latest.slice(0, 7));
+      if (date > today) date = today;
+      if (lock?.lockedThrough && date <= lock.lockedThrough) date = dayAfter(lock.lockedThrough);
+      return date;
+    };
 
-    // A project stays with the money only when every line shares it.
-    const projects = new Set(chosen.map((l) => l.projectId));
-    const projectId = projects.size === 1 ? [...projects][0] : null;
-
-    const vouchers = [...new Set(chosen.map((l) => l.voucher))];
-    const listed = vouchers.length > 20 ? `${vouchers.slice(0, 20).join(', ')} and ${vouchers.length - 20} more` : vouchers.join(', ');
     const why = input.reason?.trim().slice(0, 300);
-    const reason =
-      `${chosen.length} posted line${chosen.length === 1 ? '' : 's'} on ${from.name} (net ${net > 0 ? 'debit' : 'credit'} ${rupees(amount)}) move to ${to.name}. ` +
-      `Vouchers: ${listed}.${why ? ` Why: ${why}` : ''} The original entries stay as they were posted.`;
-
-    const refId = `bulk:${createHash('sha1').update([...keys].sort().join(',')).digest('hex').slice(0, 16)}`;
     const toId = String(to._id);
     const fromId = String(from._id);
-    const proposal = await this.adjustments.propose({
-      orgId, actorId, kind: 'reclass', refId, period, date, unique: true,
-      narration: `Reclassification from ${from.name} to ${to.name}`,
-      reason,
-      lines: net > 0
-        ? [{ accountId: toId, debitPaise: amount, creditPaise: 0, projectId }, { accountId: fromId, debitPaise: 0, creditPaise: amount, projectId }]
-        : [{ accountId: fromId, debitPaise: amount, creditPaise: 0, projectId }, { accountId: toId, debitPaise: 0, creditPaise: amount, projectId }],
-      sources: refs.map((r) => ({ journalId: r.journalId, index: r.index })),
+    const skipped: string[] = [];
+    const drafts = groups.flatMap((g) => {
+      const n = g.lines.reduce((s, l) => s + l.debitPaise - l.creditPaise, 0);
+      if (n === 0) {
+        if (g.month) skipped.push(g.month);
+        return [];
+      }
+      const amount = Math.abs(n);
+      const latest = g.lines.reduce((m, l) => (l.date > m ? l.date : m), g.lines[0].date);
+      const date = dateFor(latest);
+      // A project stays with the money only when every line shares it.
+      const projects = new Set(g.lines.map((l) => l.projectId));
+      const projectId = projects.size === 1 ? [...projects][0] : null;
+      const vouchers = [...new Set(g.lines.map((l) => l.voucher))];
+      const listed = vouchers.length > 20 ? `${vouchers.slice(0, 20).join(', ')} and ${vouchers.length - 20} more` : vouchers.join(', ');
+      const ofMonth = split === 'month' && g.month && groups.length > 1 ? ` of ${monthName(g.month)}` : '';
+      const reason =
+        `${g.lines.length} posted line${g.lines.length === 1 ? '' : 's'}${ofMonth} on ${from.name} (net ${n > 0 ? 'debit' : 'credit'} ${rupees(amount)}) move to ${to.name}. ` +
+        `Vouchers: ${listed}.${why ? ` Why: ${why}` : ''}${date.slice(0, 7) !== latest.slice(0, 7) ? ` Dated ${date}: that month is closed or not over.` : ''} The original entries stay as they were posted.`;
+      const lineKeys = g.lines.map((l) => `${l.journalId}:${l.index}`).sort();
+      return [{
+        month: g.month, amount, direction: (n > 0 ? 'debit' : 'credit') as 'debit' | 'credit', date, projectId, lines: g.lines.length,
+        input: {
+          orgId, actorId, kind: 'reclass' as const, refId: `bulk:${createHash('sha1').update(lineKeys.join(',')).digest('hex').slice(0, 16)}`, period: date.slice(0, 7), date, unique: true,
+          narration: `Reclassification from ${from.name} to ${to.name}${ofMonth ? `, ${monthName(g.month!)}` : ''}`,
+          reason,
+          lines: n > 0
+            ? [{ accountId: toId, debitPaise: amount, creditPaise: 0, projectId }, { accountId: fromId, debitPaise: 0, creditPaise: amount, projectId }]
+            : [{ accountId: fromId, debitPaise: amount, creditPaise: 0, projectId }, { accountId: toId, debitPaise: 0, creditPaise: amount, projectId }],
+          sources: g.lines.map((l) => ({ journalId: l.journalId, index: l.index })),
+        },
+      }];
     });
-    return { proposalId: String(proposal._id), amountPaise: amount, direction: net > 0 ? 'debit' : 'credit', date, period, lines: chosen.length, projectId };
+
+    // Every entry goes to the review queue together, or none does.
+    const proposals = await this.posting.inTransaction(async (session) => {
+      const made = [];
+      for (const d of drafts) made.push(await this.adjustments.propose(d.input, session));
+      return made;
+    });
+    const entries: BulkEntry[] = drafts.map((d, i) => ({
+      proposalId: String(proposals[i]._id), month: d.month, amountPaise: d.amount, direction: d.direction, date: d.date, period: d.date.slice(0, 7), lines: d.lines, projectId: d.projectId,
+    }));
+    return { split, entries, lines: chosen.length, skipped };
   }
 
   /** The org's account, open to postings: active and not a group. */

@@ -120,6 +120,8 @@ export class ProposedEntry {
     assets?: Array<{ assetId: string; amountPaise: number; from: string; to: string }>;
     /** A bulk reclassification: the posted lines it moves, by journal and line index. */
     sources?: Array<{ journalId: string; index: number }>;
+    /** A base-currency adjustment (fx_revaluation for one currency): what it revalued, at what rate. */
+    fx?: { currency: string; rate: number; notes: string; gainPaise: number; receivablesPaise: number; payablesPaise: number; documents: number };
   } | null;
 
   /** kind:refId:period, unique while in review or approved; cleared on reject so it can be drafted again. */

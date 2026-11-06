@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { api, ApiError, downloadFile } from '@/lib/api';
 import { ReportTable, ReportTableView } from '@/components/reports/report-table-view';
 import { AskBox } from '@/components/reports/ask-box';
-import { BudgetsEditor } from '@/components/reports/budgets-editor';
+import { BudgetsList, type BudgetSummary } from '@/components/reports/budgets-list';
 import { NarrativeCard } from '@/components/reports/narrative-card';
 import { GuideButton } from '@/components/guide/module-guide';
 
@@ -71,7 +71,14 @@ function ReportsTab({ catalog, onToast }: { catalog: CatalogEntry[]; onToast: (m
   const [key, setKey] = useState(params.get('report') ?? 'pl_monthly');
   const [from, setFrom] = useState(params.get('from') ?? fyStart(nowMonth()));
   const [to, setTo] = useState(params.get('to') ?? nowMonth());
-  const [fy, setFy] = useState(fyOf(nowMonth()));
+  const [fy, setFy] = useState(params.get('financialYear') ?? fyOf(nowMonth()));
+  // Budget against actual: which budget; the year's default when none is picked.
+  const [budgetId, setBudgetId] = useState(params.get('budgetId') ?? '');
+  const yearBudgets = useQuery({
+    queryKey: ['reports', 'budgets', 'active', fy],
+    enabled: key === 'budget_vs_actual',
+    queryFn: () => api.get<BudgetSummary[]>(`/reports/budgets?status=active&financialYear=${fy}`),
+  });
   const [scheduling, setScheduling] = useState(false);
   // An answer's "Open the report" link lands here with the report and its months.
   useEffect(() => {
@@ -83,7 +90,7 @@ function ReportsTab({ catalog, onToast }: { catalog: CatalogEntry[]; onToast: (m
     if (f && t) { setFrom(f); setTo(t); }
   }, [params]);
   const entry = catalog.find((c) => c.key === key) ?? catalog[0];
-  const query = entry?.params === 'range' ? `from=${from}&to=${to}` : entry?.params === 'year' ? `financialYear=${fy}` : '';
+  const query = entry?.params === 'range' ? `from=${from}&to=${to}` : entry?.params === 'year' ? `financialYear=${fy}${key === 'budget_vs_actual' && budgetId ? `&budgetId=${budgetId}` : ''}` : '';
   const q = useQuery({ queryKey: ['reports', 'run', key, query], queryFn: () => api.get<ReportTable>(`/reports/run/${key}${query ? `?${query}` : ''}`), enabled: !!entry && (entry.params !== 'range' || from <= to) });
   const groups = [...new Set(catalog.map((c) => c.group))];
   const download = async (kind: 'pdf' | 'csv') => {
@@ -115,8 +122,18 @@ function ReportsTab({ catalog, onToast }: { catalog: CatalogEntry[]; onToast: (m
           </>
         )}
         {entry?.params === 'year' && (
-          <div><label className={label}>Financial year</label><select className={field} value={fy} onChange={(e) => setFy(e.target.value)}>{recentYears().map((y) => <option key={y} value={y}>FY {y}</option>)}</select></div>
+          <div><label className={label}>Financial year</label><select className={field} value={fy} onChange={(e) => { setFy(e.target.value); setBudgetId(''); }}>{[...new Set([...recentYears(), fy])].map((y) => <option key={y} value={y}>FY {y}</option>)}</select></div>
         )}
+        {key === 'budget_vs_actual' && (
+          <div>
+            <label className={label}>Budget</label>
+            <select className={field} value={budgetId} onChange={(e) => setBudgetId(e.target.value)}>
+              <option value="">The year&apos;s default</option>
+              {(yearBudgets.data ?? []).map((b) => <option key={b.id} value={b.id}>{b.name}{b.isDefault ? ' (default)' : ''}</option>)}
+            </select>
+          </div>
+        )}
+        {key === 'budget_vs_actual' && <Link href="/accountant/budgets" className="pb-2 text-caption text-ink-600 underline">Budgets</Link>}
         {entry?.params === 'today' && <p className="text-caption text-ink-500">As the books stand today.</p>}
         <div className="ml-auto flex gap-2">
           <Button variant="secondary" size="sm" onClick={() => download('pdf')}><Download size={13} /> PDF</Button>
@@ -206,7 +223,15 @@ function ManagementReports() {
       </div>
       {catalog.isError && <p className="text-caption text-error-fg">{message(catalog.error)}</p>}
       {tab === 'reports' && catalog.data && <ReportsTab catalog={catalog.data} onToast={showToast} />}
-      {tab === 'budgets' && <BudgetsEditor onToast={showToast} />}
+      {tab === 'budgets' && (
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-body text-ink-500">Budgets are kept under <Link href="/accountant/budgets" className="underline">Accountant → Budgets</Link>. Each year has a default, which Budget against actual reads unless you pick another.</p>
+            <Link href="/accountant/budgets/new"><Button size="sm">New budget</Button></Link>
+          </div>
+          <BudgetsList />
+        </div>
+      )}
       {tab === 'schedules' && catalog.data && <SchedulesTab catalog={catalog.data} onToast={showToast} />}
       {toast && <div className="fixed bottom-6 right-6 z-50 rounded-lg border border-success-fg bg-success-bg px-4 py-3 text-body text-success-fg shadow-lg">{toast}</div>}
     </div>

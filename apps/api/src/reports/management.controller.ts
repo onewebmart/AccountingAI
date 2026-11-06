@@ -1,16 +1,18 @@
-import { Body, Controller, Get, Param, Post, Put, Query, Request, Res, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Put, Query, Request, Res, UseGuards } from '@nestjs/common';
 import { Type } from 'class-transformer';
-import { ArrayMaxSize, ArrayMinSize, IsArray, IsEmail, IsIn, IsInt, IsMongoId, IsNumber, IsOptional, IsString, Length, Matches, Max, Min, ValidateNested } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsEmail, IsIn, IsInt, IsMongoId, IsNumber, IsOptional, IsString, Length, Matches, Max, Min, ValidateNested } from 'class-validator';
 import { Response } from 'express';
 import { Permission } from '@ai-accounting/shared';
 import { RequirePermission } from '../auth/decorators';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionGuard } from '../auth/guards/permission.guard';
-import { ManagementReportsService } from './management.service';
 import { ReportCatalogService, ReportParams } from './report-catalog.service';
 import { ReportSchedulesService } from './report-schedules.service';
 import { ReportAiService } from './report-ai.service';
+import { BudgetsService } from './budgets.service';
+import { BUDGET_PERIODS, BudgetPeriod } from './budget-periods';
 import { toCsv } from './report-table';
+import { CenterParamsDto, REPORT_KEY } from './catalog/params.dto';
 
 interface AuthRequest {
   user: { orgId: string; sub: string };
@@ -19,27 +21,37 @@ interface AuthRequest {
 const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
 const FY = /^\d{4}-\d{2}$/;
 
-class ParamsDto implements ReportParams {
-  @IsOptional() @Matches(MONTH, { message: 'from is a month like 2026-04' }) from?: string;
-  @IsOptional() @Matches(MONTH, { message: 'to is a month like 2026-11' }) to?: string;
-  @IsOptional() @Matches(FY, { message: 'financialYear looks like 2026-27' }) financialYear?: string;
-  @IsOptional() @Matches(MONTH, { message: 'through is a month like 2026-11' }) through?: string;
+/** The period, and the Reports Center's filters (asOf, customerId and the rest) from CenterParamsDto. */
+class ParamsDto extends CenterParamsDto implements ReportParams {
+  /** Budget against actual: which budget; the year's default when left out. */
+  @IsOptional() @IsMongoId({ message: 'budgetId is a budget' }) budgetId?: string;
 }
 
 class BudgetRowDto {
   @IsMongoId() accountId: string;
-  @IsArray() @ArrayMinSize(12) @ArrayMaxSize(12) @IsInt({ each: true }) @Min(0, { each: true }) monthsPaise: number[];
+  /** One amount per period, whole paise: 12, 4, 2 or 1 of them. */
+  @IsArray() @ArrayMinSize(1) @ArrayMaxSize(12) @IsInt({ each: true }) amountsPaise: number[];
 }
 
-class BudgetsDto {
-  @Matches(FY) financialYear: string;
+class BudgetDto {
+  @IsString() @Length(1, 100) name: string;
+  @Matches(FY, { message: 'financialYear looks like 2026-27' }) financialYear: string;
+  @IsIn(BUDGET_PERIODS, { message: 'period is monthly, quarterly, half_yearly or yearly' }) period: BudgetPeriod;
+  @IsOptional() @IsBoolean() includeBalanceSheet?: boolean;
   @IsArray() @ArrayMaxSize(500) @ValidateNested({ each: true }) @Type(() => BudgetRowDto) rows: BudgetRowDto[];
+}
+
+class BudgetListQuery {
+  @IsOptional() @Matches(FY, { message: 'financialYear looks like 2026-27' }) financialYear?: string;
+  @IsOptional() @IsIn(['active', 'archived']) status?: 'active' | 'archived';
 }
 
 class FromYearDto {
   @Matches(FY) financialYear: string;
   @Matches(FY) fromYear: string;
   @IsOptional() @IsNumber() @Min(-99) @Max(500) changePct?: number;
+  @IsOptional() @IsBoolean() includeBalanceSheet?: boolean;
+  @IsOptional() @IsArray() @ArrayMaxSize(500) @IsMongoId({ each: true }) accountIds?: string[];
 }
 
 class PeriodDto {
@@ -51,7 +63,8 @@ class AskDto {
 }
 
 class ScheduleDto {
-  @IsIn(['pl_monthly', 'comparison', 'expenses', 'budget_vs_actual', 'sales_by_customer', 'sales_by_item', 'sales_by_month', 'purchases_by_vendor', 'purchases_by_item', 'purchases_by_month', 'receivables', 'payables', 'gst_summary', 'trial_balance', 'balance_sheet', 'project_pnl'])
+  // Any report's key, a Reports Center one or custom.<id>; the service checks it exists for this person.
+  @Matches(REPORT_KEY, { message: 'Pick a report.' })
   report: string;
   @IsOptional() @IsIn(['last_month', 'this_month', 'last_quarter', 'this_fy', 'last_fy']) period?: 'last_month' | 'this_month' | 'last_quarter' | 'this_fy' | 'last_fy';
   @IsIn(['monthly', 'weekly']) frequency: 'monthly' | 'weekly';
@@ -65,9 +78,9 @@ class ScheduleDto {
 export class ManagementController {
   constructor(
     private readonly catalog: ReportCatalogService,
-    private readonly management: ManagementReportsService,
     private readonly schedules: ReportSchedulesService,
     private readonly ai: ReportAiService,
+    private readonly budgetPlans: BudgetsService,
   ) {}
 
   @Get('catalog')
@@ -79,13 +92,13 @@ export class ManagementController {
   @Get('run/:key')
   @RequirePermission(Permission.VIEW_REPORTS)
   run(@Request() req: AuthRequest, @Param('key') key: string, @Query() q: ParamsDto) {
-    return this.catalog.run(req.user.orgId, key, q);
+    return this.catalog.run(req.user.orgId, key, q, req.user.sub);
   }
 
   @Get('run/:key/pdf')
   @RequirePermission(Permission.VIEW_REPORTS)
   async pdf(@Request() req: AuthRequest, @Param('key') key: string, @Query() q: ParamsDto, @Res() res: Response) {
-    const { filename, buffer } = await this.catalog.pdf(req.user.orgId, key, q);
+    const { filename, buffer } = await this.catalog.pdf(req.user.orgId, key, q, req.user.sub);
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.send(buffer);
@@ -94,29 +107,67 @@ export class ManagementController {
   @Get('run/:key/csv')
   @RequirePermission(Permission.VIEW_REPORTS)
   async csv(@Request() req: AuthRequest, @Param('key') key: string, @Query() q: ParamsDto, @Res() res: Response) {
-    const table = await this.catalog.run(req.user.orgId, key, q);
+    const table = await this.catalog.run(req.user.orgId, key, q, req.user.sub);
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', `attachment; filename="${key.replace(/_/g, '-')}.csv"`);
+    res.setHeader('Content-Disposition', `attachment; filename="${key.replace(/[._]/g, '-')}.csv"`);
     // A byte-order mark, so Excel reads the rupee sign and Indian names right.
     res.send(`﻿${toCsv(table)}`);
   }
 
+  // ── Budgets: named plans, several a year. Plans only; nothing here posts. ──
+
   @Get('budgets')
   @RequirePermission(Permission.VIEW_REPORTS)
-  budgets(@Request() req: AuthRequest, @Query('financialYear') financialYear: string) {
-    return this.management.budgets(req.user.orgId, financialYear);
+  budgets(@Request() req: AuthRequest, @Query() q: BudgetListQuery) {
+    return this.budgetPlans.list(req.user.orgId, q);
   }
 
-  @Put('budgets')
+  @Post('budgets')
   @RequirePermission(Permission.MANAGE_COA)
-  saveBudgets(@Request() req: AuthRequest, @Body() body: BudgetsDto) {
-    return this.management.saveBudgets(req.user.orgId, req.user.sub, body.financialYear, body.rows);
+  createBudget(@Request() req: AuthRequest, @Body() body: BudgetDto) {
+    return this.budgetPlans.create(req.user.orgId, req.user.sub, body);
   }
 
   @Post('budgets/from-year')
   @RequirePermission(Permission.MANAGE_COA)
   fromYear(@Request() req: AuthRequest, @Body() body: FromYearDto) {
-    return this.management.budgetsFromYear(req.user.orgId, body.financialYear, body.fromYear, body.changePct ?? 0);
+    return this.budgetPlans.fromYear(req.user.orgId, body);
+  }
+
+  @Get('budgets/:id')
+  @RequirePermission(Permission.VIEW_REPORTS)
+  budget(@Request() req: AuthRequest, @Param('id') id: string) {
+    return this.budgetPlans.get(req.user.orgId, id);
+  }
+
+  @Put('budgets/:id')
+  @RequirePermission(Permission.MANAGE_COA)
+  updateBudget(@Request() req: AuthRequest, @Param('id') id: string, @Body() body: BudgetDto) {
+    return this.budgetPlans.update(req.user.orgId, req.user.sub, id, body);
+  }
+
+  @Post('budgets/:id/default')
+  @RequirePermission(Permission.MANAGE_COA)
+  defaultBudget(@Request() req: AuthRequest, @Param('id') id: string) {
+    return this.budgetPlans.makeDefault(req.user.orgId, req.user.sub, id);
+  }
+
+  @Post('budgets/:id/archive')
+  @RequirePermission(Permission.MANAGE_COA)
+  archiveBudget(@Request() req: AuthRequest, @Param('id') id: string) {
+    return this.budgetPlans.archive(req.user.orgId, req.user.sub, id);
+  }
+
+  @Post('budgets/:id/restore')
+  @RequirePermission(Permission.MANAGE_COA)
+  restoreBudget(@Request() req: AuthRequest, @Param('id') id: string) {
+    return this.budgetPlans.restore(req.user.orgId, req.user.sub, id);
+  }
+
+  @Delete('budgets/:id')
+  @RequirePermission(Permission.MANAGE_COA)
+  deleteBudget(@Request() req: AuthRequest, @Param('id') id: string) {
+    return this.budgetPlans.remove(req.user.orgId, req.user.sub, id);
   }
 
   @Get('schedules')

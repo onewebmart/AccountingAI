@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Optional } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { AccountType, BillStatus, InvoiceStatus, JournalStatus } from '@ai-accounting/shared';
@@ -15,8 +15,12 @@ import { Vendor, VendorDocument } from '../purchase/schemas/vendor.schema';
 import { Item, ItemDocument } from '../items/schemas/item.schema';
 import { todayIst } from '../automation/schedule';
 import { Budget, BudgetDocument } from './schemas/budget.schema';
+import { NamedBudget, NamedBudgetDocument } from './schemas/named-budget.schema';
+import { migrateLegacyBudgets } from './budget-migration';
+import { bsTotals } from './management';
 import { Project, ProjectDocument } from '../projects/schemas/project.schema';
 import { TimeEntry, TimeEntryDocument } from '../projects/schemas/time-entry.schema';
+import { rateBook, rateFor } from '../projects/time-billing';
 import {
   AccountMeta, DocFact, GstMonth, LineFact, MONTH, MonthNet, OpenDoc, PaidFact,
   ageingByParty, budgetVsActual, byItem, byMonth, byParty, comparison, fyMonths, gstSummary, monthEnd, monthsBetween, plMonthly, plTotals, rangeLabel, shiftMonth,
@@ -58,6 +62,8 @@ export class ManagementReportsService {
     private audit: AuditService,
     @Optional() @InjectModel(Project.name) private projectModel?: Model<ProjectDocument>,
     @Optional() @InjectModel(TimeEntry.name) private timeModel?: Model<TimeEntryDocument>,
+    // Named budgets; without them (a spec that does not register them) the old per-year budget is read.
+    @Optional() @InjectModel(NamedBudget.name) private namedBudgetModel?: Model<NamedBudgetDocument>,
   ) {}
 
   /** A month range; by default this financial year to the current month. */
@@ -220,60 +226,19 @@ export class ManagementReportsService {
 
   // ── Budgets ───────────────────────────────────────────────────────────
 
-  private fy(financialYear: string) {
+  fy(financialYear: string) {
     if (!FY.test(financialYear ?? '')) throw new BadRequestException('financialYear looks like 2026-27.');
     const start = Number(financialYear.slice(0, 4));
     return { from: `${start}-04`, to: `${start + 1}-03` };
   }
 
-  /** Every income and expense account with its budget for the year, nil where none is set. */
-  async budgets(orgId: string, financialYear: string) {
-    this.fy(financialYear);
-    const [accounts, saved] = await Promise.all([
-      this.accountModel.find({ orgId, isGroup: false, isActive: true, type: { $in: [AccountType.INCOME, AccountType.EXPENSE] } }, { name: 1, code: 1, type: 1 }).sort({ code: 1 }).lean().exec(),
-      this.budgetModel.find({ orgId, financialYear }).lean().exec(),
-    ]);
-    const byAccount = new Map(saved.map((b) => [String(b.accountId), b.monthsPaise]));
-    return {
-      financialYear,
-      months: monthsBetween(`${financialYear.slice(0, 4)}-04`, `${Number(financialYear.slice(0, 4)) + 1}-03`),
-      rows: accounts.map((a) => ({ accountId: String(a._id), name: a.name, code: a.code, type: a.type, monthsPaise: byAccount.get(String(a._id)) ?? Array(12).fill(0) })),
-    };
-  }
-
-  /** Set the budgets given; an all-nil row removes the account's budget. Audited. */
-  async saveBudgets(orgId: string, actorId: string, financialYear: string, rows: Array<{ accountId: string; monthsPaise: number[] }>) {
-    this.fy(financialYear);
-    const ids = rows.map((r) => r.accountId);
-    if (ids.some((id) => !Types.ObjectId.isValid(id))) throw new BadRequestException('No such account.');
-    const accounts = await this.accountModel.find({ orgId, _id: { $in: ids } }, { name: 1, type: 1, isGroup: 1 }).lean().exec();
-    const byId = new Map(accounts.map((a) => [String(a._id), a]));
-    for (const r of rows) {
-      const a = byId.get(r.accountId);
-      if (!a || a.isGroup || ![AccountType.INCOME, AccountType.EXPENSE].includes(a.type as AccountType)) throw new BadRequestException('Budgets are for income and expense accounts.');
-      if (!Array.isArray(r.monthsPaise) || r.monthsPaise.length !== 12 || !r.monthsPaise.every((n) => Number.isInteger(n) && n >= 0)) {
-        throw new BadRequestException(`${a.name}: twelve whole-paise amounts, April to March, none negative.`);
-      }
-    }
-    let saved = 0;
-    for (const r of rows) {
-      const filter = { orgId, financialYear, accountId: new Types.ObjectId(r.accountId) };
-      const before = await this.budgetModel.findOne(filter).lean().exec();
-      if (before && before.monthsPaise.every((v, i) => v === r.monthsPaise[i])) continue;
-      if (!before && r.monthsPaise.every((v) => v === 0)) continue;
-      if (r.monthsPaise.every((v) => v === 0)) await this.budgetModel.deleteOne(filter).exec();
-      else await this.budgetModel.updateOne(filter, { $set: { monthsPaise: r.monthsPaise, updatedBy: actorId } }, { upsert: true, runValidators: true }).exec();
-      await this.audit.record({
-        orgId, entityType: 'Budget', entityId: `${financialYear}:${r.accountId}`, action: 'SET_BUDGET', performedBy: actorId,
-        before: before ? { monthsPaise: before.monthsPaise } : null, after: { account: byId.get(r.accountId)!.name, monthsPaise: r.monthsPaise },
-      });
-      saved++;
-    }
-    return { saved };
-  }
-
-  /** A year's actuals, month by month, raised or cut by a percentage: a starting point to edit, not saved. */
-  async budgetsFromYear(orgId: string, financialYear: string, fromYear: string, changePct = 0) {
+  /**
+   * A year's actuals, month by month, raised or cut by a percentage: a
+   * starting point to edit, not saved. Income and expense accounts by
+   * default (never below nil); asset, liability and capital accounts'
+   * movement too with includeBalanceSheet (which can be below nil).
+   */
+  async budgetsFromYear(orgId: string, financialYear: string, fromYear: string, changePct = 0, opts: { includeBalanceSheet?: boolean } = {}) {
     const r = this.fy(fromYear);
     this.fy(financialYear);
     if (!(changePct > -100 && changePct <= 500)) throw new BadRequestException('The change is a percentage above −100.');
@@ -282,27 +247,66 @@ export class ManagementReportsService {
     const grid = new Map<string, number[]>();
     for (const n of await this.monthNets(orgId, r)) {
       const a = accounts.get(n.accountId);
-      if (!a || (a.type !== AccountType.INCOME && a.type !== AccountType.EXPENSE)) continue;
+      if (!a) continue;
+      const pl = a.type === AccountType.INCOME || a.type === AccountType.EXPENSE;
+      if (!pl && !opts.includeBalanceSheet) continue;
       const row = grid.get(n.accountId) ?? Array(12).fill(0);
-      const v = a.type === AccountType.INCOME ? -n.net : n.net;
+      const v = a.type === AccountType.INCOME || a.type === AccountType.LIABILITIES || a.type === AccountType.CAPITAL ? -n.net : n.net;
       row[months.indexOf(n.month)] += v;
       grid.set(n.accountId, row);
     }
+    const scale = (v: number) => Math.round((v * (100 + changePct)) / 100) || 0;
     return {
       financialYear,
-      rows: [...grid].map(([accountId, row]) => ({ accountId, monthsPaise: row.map((v) => Math.max(0, Math.round((v * (100 + changePct)) / 100))) })),
+      rows: [...grid].map(([accountId, row]) => {
+        const type = accounts.get(accountId)!.type;
+        const pl = type === AccountType.INCOME || type === AccountType.EXPENSE;
+        return { accountId, monthsPaise: row.map((v) => (pl ? Math.max(0, scale(v)) : scale(v))) };
+      }),
     };
   }
 
-  /** Budget against actual over the year's months to `through` (by default the year so far). */
-  async budgetVsActual(orgId: string, financialYear: string, through?: string | null): Promise<ReportTable> {
-    const year = this.fy(financialYear);
+  /**
+   * The budget budget against actual reads: the one asked for, else the
+   * year's default, else the year's most recently changed. Old per-year
+   * budgets are copied into named ones first.
+   */
+  async budgetFor(orgId: string, financialYear: string, budgetId?: string | null): Promise<NamedBudget & { _id: Types.ObjectId } | null> {
+    if (!this.namedBudgetModel) return null;
+    await migrateLegacyBudgets({ legacy: this.budgetModel, named: this.namedBudgetModel, audit: this.audit }, orgId);
+    if (budgetId) {
+      const found = Types.ObjectId.isValid(budgetId) ? await this.namedBudgetModel.findOne({ orgId, _id: new Types.ObjectId(budgetId), status: { $ne: 'deleted' } }).lean().exec() : null;
+      if (!found) throw new NotFoundException('No such budget.');
+      return found;
+    }
+    return (
+      (await this.namedBudgetModel.findOne({ orgId, financialYear, status: 'active', isDefault: true }).lean().exec()) ??
+      (await this.namedBudgetModel.findOne({ orgId, financialYear, status: 'active' }).sort({ updatedAt: -1 }).lean().exec())
+    );
+  }
+
+  /**
+   * Budget against actual over the year's months to `through` (by default
+   * the year so far), for a budget by id, or the year's default. A budget
+   * asked for by id brings its own year.
+   */
+  async budgetVsActual(orgId: string, financialYear: string, through?: string | null, budgetId?: string | null): Promise<ReportTable> {
+    const chosen = await this.budgetFor(orgId, financialYear, budgetId);
+    const fy = chosen?.financialYear ?? financialYear;
+    const year = this.fy(fy);
     const end = through || (todayIst().slice(0, 7) < year.to ? todayIst().slice(0, 7) : year.to);
-    if (!MONTH.test(end) || end < year.from || end > year.to) throw new BadRequestException(`through is a month of ${financialYear}.`);
+    if (!MONTH.test(end) || end < year.from || end > year.to) throw new BadRequestException(`through is a month of ${fy}.`);
     const months = monthsBetween(year.from, end);
-    const [accounts, saved, nets] = await Promise.all([this.accounts(orgId), this.budgetModel.find({ orgId, financialYear }).lean().exec(), this.monthNets(orgId, { from: year.from, to: end })]);
-    const budget = new Map(saved.map((b) => [String(b.accountId), b.monthsPaise.slice(0, months.length).reduce((s, v) => s + v, 0)]));
-    return budgetVsActual(budget, plTotals(nets, accounts), accounts, `${financialYear}, ${rangeLabel(year.from, end)}`);
+    const [accounts, nets] = await Promise.all([this.accounts(orgId), this.monthNets(orgId, { from: year.from, to: end })]);
+    // Without named budgets registered (a narrow spec), the old per-year rows.
+    const rows = this.namedBudgetModel ? (chosen?.rows ?? []) : await this.budgetModel.find({ orgId, financialYear: fy }).lean().exec();
+    const budget = new Map(rows.map((b) => [String(b.accountId), b.monthsPaise.slice(0, months.length).reduce((s, v) => s + v, 0)]));
+    const balanceSheet = !!chosen?.includeBalanceSheet;
+    const actual = plTotals(nets, accounts);
+    if (balanceSheet) for (const [id, v] of bsTotals(nets, accounts)) if (budget.has(id)) actual.set(id, v);
+    const table = budgetVsActual(budget, actual, accounts, `${chosen ? `${chosen.name}, ` : ''}${fy}, ${rangeLabel(year.from, end)}`, { balanceSheet });
+    if (!chosen && this.namedBudgetModel) table.notes = [...(table.notes ?? []), `No budget for ${fy} yet: make one under Accountant → Budgets.`];
+    return table;
   }
 
   // ── Projects ──────────────────────────────────────────────────────────
@@ -332,14 +336,17 @@ export class ManagementReportsService {
       else if (a.type === AccountType.EXPENSE) row(String(l._id.p)).costPaise += l.net;
     }
     if (this.timeModel && this.projectModel) {
-      const rates = new Map((await this.projectModel.find({ orgId }, { ratePaise: 1 }).lean().exec()).map((p) => [String(p._id), p.ratePaise]));
-      const time = await this.timeModel.find({ orgId }, { projectId: 1, date: 1, hours: 1, billable: 1, status: 1, ratePaise: 1 }).lean().exec();
+      // Priced by each project's billing method: its rate, the task's, or the person's.
+      const books = new Map((await this.projectModel.find({ orgId }, { billing: 1, ratePaise: 1, tasks: 1, members: 1 }).lean().exec()).map((p) => [String(p._id), rateBook(p)]));
+      const time = await this.timeModel.find({ orgId }, { projectId: 1, date: 1, hours: 1, billable: 1, status: 1, ratePaise: 1, task: 1, taskId: 1, userId: 1, userName: 1 }).lean().exec();
       for (const t of time) {
         const f = row(String(t.projectId));
         if (!r || (t.date >= `${r.from}-01` && t.date <= monthEnd(r.to))) f.hours = Math.round((f.hours + t.hours) * 100) / 100;
         if (t.billable && t.status === 'unbilled') {
           f.unbilledHours = Math.round((f.unbilledHours + t.hours) * 100) / 100;
-          f.unbilledPaise += Math.round(t.hours * (t.ratePaise ?? rates.get(String(t.projectId)) ?? 0));
+          const book = books.get(String(t.projectId));
+          const rate = book ? rateFor(book, { ratePaise: t.ratePaise, task: t.task, taskId: t.taskId ? String(t.taskId) : null, userId: t.userId, userName: t.userName }).ratePaise : t.ratePaise;
+          f.unbilledPaise += Math.round(t.hours * (rate ?? 0));
         }
       }
     }

@@ -68,6 +68,9 @@ class BulkLinesQuery {
   @IsOptional() @Matches(DATE, { message: 'from must look like 2026-04-01' }) from?: string;
   @IsOptional() @Matches(DATE, { message: 'to must look like 2026-11-30' }) to?: string;
   @IsOptional() @IsString() @Length(0, 100) text?: string;
+  @IsOptional() @IsMongoId({ message: 'Choose a customer or vendor.' }) contactId?: string;
+  @IsOptional() @Type(() => Number) @IsInt({ message: 'minPaise is whole paise.' }) @Min(0) minPaise?: number;
+  @IsOptional() @Type(() => Number) @IsInt({ message: 'maxPaise is whole paise.' }) @Min(0) maxPaise?: number;
 }
 
 class BulkLineRef {
@@ -85,6 +88,7 @@ class BulkProposeDto {
   @Type(() => BulkLineRef)
   lines: BulkLineRef[];
   @IsOptional() @IsString() @Length(0, 300) reason?: string | null;
+  @IsOptional() @IsIn(['month', 'single'], { message: 'split is month or single.' }) split?: 'month' | 'single';
 }
 
 /**
@@ -179,7 +183,13 @@ export class MonthEndController {
     return this.schedules.stop(req.user.orgId, req.user.sub, id);
   }
 
-  // Bulk update: posted lines on one account, moved to another by one reclass in the review queue.
+  // Bulk update: posted lines on one account, moved to another by reclassifications in the review queue.
+  @Get('bulk-update/contacts')
+  @RequirePermission(Permission.VIEW_REPORTS)
+  bulkContacts(@Request() req: AuthRequest) {
+    return this.bulk.contactList(req.user.orgId);
+  }
+
   @Get('bulk-update/lines')
   @RequirePermission(Permission.VIEW_REPORTS)
   bulkLines(@Request() req: AuthRequest, @Query() q: BulkLinesQuery) {

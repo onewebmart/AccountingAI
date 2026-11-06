@@ -2,7 +2,7 @@
  * Tests — management reports, budgets and scheduled report emails, against the books.
  *
  *  ✓ P&L by month and compared with the month before and the year before, from posted journals
- *  ✓ Budgets: saved and audited, unchanged rows skipped, last year's actuals as a start; against actual
+ *  ✓ Budgets: last year's actuals as a start; the old per-year budget against actual when named budgets are not registered
  *  ✓ Any report by key, as a table or a PDF; an unknown one refused
  *  ✓ Sales by customer, month and item, less credit notes; GST from the books
  *  ✓ Receivables by how overdue, with how long the customer takes to pay
@@ -152,7 +152,8 @@ describe('profit, comparisons and budgets', () => {
     expect(tb.buffer.toString('latin1')).toContain('(Saffron Foods) Tj');
   });
 
-  it('saves budgets with an audit entry, starts from last year, and sets them against the actual', async () => {
+  // Named budgets themselves are tested in budgets.service.spec.ts; this module registers only the old per-year model.
+  it('starts from last year, and without named budgets sets the old per-year budget against the actual', async () => {
     const { orgId, id } = await org();
     await journal(orgId, '2025-11-15', id('Bank Accounts'), id('Sales Revenue'), 80_000_00);
     await journal(orgId, '2026-10-10', id('Bank Accounts'), id('Sales Revenue'), 1_00_000_00);
@@ -161,17 +162,10 @@ describe('profit, comparisons and budgets', () => {
 
     const start = await management.budgetsFromYear(orgId, '2026-27', '2025-26', 10);
     expect(start.rows).toEqual([{ accountId: id('Sales Revenue'), monthsPaise: [0, 0, 0, 0, 0, 0, 0, 88_000_00, 0, 0, 0, 0] }]);
+    await expect(management.budgetsFromYear(orgId, '2026-27', '2025-26', -100)).rejects.toThrow(/above −100/);
 
     const months = [0, 0, 0, 0, 0, 0, 1_10_000_00, 1_10_000_00, 1_10_000_00, 0, 0, 0];
-    expect(await management.saveBudgets(orgId, ACTOR, '2026-27', [{ accountId: id('Sales Revenue'), monthsPaise: months }, { accountId: id('Rent'), monthsPaise: Array(12).fill(0) }])).toEqual({ saved: 1 });
-    expect(await management.saveBudgets(orgId, ACTOR, '2026-27', [{ accountId: id('Sales Revenue'), monthsPaise: months }])).toEqual({ saved: 0 });
-    expect(await auditModel.countDocuments({ orgId, entityType: 'Budget', action: 'SET_BUDGET' })).toBe(1);
-    await expect(management.saveBudgets(orgId, ACTOR, '2026-27', [{ accountId: id('Bank Accounts'), monthsPaise: months }])).rejects.toThrow(/income and expense accounts/);
-    await expect(management.saveBudgets(orgId, ACTOR, '2026-27', [{ accountId: id('Rent'), monthsPaise: [1.5, ...Array(11).fill(0)] }])).rejects.toThrow(/whole-paise/);
-
-    const listed = await management.budgets(orgId, '2026-27');
-    expect(listed.rows.find((r) => r.name === 'Sales Revenue')!.monthsPaise).toEqual(months);
-    expect(listed.rows.find((r) => r.name === 'Rent')!.monthsPaise).toEqual(Array(12).fill(0));
+    await moduleRef.get<Model<unknown>>(getModelToken(Budget.name)).create({ orgId, financialYear: '2026-27', accountId: new Types.ObjectId(id('Sales Revenue')), monthsPaise: months, updatedBy: ACTOR });
 
     const bva = await management.budgetVsActual(orgId, '2026-27', '2026-11');
     expect(cells(bva, 'Sales Revenue')).toEqual(['Sales Revenue', 2_20_000_00, 2_20_000_00, 0, 100]);

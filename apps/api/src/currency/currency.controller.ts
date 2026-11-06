@@ -72,6 +72,25 @@ class PeriodDto {
   @Matches(/^\d{4}-(0[1-9]|1[0-2])$/, { message: 'period is a month like 2026-11' }) period: string;
 }
 
+class AdjustmentPreviewQuery {
+  @IsIn(CODES, { message: 'Choose a currency.' }) currency: string;
+  @Matches(DATE, { message: 'date must look like 2026-11-30' }) date: string;
+  @Type(() => Number) @IsNumber({}, { message: 'rate is rupees for one unit' }) @Min(0.0001) rate: number;
+}
+
+class AdjustmentDto {
+  @IsIn(CODES, { message: 'Choose a currency.' }) currency: string;
+  @Matches(DATE, { message: 'date must look like 2026-11-30' }) date: string;
+  @IsNumber({}, { message: 'rate is rupees for one unit' }) @Min(0.0001) rate: number;
+  @IsString() @Length(1, 300, { message: 'Add a note of up to 300 characters.' }) notes: string;
+}
+
+class AdjustmentsQuery {
+  @IsOptional() @IsIn(CODES) currency?: string;
+  @IsOptional() @Matches(DATE, { message: 'from must look like 2026-04-01' }) from?: string;
+  @IsOptional() @Matches(DATE, { message: 'to must look like 2026-11-30' }) to?: string;
+}
+
 /** Exchange rates, foreign-currency invoices and bills, their payments, and month-end revaluation. */
 @UseGuards(JwtAuthGuard, PermissionGuard)
 @Controller('currency')
@@ -142,5 +161,24 @@ export class CurrencyController {
   @RequirePermission(Permission.POST_JOURNAL)
   proposeRevaluation(@Request() req: AuthRequest, @Body() body: PeriodDto) {
     return this.foreign.proposeRevaluation(req.user.orgId, req.user.sub, body.period);
+  }
+
+  // Base currency adjustments: one currency at a date and a rate, through the review queue.
+  @Get('adjustments')
+  @RequirePermission(Permission.VIEW_REPORTS)
+  adjustments(@Request() req: AuthRequest, @Query() q: AdjustmentsQuery) {
+    return this.foreign.adjustmentsList(req.user.orgId, q);
+  }
+
+  @Get('adjustments/preview')
+  @RequirePermission(Permission.VIEW_REPORTS)
+  adjustmentPreview(@Request() req: AuthRequest, @Query() q: AdjustmentPreviewQuery) {
+    return this.foreign.adjustmentPreview(req.user.orgId, q);
+  }
+
+  @Post('adjustments')
+  @RequirePermission(Permission.POST_JOURNAL)
+  proposeAdjustment(@Request() req: AuthRequest, @Body() body: AdjustmentDto) {
+    return this.foreign.proposeAdjustment(req.user.orgId, req.user.sub, body);
   }
 }

@@ -1,19 +1,22 @@
 'use client';
 
 import Link from 'next/link';
+import { Plus } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/page/page-shell';
-import { BudgetsEditor } from '@/components/reports/budgets-editor';
+import { BudgetsList } from '@/components/reports/budgets-list';
 
-/** The budgets grid, the same one the management reports compare against. */
+/** Named budgets, several a year; budget against actual reads the one chosen, or the year's default. */
 export default function BudgetsPage() {
   return (
     <div>
       <PageHeader
         guide="budgets"
         title="Budgets"
-        subtitle={<>A monthly plan for each income and expense account. Compare it with what happened in <Link href="/reports/management?report=budget_vs_actual" className="underline">Management reports</Link>.</>}
+        subtitle={<>Plans for income and expense accounts, and balance-sheet accounts if you like, by month, quarter, half-year or year. Compare one with what happened in <Link href="/reports/management?report=budget_vs_actual" className="underline">Budget against actual</Link>.</>}
+        actions={<Link href="/accountant/budgets/new"><Button><Plus size={14} /> New budget</Button></Link>}
       />
-      <BudgetsEditor />
+      <BudgetsList />
     </div>
   );
 }

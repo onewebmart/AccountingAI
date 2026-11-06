@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { ClientSession, Model, Types } from 'mongoose';
 import { BillStatus, InvoiceStatus, ProposedEntryStatus, VoucherType } from '@ai-accounting/shared';
@@ -15,7 +15,8 @@ import { PurchaseBillsService } from '../purchase/purchase-bills.service';
 import { PurchaseBill, PurchaseBillDocument } from '../purchase/schemas/purchase-bill.schema';
 import { Vendor, VendorDocument } from '../purchase/schemas/vendor.schema';
 import { AdjustmentsService, nextPeriod, periodEnd } from '../month-end/adjustments.service';
-import { addDays } from '../automation/schedule';
+import { addDays, todayIst } from '../automation/schedule';
+import { PeriodLock, PeriodLockDocument } from '../gl/schemas/period-lock.schema';
 import { CURRENCIES, formatMinor, isForeign, rateProblem, toPaise } from './currencies';
 import { ExchangeRate, ExchangeRateDocument } from './schemas/exchange-rate.schema';
 
@@ -59,6 +60,8 @@ export class ForeignService {
     private accounts: AccountsService,
     private adjustments: AdjustmentsService,
     private audit: AuditService,
+    // Read only: an adjustment is not dated in a locked period (PostingService refuses it on approval anyway).
+    @Optional() @InjectModel(PeriodLock.name) private lockModel?: Model<PeriodLockDocument>,
   ) {}
 
   // ── Rates ─────────────────────────────────────────────────────────────
@@ -70,16 +73,16 @@ export class ForeignService {
   }
 
   /** The day's rate, as a person enters it: the RBI/FBIL reference rate or the bank's. Entering it again replaces it. */
-  async setRate(orgId: string, actorId: string, input: { currency: string; date: string; rate: number; source?: string | null }) {
+  async setRate(orgId: string, actorId: string, input: { currency: string; date: string; rate: number; source?: string | null }, session?: ClientSession) {
     const currency = this.currency(input.currency);
     if (!DATE.test(input.date ?? '')) throw new BadRequestException('date must look like 2026-11-04');
     const problem = rateProblem(input.rate);
     if (problem) throw new BadRequestException(problem);
-    const before = await this.rateModel.findOne({ orgId, currency, date: input.date }).lean().exec();
+    const before = await this.rateModel.findOne({ orgId, currency, date: input.date }).session(session ?? null).lean().exec();
     const saved = await this.rateModel
-      .findOneAndUpdate({ orgId, currency, date: input.date }, { $set: { rate: input.rate, source: input.source?.trim() || null, enteredBy: actorId } }, { upsert: true, new: true })
+      .findOneAndUpdate({ orgId, currency, date: input.date }, { $set: { rate: input.rate, source: input.source?.trim() || null, enteredBy: actorId } }, { upsert: true, new: true, session })
       .exec();
-    await this.audit.record({ orgId, entityType: 'ExchangeRate', entityId: String(saved._id), action: before ? 'UPDATE' : 'CREATE', performedBy: actorId, before: before ? { rate: before.rate } : null, after: { currency, date: input.date, rate: input.rate } });
+    await this.audit.record({ orgId, entityType: 'ExchangeRate', entityId: String(saved._id), action: before ? 'UPDATE' : 'CREATE', performedBy: actorId, before: before ? { rate: before.rate, source: before.source } : null, after: { currency, date: input.date, rate: input.rate, source: input.source?.trim() || null } }, session);
     return saved;
   }
 
@@ -294,27 +297,21 @@ export class ForeignService {
   async revaluation(orgId: string, period: string) {
     if (!PERIOD.test(period ?? '')) throw new BadRequestException('period is a month like 2026-11.');
     const date = periodEnd(period);
-    const [invoices, bills] = await Promise.all([
-      this.invoiceModel.find({ orgId, status: InvoiceStatus.POSTED, foreign: { $ne: null }, invoiceDate: { $lte: date } }).lean().exec(),
-      this.billModel.find({ orgId, status: BillStatus.POSTED, foreign: { $ne: null }, billDate: { $lte: date } }).lean().exec(),
-    ]);
+    // A currency given its own adjustment this month is left out: counting it again would double it.
+    const live = (await this.adjustments.live(orgId, 'fx_revaluation')).filter((p) => p.adjustment?.period === period);
+    const monthEnd = live.filter((p) => !p.adjustment?.refId?.startsWith('fx:'));
+    const adjusted = [...new Set(live.filter((p) => p.adjustment?.refId?.startsWith('fx:')).map((p) => p.adjustment!.refId!.slice(3)))].sort();
+    const docs = (await this.openForeign(orgId, date)).filter((x) => !adjusted.includes(x.d.foreign!.currency));
     const rates = new Map<string, number | null>();
-    for (const c of new Set([...invoices, ...bills].map((d) => d.foreign!.currency))) rates.set(c, (await this.rateOn(orgId, c, date))?.rate ?? null);
-    const rows = [
-      ...invoices.map((d) => ({ kind: 'invoice' as const, d, number: d.invoiceNumber })),
-      ...bills.map((d) => ({ kind: 'bill' as const, d, number: d.billNumber })),
-    ].map(({ kind, d, number }) => {
-      const f = d.foreign!;
-      const openMinor = f.totalMinor - f.paidMinor;
-      const booked = outstandingPaise(d);
-      const rate = rates.get(f.currency) ?? null;
-      const revalued = rate === null ? null : toPaise(openMinor, rate, f.digits);
-      return { kind, id: String(d._id), number, currency: f.currency, digits: f.digits, openMinor, bookedRate: f.rate, rate, bookedPaise: booked, revaluedPaise: revalued, differencePaise: revalued === null ? null : revalued - booked };
-    });
+    for (const c of new Set(docs.map((x) => x.d.foreign!.currency))) rates.set(c, (await this.rateOn(orgId, c, date))?.rate ?? null);
+    const rows = docs.map((x) => this.valued(x, rates.get(x.d.foreign!.currency) ?? null));
     const missing = [...rates].filter(([, r]) => r === null).map(([c]) => c);
     const sum = (k: 'invoice' | 'bill') => rows.filter((r) => r.kind === k).reduce((s, r) => s + (r.differencePaise ?? 0), 0);
-    const live = (await this.adjustments.live(orgId, 'fx_revaluation')).filter((p) => p.adjustment?.period === period);
-    return { period, date, rows, missingRates: missing, receivablesPaise: sum('invoice'), payablesPaise: sum('bill'), inReview: live.some((p) => p.status === ProposedEntryStatus.PROPOSED), approved: live.filter((p) => p.status === ProposedEntryStatus.APPROVED).length };
+    return {
+      period, date, rows, missingRates: missing, receivablesPaise: sum('invoice'), payablesPaise: sum('bill'),
+      inReview: monthEnd.some((p) => p.status === ProposedEntryStatus.PROPOSED), approved: monthEnd.filter((p) => p.status === ProposedEntryStatus.APPROVED).length,
+      adjustedCurrencies: adjusted,
+    };
   }
 
   /**
@@ -328,6 +325,45 @@ export class ForeignService {
     if (r.inReview) throw new ConflictException(`A revaluation for ${period} is waiting in the review queue: approve or reject it first.`);
     if (r.approved) throw new ConflictException(`${period} is already revalued.`);
     if (!r.receivablesPaise && !r.payablesPaise) throw new ConflictException('Nothing to revalue: open foreign documents are at the month-end rate already.');
+    const lines = await this.revaluationLines(orgId, r.receivablesPaise, r.payablesPaise);
+    const said = (paise: number, side: string) => (paise ? `${side} ${paise > 0 ? 'up' : 'down'} ${rupees(paise)}` : null);
+    const left = r.adjustedCurrencies.length ? ` ${r.adjustedCurrencies.join(', ')} ${r.adjustedCurrencies.length === 1 ? 'has' : 'have'} its own adjustment this month and ${r.adjustedCurrencies.length === 1 ? 'is' : 'are'} left out.` : '';
+    return this.adjustments.propose({
+      orgId, actorId, kind: 'fx_revaluation', refId: 'fx', period, date: r.date, unique: true,
+      reverseOn: `${nextPeriod(period)}-01`,
+      narration: `Revaluation of foreign-currency balances at ${r.date}`,
+      reason: `${r.rows.length} open foreign document${r.rows.length === 1 ? '' : 's'} at the ${r.date} rates against their booked rates: ${[said(r.receivablesPaise, 'receivables'), said(r.payablesPaise, 'payables')].filter(Boolean).join(', ')}. Unrealised, so it reverses on ${nextPeriod(period)}-01.${left}`,
+      lines,
+    });
+  }
+
+  /** Posted, unpaid foreign invoices and bills dated on or before `date`; of one currency if given. */
+  private async openForeign(orgId: string, date: string, currency?: string) {
+    const which = currency ? { 'foreign.currency': currency } : { foreign: { $ne: null } };
+    const [invoices, bills] = await Promise.all([
+      this.invoiceModel.find({ orgId, status: InvoiceStatus.POSTED, ...which, invoiceDate: { $lte: date } }).sort({ invoiceDate: 1 }).lean().exec(),
+      this.billModel.find({ orgId, status: BillStatus.POSTED, ...which, billDate: { $lte: date } }).sort({ billDate: 1 }).lean().exec(),
+    ]);
+    return [
+      ...invoices.map((d) => ({ kind: 'invoice' as const, d: d as SalesInvoice & { _id: Types.ObjectId }, number: d.invoiceNumber, date: d.invoiceDate, partyId: String(d.customerId) })),
+      ...bills.map((d) => ({ kind: 'bill' as const, d: d as PurchaseBill & { _id: Types.ObjectId }, number: d.billNumber, date: d.billDate, partyId: String(d.vendorId) })),
+    ];
+  }
+
+  /** What is still owed on a document, at the rupees it is booked at and at a rate. */
+  private valued(x: Awaited<ReturnType<ForeignService['openForeign']>>[number], rate: number | null) {
+    const f = x.d.foreign!;
+    const openMinor = f.totalMinor - f.paidMinor;
+    const booked = outstandingPaise(x.d);
+    const revalued = rate === null ? null : toPaise(openMinor, rate, f.digits);
+    return { kind: x.kind, id: String(x.d._id), number: x.number, date: x.date, partyId: x.partyId, currency: f.currency, digits: f.digits, openMinor, bookedRate: f.rate, rate, bookedPaise: booked, revaluedPaise: revalued, differencePaise: revalued === null ? null : revalued - booked };
+  }
+
+  /**
+   * The unrealised entry for receivables and payables moving by ar and ap:
+   * receivables up is a gain, payables up a loss, netted per account.
+   */
+  private async revaluationLines(orgId: string, ar: number, ap: number) {
     const acc = await this.accounts.resolveSystemAccounts(orgId, [SystemAccountKey.ACCOUNTS_RECEIVABLE, SystemAccountKey.ACCOUNTS_PAYABLE, SystemAccountKey.FX_GAIN, SystemAccountKey.FX_LOSS]);
     const id = (k: SystemAccountKey) => String(acc.get(k)!._id);
     const totals = new Map<string, { debit: number; credit: number }>();
@@ -335,23 +371,136 @@ export class ForeignService {
       const t = totals.get(accountId) ?? { debit: 0, credit: 0 };
       totals.set(accountId, { debit: t.debit + debit, credit: t.credit + credit });
     };
-    const ar = r.receivablesPaise;
     if (ar > 0) { add(id(SystemAccountKey.ACCOUNTS_RECEIVABLE), ar, 0); add(id(SystemAccountKey.FX_GAIN), 0, ar); }
     if (ar < 0) { add(id(SystemAccountKey.FX_LOSS), -ar, 0); add(id(SystemAccountKey.ACCOUNTS_RECEIVABLE), 0, -ar); }
-    const ap = r.payablesPaise;
     if (ap > 0) { add(id(SystemAccountKey.FX_LOSS), ap, 0); add(id(SystemAccountKey.ACCOUNTS_PAYABLE), 0, ap); }
     if (ap < 0) { add(id(SystemAccountKey.ACCOUNTS_PAYABLE), -ap, 0); add(id(SystemAccountKey.FX_GAIN), 0, -ap); }
-    const lines = [...totals].map(([accountId, t]) => {
+    return [...totals].map(([accountId, t]) => {
       const net = t.debit - t.credit;
       return { accountId, debitPaise: Math.max(0, net), creditPaise: Math.max(0, -net) };
     });
+  }
+
+  // ── Base currency adjustments: one currency, a date and a rate ─────────
+
+  /**
+   * Why an adjustment for this currency and date cannot be made, or null:
+   * the date is in a locked period; the month is already revalued at
+   * month-end (every currency); or the currency already has one this month.
+   * One a currency a month, because each reverses only on the 1st of the
+   * next: two in a month would count the same difference twice.
+   */
+  private async adjustmentBlock(orgId: string, currency: string, date: string): Promise<string | null> {
+    const lock = this.lockModel ? await this.lockModel.findOne({ orgId }).lean().exec() : null;
+    if (lock?.lockedThrough && date <= lock.lockedThrough) return `The books are locked through ${lock.lockedThrough}: date the adjustment after that, or unlock the period first.`;
+    const period = date.slice(0, 7);
+    const live = (await this.adjustments.live(orgId, 'fx_revaluation')).filter((p) => p.adjustment?.period === period);
+    const status = (p: { status: string }) => (p.status === ProposedEntryStatus.PROPOSED ? 'waiting in Review' : 'posted');
+    const monthEnd = live.find((p) => !p.adjustment?.refId?.startsWith('fx:'));
+    if (monthEnd) return `${monthName(period)} is already revalued at month-end for every currency (${status(monthEnd)}). Reject it in Review first, or adjust a later month.`;
+    const same = live.find((p) => p.adjustment?.refId === `fx:${currency}`);
+    if (same) return `${currency} already has an adjustment for ${monthName(period)}, dated ${same.invoiceDate} (${status(same)}). Reject it in Review first, or adjust a later month.`;
+    return null;
+  }
+
+  /**
+   * Open invoices and bills in one currency at a date, valued at a rate,
+   * against the rupees they are booked at: what an adjustment would book.
+   * Reads only. Bank accounts are kept in rupees, so no bank balance is
+   * revalued.
+   */
+  async adjustmentPreview(orgId: string, input: { currency: string; date: string; rate: number }) {
+    const currency = this.currency(input.currency);
+    if (!DATE.test(input.date ?? '')) throw new BadRequestException('date must look like 2026-11-30');
+    if (input.date > todayIst()) throw new BadRequestException('Date the adjustment today or earlier: a later day’s rate is not known yet.');
+    const problem = rateProblem(input.rate);
+    if (problem) throw new BadRequestException(problem);
+    const period = input.date.slice(0, 7);
+    const docs = await this.openForeign(orgId, input.date, currency);
+    const [customers, vendors] = await Promise.all([
+      this.customerModel.find({ orgId, _id: { $in: docs.filter((x) => x.kind === 'invoice').map((x) => new Types.ObjectId(x.partyId)) } }, { name: 1 }).lean().exec(),
+      this.vendorModel.find({ orgId, _id: { $in: docs.filter((x) => x.kind === 'bill').map((x) => new Types.ObjectId(x.partyId)) } }, { name: 1 }).lean().exec(),
+    ]);
+    const names = new Map([...customers, ...vendors].map((p) => [String(p._id), p.name]));
+    const rows = docs.map((x) => {
+      const v = this.valued(x, input.rate);
+      // Money owed to us worth more is a gain; money we owe worth more, a loss.
+      const gainPaise = x.kind === 'invoice' ? v.differencePaise! : -v.differencePaise!;
+      return { ...v, party: names.get(x.partyId) ?? '', gainPaise };
+    });
+    const receivablesPaise = rows.filter((r) => r.kind === 'invoice').reduce((s, r) => s + r.differencePaise!, 0);
+    const payablesPaise = rows.filter((r) => r.kind === 'bill').reduce((s, r) => s + r.differencePaise!, 0);
+    return {
+      currency, digits: CURRENCIES[currency].digits, date: input.date, rate: input.rate, period, reverseOn: `${nextPeriod(period)}-01`,
+      rows, receivablesPaise, payablesPaise, gainPaise: receivablesPaise - payablesPaise,
+      bookedPaise: rows.reduce((s, r) => s + (r.kind === 'invoice' ? r.bookedPaise : -r.bookedPaise), 0),
+      blocked: await this.adjustmentBlock(orgId, currency, input.date),
+    };
+  }
+
+  /**
+   * A base-currency adjustment to the review queue: open documents in one
+   * currency at the rate entered, the unrealised gain or loss against what
+   * they are booked at, by the same entry and accounts as the month-end
+   * revaluation, reversing on the 1st of the next month. The rate is saved
+   * as that day's rate, in the same transaction. A person approves it in
+   * Review; nothing posts here.
+   */
+  async proposeAdjustment(orgId: string, actorId: string, input: { currency: string; date: string; rate: number; notes: string }) {
+    const notes = (input.notes ?? '').trim().replace(/\s+/g, ' ').slice(0, 300);
+    if (!notes) throw new BadRequestException('Add a note: why the rate is being adjusted, or where it comes from.');
+    const p = await this.adjustmentPreview(orgId, input);
+    if (p.blocked) throw new ConflictException(p.blocked);
+    if (!p.rows.length) throw new ConflictException(`Nothing is open in ${p.currency} on ${p.date}: there is nothing to adjust.`);
+    if (!p.receivablesPaise && !p.payablesPaise) throw new ConflictException(`The open ${p.currency} documents are worth the same at ${p.rate}: there is nothing to adjust.`);
+    const lines = await this.revaluationLines(orgId, p.receivablesPaise, p.payablesPaise);
     const said = (paise: number, side: string) => (paise ? `${side} ${paise > 0 ? 'up' : 'down'} ${rupees(paise)}` : null);
-    return this.adjustments.propose({
-      orgId, actorId, kind: 'fx_revaluation', refId: 'fx', period, date: r.date, unique: true,
-      reverseOn: `${nextPeriod(period)}-01`,
-      narration: `Revaluation of foreign-currency balances at ${r.date}`,
-      reason: `${r.rows.length} open foreign document${r.rows.length === 1 ? '' : 's'} at the ${r.date} rates against their booked rates: ${[said(ar, 'receivables'), said(ap, 'payables')].filter(Boolean).join(', ')}. Unrealised, so it reverses on ${nextPeriod(period)}-01.`,
-      lines,
+    const outcome = p.gainPaise === 0 ? 'no gain or loss overall' : `an unrealised ${p.gainPaise > 0 ? 'gain' : 'loss'} of ${rupees(p.gainPaise)}`;
+    const existing = await this.rateModel.findOne({ orgId, currency: p.currency, date: p.date }).lean().exec();
+    const proposal = await this.posting.inTransaction(async (session) => {
+      if (existing?.rate !== p.rate) await this.setRate(orgId, actorId, { currency: p.currency, date: p.date, rate: p.rate, source: 'Base currency adjustment' }, session);
+      return this.adjustments.propose({
+        orgId, actorId, kind: 'fx_revaluation', refId: `fx:${p.currency}`, period: p.period, date: p.date, unique: true,
+        reverseOn: p.reverseOn,
+        narration: `Base currency adjustment: ${p.currency} at ${p.rate} on ${p.date}`,
+        reason:
+          `${notes.replace(/[.!?]?$/, '.')} ${p.rows.length} open ${p.currency} document${p.rows.length === 1 ? '' : 's'} at 1 ${p.currency} = ₹${p.rate} against their booked rates: ` +
+          `${[said(p.receivablesPaise, 'receivables'), said(p.payablesPaise, 'payables')].filter(Boolean).join(', ')}; ${outcome}. Unrealised, so it reverses on ${p.reverseOn}.`,
+        lines,
+        fx: { currency: p.currency, rate: p.rate, notes, gainPaise: p.gainPaise, receivablesPaise: p.receivablesPaise, payablesPaise: p.payablesPaise, documents: p.rows.length },
+      }, session);
+    });
+    return { proposalId: String(proposal._id), currency: p.currency, date: p.date, rate: p.rate, gainPaise: p.gainPaise, receivablesPaise: p.receivablesPaise, payablesPaise: p.payablesPaise, documents: p.rows.length, reverseOn: p.reverseOn };
+  }
+
+  /**
+   * Base-currency adjustments and month-end revaluations, newest first:
+   * in Review, posted, or posted and reversed on the 1st. Rejected ones are
+   * left out; nothing of theirs reached the books.
+   */
+  async adjustmentsList(orgId: string, q: { currency?: string; from?: string; to?: string } = {}) {
+    const currency = q.currency ? this.currency(q.currency) : null;
+    for (const d of [q.from, q.to]) if (d && !DATE.test(d)) throw new BadRequestException('Dates look like 2026-11-30.');
+    const found = (await this.adjustments.live(orgId, 'fx_revaluation'))
+      .filter((p) => (!currency || p.adjustment?.refId === `fx:${currency}`) && (!q.from || p.invoiceDate! >= q.from) && (!q.to || p.invoiceDate! <= q.to))
+      .sort((a, b) => (b.invoiceDate ?? '').localeCompare(a.invoiceDate ?? '') || String(b._id).localeCompare(String(a._id)))
+      .slice(0, 200);
+    const acc = await this.accounts.resolveSystemAccounts(orgId, [SystemAccountKey.FX_GAIN, SystemAccountKey.FX_LOSS]);
+    // Gain or loss read off the entry: credits to either exchange account less debits.
+    const fxAccounts = new Set([String(acc.get(SystemAccountKey.FX_GAIN)!._id), String(acc.get(SystemAccountKey.FX_LOSS)!._id)]);
+    return found.map((p) => {
+      const a = p.adjustment!;
+      const fx = a.fx ?? null;
+      const gainPaise = fx?.gainPaise ?? p.suggestedLines.reduce((s, l) => s + (fxAccounts.has(String(l.accountId)) ? l.creditPaise - l.debitPaise : 0), 0);
+      const status = p.status === ProposedEntryStatus.PROPOSED ? 'in_review' : a.reversalJournalId ? 'reversed' : 'posted';
+      return {
+        proposalId: String(p._id), kind: a.refId?.startsWith('fx:') ? 'currency' as const : 'month_end' as const, date: p.invoiceDate, period: a.period,
+        currency: fx?.currency ?? null, rate: fx?.rate ?? null, notes: fx?.notes ?? null, documents: fx?.documents ?? null, gainPaise, status,
+        journalId: p.journalId ? String(p.journalId) : null, reversalJournalId: a.reversalJournalId && a.reversalJournalId !== 'manual' ? a.reversalJournalId : null, reverseOn: a.reverseOn ?? null, narration: p.narration,
+      };
     });
   }
 }
+
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const monthName = (period: string) => `${MONTH_NAMES[Number(period.slice(5, 7)) - 1]} ${period.slice(0, 4)}`;

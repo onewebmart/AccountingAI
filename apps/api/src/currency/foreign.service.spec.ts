@@ -8,6 +8,11 @@
  *  ✓ An import of services in USD under reverse charge: IGST on the rupee value, the vendor owed dollars only;
  *    paid at a dearer rate, a loss
  *  ✓ Month-end revaluation of what is open: a proposal that reverses on the 1st; no rate, no proposal
+ *  ✓ Base currency adjustment: one currency at a date and rate, previewed without a write, proposed to Review
+ *    with the rate saved as that day's; approved it posts, and reverses on the 1st; listed in Review, posted,
+ *    reversed; the month-end revaluation leaves that currency out
+ *  ✓ Refused: a later date, a locked period, a month revalued for every currency, a second one that month,
+ *    nothing open, no note
  */
 import 'reflect-metadata';
 import mongoose, { Model, Types } from 'mongoose';
@@ -45,6 +50,18 @@ import { PurchaseBill, PurchaseBillSchema, PurchaseBillDocument } from '../purch
 import { Vendor, VendorSchema } from '../purchase/schemas/vendor.schema';
 import { BankStatementLine, BankStatementLineSchema } from '../banking/schemas/bank-statement-line.schema';
 import { TdsDeposit, TdsDepositSchema } from '../tds/schemas/tds-deposit.schema';
+import { PeriodLock, PeriodLockSchema } from '../gl/schemas/period-lock.schema';
+import { ProposalsService } from '../proposals/proposals.service';
+import { LearningService } from '../proposals/learning.service';
+import { SubledgerSyncService } from '../proposals/subledger-sync.service';
+import { BillChecksService } from '../proposals/checks/bill-checks.service';
+import { ExpenseCategorizerService } from '../proposals/categorisation/expense-categorizer.service';
+import { CATEGORY_MODEL } from '../proposals/categorisation/category-model';
+import { VendorLedgerMap, VendorLedgerMapSchema } from '../proposals/schemas/vendor-ledger-map.schema';
+import { ExtractedDocument, ExtractedDocumentSchema } from '../extraction/schemas/extracted-document.schema';
+import { Document as UploadedDocument, DocumentSchema } from '../documents/schemas/document.schema';
+import { REDIS_CLIENT } from '../redis/redis.module';
+import { ProposedEntryStatus } from '@ai-accounting/shared';
 
 const ACTOR = new Types.ObjectId().toString();
 
@@ -80,10 +97,18 @@ beforeAll(async () => {
         { name: Vendor.name, schema: VendorSchema },
         { name: BankStatementLine.name, schema: BankStatementLineSchema },
         { name: TdsDeposit.name, schema: TdsDepositSchema },
+        { name: PeriodLock.name, schema: PeriodLockSchema },
+        { name: VendorLedgerMap.name, schema: VendorLedgerMapSchema },
+        { name: ExtractedDocument.name, schema: ExtractedDocumentSchema },
+        { name: UploadedDocument.name, schema: DocumentSchema },
       ]),
     ],
     providers: [
       ForeignService, AdjustmentsService, ItemsService, UsageMeterService,
+      // Review: a person approves the adjustment there.
+      ProposalsService, LearningService, SubledgerSyncService, BillChecksService, ExpenseCategorizerService,
+      { provide: CATEGORY_MODEL, useValue: { available: false, choose: jest.fn() } },
+      { provide: REDIS_CLIENT, useValue: { get: jest.fn().mockResolvedValue(null), set: jest.fn().mockResolvedValue('OK') } },
       { provide: getQueueToken(HSN_QUEUE), useValue: { add: jest.fn() } },
       { provide: HSN_MODEL, useValue: { available: false, ask: jest.fn() } },
       PostingService, AccountsService, AuditService, SalesInvoicesService, CustomersService, PurchaseBillsService, VendorsService,
@@ -205,5 +230,108 @@ describe('month-end revaluation', () => {
       ['Foreign Exchange Loss', 20_000, 0],
     ]);
     await expect(foreign.proposeRevaluation(orgId, ACTOR, '2026-10')).rejects.toThrow(/waiting in the review queue/);
+  });
+});
+
+describe('base currency adjustments', () => {
+  const proposalCount = (orgId: string) => moduleRef.get<Model<unknown>>(getModelToken(ProposedEntry.name)).countDocuments({ orgId });
+
+  /** AED 10,000 owed to us at 22.50 (₹2,25,000) and AED 4,000 we owe at 22.60 (₹90,400), both October; and $1,000 at 83.25. */
+  async function books() {
+    const { orgId, customerId } = await org();
+    const gulf = await customers.create({ orgId, name: 'Gulf Foods LLC' });
+    const vendor = await vendors.create({ orgId, name: 'Dubai Freight FZE' });
+    const inv = await foreign.createInvoice(orgId, ACTOR, { customerId: String(gulf._id), currency: 'AED', rate: 22.5, invoiceNumber: 'EXP/21', invoiceDate: '2026-10-03', lines: [{ description: 'Spices', qty: 1, rateMinor: 1_000_000 }] });
+    await invoices.post(String(inv._id), orgId, ACTOR);
+    const bill = await foreign.createBill(orgId, ACTOR, { vendorId: String(vendor._id), currency: 'AED', rate: 22.6, billNumber: 'DF-9', billDate: '2026-10-08', lines: [{ description: 'Freight', qty: 1, rateMinor: 400_000 }] });
+    await bills.post(String(bill._id), orgId, ACTOR);
+    const usd = await foreign.createInvoice(orgId, ACTOR, { customerId, currency: 'USD', rate: 83.25, invoiceNumber: 'EXP/22', invoiceDate: '2026-10-05', lines: [{ description: 'Design', qty: 1, rateMinor: 100_000 }] });
+    await invoices.post(String(usd._id), orgId, ACTOR);
+    return { orgId, invoiceId: String(inv._id), billId: String(bill._id) };
+  }
+
+  it('previews one currency without a write, proposes it with the rate saved, posts on approval and reverses on the 1st', async () => {
+    const { orgId, invoiceId, billId } = await books();
+
+    // 1 AED = ₹25.58 on 20 October. Receivable: ₹2,25,000 → ₹2,55,800, up ₹30,800, a gain.
+    // Payable: ₹90,400 → ₹1,02,320, up ₹11,920, a loss. Net, an unrealised gain of ₹18,880.
+    const preview = await foreign.adjustmentPreview(orgId, { currency: 'aed', date: '2026-10-20', rate: 25.58 });
+    expect(preview).toMatchObject({ currency: 'AED', date: '2026-10-20', rate: 25.58, period: '2026-10', reverseOn: '2026-11-01', receivablesPaise: 30_800_00, payablesPaise: 11_920_00, gainPaise: 18_880_00, blocked: null });
+    expect(preview.rows.map((r) => [r.kind, r.id, r.party, r.openMinor, r.bookedRate, r.bookedPaise, r.revaluedPaise, r.gainPaise])).toEqual([
+      ['invoice', invoiceId, 'Gulf Foods LLC', 1_000_000, 22.5, 2_25_000_00, 2_55_800_00, 30_800_00],
+      ['bill', billId, 'Dubai Freight FZE', 400_000, 22.6, 90_400_00, 1_02_320_00, -11_920_00],
+    ]);
+    // A preview writes nothing: no proposal, no rate.
+    expect(await proposalCount(orgId)).toBe(0);
+    expect(await foreign.rateOn(orgId, 'AED', '2026-10-31')).toBeNull();
+
+    const made = await foreign.proposeAdjustment(orgId, ACTOR, { currency: 'AED', date: '2026-10-20', rate: 25.58, notes: 'Dirham firmed after the RBI move' });
+    expect(made).toMatchObject({ currency: 'AED', date: '2026-10-20', rate: 25.58, gainPaise: 18_880_00, documents: 2, reverseOn: '2026-11-01' });
+    expect(await foreign.rateOn(orgId, 'AED', '2026-10-20')).toEqual({ rate: 25.58, date: '2026-10-20' });
+    expect((await foreign.rates(orgId, 'AED'))[0]).toMatchObject({ source: 'Base currency adjustment' });
+
+    const proposals = moduleRef.get(ProposalsService);
+    const p = (await moduleRef.get<Model<{ _id: unknown; status: string; invoiceDate: string; adjustment: Record<string, unknown>; suggestedLines: Array<{ accountName: string; debitPaise: number; creditPaise: number }> }>>(getModelToken(ProposedEntry.name)).findById(made.proposalId).lean().exec())!;
+    // The month-end revaluation's own path: an unrealised fx_revaluation, reversing on the 1st, waiting for a person.
+    expect(p).toMatchObject({ status: ProposedEntryStatus.PROPOSED, invoiceDate: '2026-10-20', adjustment: { kind: 'fx_revaluation', refId: 'fx:AED', period: '2026-10', reverseOn: '2026-11-01', fx: { currency: 'AED', rate: 25.58, gainPaise: 18_880_00, notes: 'Dirham firmed after the RBI move' } } });
+    expect(String(p.adjustment.reason)).toMatch(/^Dirham firmed after the RBI move\. 2 open AED documents at 1 AED = ₹25\.58/);
+    expect(p.suggestedLines.map((l) => [l.accountName, l.debitPaise, l.creditPaise]).sort()).toEqual([
+      ['Accounts Payable', 0, 11_920_00],
+      ['Accounts Receivable', 30_800_00, 0],
+      ['Foreign Exchange Gain', 0, 30_800_00],
+      ['Foreign Exchange Loss', 11_920_00, 0],
+    ]);
+    expect(await journals.countDocuments({ orgId, date: '2026-10-20' })).toBe(0);
+    expect(await foreign.adjustmentsList(orgId)).toEqual([expect.objectContaining({ proposalId: made.proposalId, kind: 'currency', date: '2026-10-20', currency: 'AED', rate: 25.58, gainPaise: 18_880_00, status: 'in_review', journalId: null })]);
+
+    // A second AED adjustment in October would count the difference twice.
+    await expect(foreign.proposeAdjustment(orgId, ACTOR, { currency: 'AED', date: '2026-10-31', rate: 26, notes: 'Month end' })).rejects.toThrow(/AED already has an adjustment for October 2026, dated 2026-10-20 \(waiting in Review\)/);
+    // The month-end revaluation of October leaves AED out and revalues the rest.
+    await foreign.setRate(orgId, ACTOR, { currency: 'USD', date: '2026-10-31', rate: 84 });
+    const monthEnd = await foreign.revaluation(orgId, '2026-10');
+    expect(monthEnd.adjustedCurrencies).toEqual(['AED']);
+    expect(monthEnd.rows.map((r) => r.currency)).toEqual(['USD']);
+    expect(monthEnd).toMatchObject({ receivablesPaise: 750_00, payablesPaise: 0, inReview: false, approved: 0 });
+
+    await proposals.approve({ proposalId: made.proposalId, orgId, actorId: ACTOR });
+    const [posted] = await foreign.adjustmentsList(orgId, { currency: 'AED' });
+    expect(posted).toMatchObject({ status: 'posted', date: '2026-10-20' });
+    const journal = (await journals.findById(posted.journalId).lean().exec())!;
+    expect(journal.date).toBe('2026-10-20');
+    // The documents stay at their booked rate; only the balance sheet moves until the 1st.
+    expect((await invoiceModel.findById(invoiceId).lean().exec())!.amountsPaise.total).toBe(2_25_000_00);
+
+    expect(await moduleRef.get(AdjustmentsService).reverseDueAccruals(orgId, '2026-11-01')).toBe(1);
+    const [reversed] = await foreign.adjustmentsList(orgId, { from: '2026-10-01', to: '2026-10-31' });
+    expect(reversed).toMatchObject({ status: 'reversed' });
+    const reversal = (await journals.findById(reversed.reversalJournalId).lean().exec())!;
+    expect(reversal).toMatchObject({ date: '2026-11-01', reversalOf: journal._id });
+    expect(await foreign.adjustmentsList(orgId, { from: '2026-11-01' })).toEqual([]);
+  });
+
+  it('refuses a later date, a locked period, a month revalued for every currency, nothing open and no note', async () => {
+    const { orgId } = await books();
+    await expect(foreign.adjustmentPreview(orgId, { currency: 'AED', date: '2099-01-31', rate: 25 })).rejects.toThrow(/today or earlier/);
+    await expect(foreign.adjustmentPreview(orgId, { currency: 'XYZ', date: '2026-10-20', rate: 25 })).rejects.toThrow(/not a currency we keep/);
+    await expect(foreign.proposeAdjustment(orgId, ACTOR, { currency: 'AED', date: '2026-10-20', rate: 25, notes: '  ' })).rejects.toThrow(/Add a note/);
+    // Nothing open in euros, or in dirhams before the documents' dates.
+    await expect(foreign.proposeAdjustment(orgId, ACTOR, { currency: 'EUR', date: '2026-10-20', rate: 90, notes: 'Check' })).rejects.toThrow(/Nothing is open in EUR/);
+    // Before the documents were dated, nothing was open.
+    await expect(foreign.proposeAdjustment(orgId, ACTOR, { currency: 'AED', date: '2026-10-01', rate: 25, notes: 'Early' })).rejects.toThrow(/Nothing is open in AED on 2026-10-01/);
+
+    // October revalued at month-end, for every currency: no AED adjustment in October.
+    await foreign.setRate(orgId, ACTOR, { currency: 'USD', date: '2026-10-31', rate: 84 });
+    await foreign.setRate(orgId, ACTOR, { currency: 'AED', date: '2026-10-31', rate: 23 });
+    await foreign.proposeRevaluation(orgId, ACTOR, '2026-10');
+    const blocked = await foreign.adjustmentPreview(orgId, { currency: 'AED', date: '2026-10-25', rate: 24 });
+    expect(blocked.blocked).toMatch(/October 2026 is already revalued at month-end for every currency/);
+    await expect(foreign.proposeAdjustment(orgId, ACTOR, { currency: 'AED', date: '2026-10-25', rate: 24, notes: 'Mid month' })).rejects.toThrow(/already revalued at month-end/);
+    // A locked period: the adjustment is dated after the lock.
+    await moduleRef.get<Model<unknown>>(getModelToken(PeriodLock.name)).create({ orgId, lockedThrough: '2026-10-31', history: [] });
+    expect((await foreign.adjustmentPreview(orgId, { currency: 'AED', date: '2026-10-31', rate: 24 })).blocked).toMatch(/locked through 2026-10-31/);
+    // The refusals saved no rate; November is open.
+    expect(await foreign.rateOn(orgId, 'AED', '2026-10-25')).toBeNull();
+    const nov = await foreign.adjustmentPreview(orgId, { currency: 'AED', date: '2026-11-02', rate: 24 });
+    expect(nov.blocked).toBeNull();
   });
 });
