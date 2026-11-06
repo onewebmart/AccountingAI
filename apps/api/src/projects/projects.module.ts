@@ -13,10 +13,12 @@ import { SalesInvoice, SalesInvoiceSchema } from '../sales/schemas/sales-invoice
 import { Customer, CustomerSchema } from '../sales/schemas/customer.schema';
 import { OrgSettings, OrgSettingsSchema } from '../org-settings/schemas/org-settings.schema';
 import { User, UserSchema } from '../tenancy/schemas/user.schema';
+import { OrgMembership, OrgMembershipSchema } from '../tenancy/schemas/org-membership.schema';
 import { AiSuggestion, AiSuggestionSchema } from '../ai-suggestions/schemas/ai-suggestion.schema';
 import { GeminiReportModel, REPORT_MODEL } from '../reports/report-model';
 import { Project, ProjectSchema } from './schemas/project.schema';
 import { TimeEntry, TimeEntrySchema } from './schemas/time-entry.schema';
+import { TimeTimer, TimeTimerSchema } from './schemas/time-timer.schema';
 import { PROJECT_AI_QUEUE, ProjectsService } from './projects.service';
 import { ProjectsController } from './projects.controller';
 
@@ -38,6 +40,8 @@ export class ProjectAiProcessor extends WorkerHost {
     MongooseModule.forFeature([
       { name: Project.name, schema: ProjectSchema },
       { name: TimeEntry.name, schema: TimeEntrySchema },
+      { name: TimeTimer.name, schema: TimeTimerSchema },
+      { name: OrgMembership.name, schema: OrgMembershipSchema },
       { name: Item.name, schema: ItemSchema },
       { name: SalesInvoice.name, schema: SalesInvoiceSchema },
       { name: Customer.name, schema: CustomerSchema },

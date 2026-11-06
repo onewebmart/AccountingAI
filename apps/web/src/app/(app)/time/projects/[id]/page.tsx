@@ -4,17 +4,18 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Loader2, Pencil, Sparkles } from 'lucide-react';
+import { Loader2, Pencil, Sparkles, Star } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { QueryError } from '@/components/ui/query-error';
 import { DetailGrid, EmptyState, PageHeader, Section, StatusChip, TableCard, td, tdMoney, th } from '@/components/page/page-shell';
 import { notify } from '@/components/page/notifier';
 import { Notice, errorText, shortDate } from '@/components/accountant/common';
-import { PROJECT_STATUS, hoursText, useProjectList, type ProjectStatus, type TimeEntry } from '@/components/time/types';
+import { TimerChip } from '@/components/time/timer-chip';
+import { PROJECT_STATUS, billingLabel, fetchTime, hhmm, hoursText, revenueBudget, useProjectList, type ProjectStatus } from '@/components/time/types';
 import { api } from '@/lib/api';
 import { formatPaise } from '@/lib/gst';
 
-interface Unbilled { lines: Array<{ description: string; hours: number; ratePaise: number; amountPaise: number; entries: number }>; unpriced: number }
+interface Unbilled { lines: Array<{ description: string; hours: number; ratePaise: number; amountPaise: number; entries: number }>; unpriced: number; missing?: string | null }
 interface Drafted { invoiceId: string; hours: number; lines: number; wording: string | null }
 
 const STATUS_DONE: Record<ProjectStatus, string> = { active: 'Project reopened', on_hold: 'Project put on hold', completed: 'Project marked completed' };
@@ -28,8 +29,16 @@ export default function ProjectPage() {
   const [wording, setWording] = useState<string | null>(null);
 
   const unbilled = useQuery({ queryKey: ['projects', id, 'unbilled'], queryFn: () => api.get<Unbilled>(`/projects/${id}/unbilled`), enabled: !!project?.customerId });
-  const entries = useQuery({ queryKey: ['projects', id, 'time'], queryFn: () => api.get<TimeEntry[]>(`/projects/time/entries?projectId=${id}`) });
+  const entries = useQuery({ queryKey: ['projects', id, 'time'], queryFn: () => fetchTime(`projectId=${id}`) });
   const refresh = () => void qc.invalidateQueries({ queryKey: ['projects'] });
+  const watch = useMutation({
+    mutationFn: (on: boolean) => api.patch(`/projects/${id}`, { watchlist: on }),
+    onSuccess: (_r, on) => {
+      refresh();
+      notify(on ? 'Added to the dashboard watchlist' : 'Removed from the dashboard watchlist');
+    },
+    onError: (err) => notify(errorText(err, "Couldn't change the watchlist."), 'error'),
+  });
 
   const bill = useMutation({
     mutationFn: () => api.post<Drafted>(`/projects/${id}/invoice`, {}),
@@ -66,16 +75,30 @@ export default function ProjectPage() {
 
   const p = project;
   const total = (unbilled.data?.lines ?? []).reduce((s, l) => s + l.amountPaise, 0);
-  const time = entries.data ?? [];
+  const time = entries.data?.entries ?? [];
+  const tasks = p.tasks ?? [];
+  const members = p.members ?? [];
+  const revenue = revenueBudget(p);
+  const money = (v: number | null | undefined, k: string) => (v == null ? '—' : <span key={k} className="font-mono">{formatPaise(v)}</span>);
+  const method = `${billingLabel(p.billing)}${p.billing === 'project_hours' && p.ratePaise ? ` at ${formatPaise(p.ratePaise)} an hour` : ''}`;
   return (
     <div className="space-y-5">
       <PageHeader
         title={p.name}
         back={{ href: '/time/projects', label: 'Projects' }}
-        meta={<StatusChip tone={PROJECT_STATUS[p.status].tone}>{PROJECT_STATUS[p.status].label}</StatusChip>}
-        subtitle={`${p.customerName ?? 'Internal work'} · ${p.billing === 'time' ? `by the hour${p.ratePaise ? ` at ${formatPaise(p.ratePaise)}` : ''}` : 'fixed fee'}`}
+        meta={
+          <>
+            <StatusChip tone={PROJECT_STATUS[p.status].tone}>{PROJECT_STATUS[p.status].label}</StatusChip>
+            {p.watchlist && <StatusChip tone="neutral"><Star size={11} className="mr-1 fill-marigold-400 text-marigold-400" aria-hidden /> On the watchlist</StatusChip>}
+            <TimerChip />
+          </>
+        }
+        subtitle={`${p.customerName ?? 'Internal work'} · ${method}`}
         actions={
           <>
+            <Button variant="secondary" disabled={watch.isPending} onClick={() => watch.mutate(!p.watchlist)}>
+              <Star size={13} className={p.watchlist ? 'fill-marigold-400 text-marigold-400' : ''} aria-hidden /> {p.watchlist ? 'Remove from watchlist' : 'Add to watchlist'}
+            </Button>
             <Button variant="secondary" asChild><Link href={`/time/projects/${id}/edit`}><Pencil size={13} /> Edit</Link></Button>
             {p.status !== 'active' && <Button variant="secondary" disabled={status.isPending} onClick={() => status.mutate('active')}>Reopen</Button>}
             {p.status === 'active' && <Button variant="secondary" disabled={status.isPending} onClick={() => status.mutate('on_hold')}>Put on hold</Button>}
@@ -94,21 +117,78 @@ export default function ProjectPage() {
             ['Profit', <span key="p" className="font-mono">{formatPaise(p.profitPaise)}</span>],
             ['Hours logged', <span key="h" className="font-mono">{hoursText(p.hours)}</span>],
             ['Unbilled', <span key="u" className="font-mono">{p.unbilledPaise ? `${formatPaise(p.unbilledPaise)} · ${hoursText(p.unbilledHours)}` : '—'}</span>],
-            [p.billing === 'fixed' ? 'Fee' : 'Budget cap', p.budgetPaise == null ? '—' : <span key="b" className="font-mono">{formatPaise(p.budgetPaise)}</span>],
+            ['Billing method', method],
+            ['Cost budget', money(p.costBudgetPaise, 'cb')],
+            [p.billing === 'fixed' ? 'Fee (revenue budget)' : 'Revenue budget', money(revenue, 'rb')],
             ['Budgeted hours', p.budgetHours == null ? '—' : <span key="bh" className="font-mono">{hoursText(p.budgetHours)}</span>],
             ['Code', p.code ? <span key="code" className="font-mono">{p.code}</span> : '—'],
             ['Dates', p.startDate || p.endDate ? `${shortDate(p.startDate)} to ${shortDate(p.endDate)}` : '—'],
           ]}
         />
-        {p.notes && <p className="mt-4 whitespace-pre-line text-body text-ink-700">{p.notes}</p>}
+        {p.description && <p className="mt-4 whitespace-pre-line text-body text-ink-700">{p.description}</p>}
       </Section>
+
+      <div className="grid gap-5 lg:grid-cols-2">
+        <Section title="Project tasks" description={p.billing === 'task_hours' ? 'Each task bills at its own rate.' : undefined}>
+          {tasks.length === 0 ? (
+            <p className="text-body text-ink-500">No tasks. Time is logged with a task typed in. <Link className="font-medium text-saffron-600 hover:underline" href={`/time/projects/${id}/edit`}>Add tasks</Link></p>
+          ) : (
+            <TableCard>
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-line-200 bg-surface-sink">
+                    <th className={th}>Task</th>
+                    {p.billing === 'task_hours' && <th className={`${th} text-right`}>Rate per hour</th>}
+                    <th className={th}>Billable</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {tasks.map((t) => (
+                    <tr key={t.id} className="border-b border-line-100 last:border-0">
+                      <td className={td}>{t.name}{t.description && <p className="text-caption text-ink-500">{t.description}</p>}</td>
+                      {p.billing === 'task_hours' && <td className={tdMoney}>{t.ratePaise == null ? <span className="text-pending-fg">No rate</span> : formatPaise(t.ratePaise)}</td>}
+                      <td className={`${td} text-caption`}>{t.billable ? 'Billable' : <span className="text-ink-500">Not billable</span>}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </TableCard>
+          )}
+        </Section>
+        <Section title="Users" description={p.billing === 'staff_hours' ? 'Each person bills at their own rate.' : undefined}>
+          {members.length === 0 ? (
+            <p className="text-body text-ink-500">No one is on this project yet. <Link className="font-medium text-saffron-600 hover:underline" href={`/time/projects/${id}/edit`}>Add users</Link></p>
+          ) : (
+            <TableCard>
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-line-200 bg-surface-sink">
+                    <th className={th}>User</th>
+                    <th className={th}>Email</th>
+                    {p.billing === 'staff_hours' && <th className={`${th} text-right`}>Rate per hour</th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {members.map((m) => (
+                    <tr key={m.userId} className="border-b border-line-100 last:border-0">
+                      <td className={td}>{m.name}</td>
+                      <td className={`${td} text-ink-600`}>{m.email || '—'}</td>
+                      {p.billing === 'staff_hours' && <td className={tdMoney}>{m.ratePaise == null ? <span className="text-pending-fg">No rate</span> : formatPaise(m.ratePaise)}</td>}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </TableCard>
+          )}
+        </Section>
+      </div>
 
       {p.customerId && (
         <Section
           title="Unbilled time"
           description="Billable time not yet on an invoice, a line per task and rate."
           actions={
-            <Button disabled={!unbilled.data?.lines.length || bill.isPending} onClick={() => bill.mutate()}>
+            <Button disabled={!unbilled.data?.lines.length || !!unbilled.data?.missing || bill.isPending} onClick={() => bill.mutate()}>
               {bill.isPending ? 'Drafting…' : 'Draft invoice from time'}
             </Button>
           }
@@ -144,8 +224,12 @@ export default function ProjectPage() {
           ) : (
             !unbilled.isLoading && <p className="text-body text-ink-500">No billable time waiting.</p>
           )}
-          {!!unbilled.data?.unpriced && (
-            <p className="mt-2 text-caption text-pending-fg">{unbilled.data.unpriced} entr{unbilled.data.unpriced === 1 ? 'y has' : 'ies have'} no rate: give the project a rate per hour.</p>
+          {unbilled.data?.missing ? (
+            <p className="mt-2 text-caption text-pending-fg">{unbilled.data.missing}</p>
+          ) : (
+            !!unbilled.data?.unpriced && (
+              <p className="mt-2 text-caption text-pending-fg">{unbilled.data.unpriced} entr{unbilled.data.unpriced === 1 ? 'y has' : 'ies have'} no rate and stay{unbilled.data.unpriced === 1 ? 's' : ''} off the invoice: give the project a rate per hour.</p>
+            )
           )}
           {drafted && (
             <p className="mt-3 flex flex-wrap items-center gap-1.5 rounded-md border border-pending-fg/30 bg-pending-bg px-3 py-2 text-caption text-pending-fg">
@@ -164,7 +248,7 @@ export default function ProjectPage() {
 
       <Section
         title="Time"
-        actions={p.status !== 'completed' ? <Button variant="secondary" size="sm" asChild><Link href={`/time/timesheet?projectId=${id}`}>Log time</Link></Button> : undefined}
+        actions={p.status !== 'completed' ? <Button variant="secondary" size="sm" asChild><Link href={`/time/timesheet?projectId=${id}&log=1`}>Log time</Link></Button> : undefined}
       >
         {entries.isError && <Notice tone="error">{errorText(entries.error)}</Notice>}
         {time.length === 0 ? (
