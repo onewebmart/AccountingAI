@@ -312,7 +312,7 @@ function SplitView({ documentId, returnTo, children }: { documentId: string; ret
     <Ctx.Provider value={{ documentId, returnTo, extraction: extraction.data ?? null, loading: extraction.isLoading, intent }}>
       <div
         // Wider than the page on a wide screen: the file and the form side by side need the room.
-        className="grid gap-6 lg:mx-[calc((100%_-_100vw_+_260px)/2_+_32px)] lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]"
+        className="grid gap-6 lg:mx-[calc((100%_-_100vw_+_var(--sidebar-w))/2_+_32px)] lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]"
         onClickCapture={(e) => {
           // Which button in the form's bar was pressed: "Save and next", or another.
           const button = (e.target as HTMLElement).closest('button');

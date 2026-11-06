@@ -149,7 +149,7 @@ export function FormPage({ onSubmit, children, actions, error }: {
     >
       <div className="space-y-5">{children}</div>
       {/* data-form-bar lets the Ask your books button and the toasts sit above this bar. */}
-      <div data-form-bar="" className="fixed bottom-0 left-0 right-0 z-30 lg:left-[260px] border-t border-line-200 bg-surface-card/95 backdrop-blur">
+      <div data-form-bar="" className="fixed bottom-0 left-0 right-0 z-30 lg:left-[var(--sidebar-w)] border-t border-line-200 bg-surface-card/95 backdrop-blur">
         <div className="mx-auto flex max-w-content flex-wrap items-center gap-3 px-4 py-3 sm:px-6">
           {actions}
           {error && <p className="text-caption text-error-fg">{error}</p>}

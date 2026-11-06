@@ -342,7 +342,7 @@ export function ReportBuilder({ mode, initial, baseKey }: { mode: 'derived' | 'm
         </>
       )}
 
-      <div data-form-bar="" className="fixed bottom-0 left-0 right-0 z-30 lg:left-[260px] border-t border-line-200 bg-surface-card/95 backdrop-blur">
+      <div data-form-bar="" className="fixed bottom-0 left-0 right-0 z-30 lg:left-[var(--sidebar-w)] border-t border-line-200 bg-surface-card/95 backdrop-blur">
         <div className="mx-auto flex max-w-content flex-wrap items-center gap-3 px-6 py-3">
           <Button type="button" disabled={!ready || spec.name.trim().length < 2 || save.isPending} onClick={() => save.mutate()}>
             <Save size={14} /> {save.isPending ? 'Saving…' : 'Save report'}
