@@ -1,924 +1,281 @@
 'use client';
 
-import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { Button } from '@/components/ui/button';
-import { ReportBarChart } from '@/components/reports/report-chart';
+import { Suspense, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { CheckCircle, Download, Send, FileText } from 'lucide-react';
-import { api } from '@/lib/api';
-import { currentFinancialYear, recentFinancialYears } from '@/lib/financial-year';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { BookOpen, CalendarClock, Home, Loader2, Plus, Search, Share2, Star, UserRound } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { GuideButton } from '@/components/guide/module-guide';
+import { notify } from '@/components/page/notifier';
+import { api, ApiError } from '@/lib/api';
+import { FavouriteStar } from '@/components/reports/center/favourite-star';
+import type { CenterData, CenterReport, Schedule } from '@/components/reports/center/types';
+import { lastVisited } from '@/components/reports/center/types';
 
-// ── Types ─────────────────────────────────────────────────────────────────────
+type View = 'home' | 'favorites' | 'shared' | 'mine' | 'scheduled';
+const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+const message = (e: unknown) => (e instanceof ApiError ? e.message : 'Something went wrong. Try again.');
+const th = 'whitespace-nowrap px-3 py-2 text-caption font-medium uppercase tracking-wide text-ink-500';
 
-type ReportType = 'pl' | 'bs' | 'cashflow' | 'tb' | 'ledger' | 'daybook' | 'ageing';
-
-const REPORT_TYPES: { id: ReportType; label: string }[] = [
-  { id: 'pl', label: 'P&L' },
-  { id: 'bs', label: 'Balance Sheet' },
-  { id: 'cashflow', label: 'Cash Flow' },
-  { id: 'tb', label: 'Trial Balance' },
-  { id: 'ledger', label: 'Ledger' },
-  { id: 'daybook', label: 'Day Book' },
-  { id: 'ageing', label: 'Ageing' },
-];
-
-// ── API response types ─────────────────────────────────────────────────────────
-
-interface TbRow {
-  account: string;
-  type: string;
-  debit: number;
-  credit: number;
-}
-
-interface PlResponse {
-  income: { account: string; paise: number }[];
-  expenses: { account: string; paise: number }[];
-  netProfitPaise: number;
-  // legacy shape fallback
-  revenue?: { account: string; paise: number }[];
-  totalRevenue?: number;
-  totalExpenses?: number;
-  netIncome?: number;
-}
-
-interface BsResponse {
-  assets: { account: string; paise: number }[];
-  liabilities: { account: string; paise: number }[];
-  equity: { account: string; paise: number }[];
-  // legacy shape fallback
-  capital?: { account: string; paise: number }[];
-  retainedEarnings?: number;
-  totalAssets?: number;
-  totalLiabilities?: number;
-  totalEquity?: number;
-  isTiedOut?: boolean;
-}
-
-interface CashFlowResponse {
-  inflows: number;
-  outflows: number;
-  netCashFlow: number;
-}
-
-interface DayBookEntry {
-  date: string;
-  voucher: string;
-  narration: string;
-  amount: number;
-  lines: { desc: string; dr: number; cr: number }[];
-}
-
-interface AgeingBucket {
-  current: number;
-  days1_30: number;
-  days31_60: number;
-  days61_90: number;
-  over90: number;
-  total: number;
-}
-
-/** Shapes the API actually returns — mapped into the view models above. */
-interface ApiTbEntry {
-  accountDescription: string;
-  accountType: string;
-  totalDebitPaise: number;
-  totalCreditPaise: number;
-  netPaise: number;
-}
-
-interface ApiTrialBalance {
-  entries: ApiTbEntry[];
-  grandTotalDebitPaise: number;
-  grandTotalCreditPaise: number;
-  isBalanced: boolean;
-}
-
-interface ApiPl {
-  revenueLines: ApiTbEntry[];
-  expenseLines: ApiTbEntry[];
-  totalRevenuePaise: number;
-  totalExpensesPaise: number;
-  netIncomePaise: number;
-}
-
-interface ApiBs {
-  assetLines: ApiTbEntry[];
-  liabilityLines: ApiTbEntry[];
-  capitalLines: ApiTbEntry[];
-  retainedEarningsPaise: number;
-  totalAssetsPaise: number;
-  totalLiabilitiesPaise: number;
-  totalEquityPaise: number;
-  isTiedOut: boolean;
-}
-
-interface ApiCashFlow {
-  cashInflowsPaise: number;
-  cashOutflowsPaise: number;
-  netCashFlowPaise: number;
-}
-
-interface ApiDayBookEntry {
-  date: string;
-  voucherType: string;
-  voucherNumber: number;
-  narration: string;
-  totalAmountPaise: number;
-  lines: { description: string; debitPaise: number; creditPaise: number }[];
-}
-
-/** GET /reports/ledger — one account's postings with a running balance. */
-interface ApiLedger {
-  accountDescription: string;
-  openingBalancePaise: number;
-  closingBalancePaise: number;
-  entries: Array<{
-    date: string;
-    journalId: string;
-    voucherType: string;
-    voucherNumber: number;
-    narration: string;
-    debitPaise: number;
-    creditPaise: number;
-    runningBalancePaise: number;
-  }>;
-}
-
-interface LedgerAccountOption {
-  _id: string;
-  name: string;
-  code: string;
-  isGroup: boolean;
-  systemKey?: string;
-}
-
-interface AgeingResponse {
-  ap: AgeingBucket;
-  ar: AgeingBucket;
-}
-
-// ── Formatters ─────────────────────────────────────────────────────────────────
-
-function fmt(paise: number): string {
-  return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(
-    paise / 100,
+function NavItem({ active, icon, label, count, onClick }: { active: boolean; icon: React.ReactNode; label: string; count?: number; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-current={active ? 'page' : undefined}
+      className={`flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-body transition-colors ${active ? 'bg-honey-100 font-medium text-ink-900' : 'text-ink-600 hover:bg-surface-sink hover:text-ink-900'}`}
+    >
+      {icon}
+      <span className="flex-1 truncate">{label}</span>
+      {count !== undefined && <span className="font-mono text-caption tabular-nums text-ink-400">{count}</span>}
+    </button>
   );
 }
 
-function fmtDate(d: string): string {
-  return new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: '2-digit' });
-}
-
-// ── Subcomponents ─────────────────────────────────────────────────────────────
-
-function TiedOutBadge({ ok }: { ok: boolean }) {
-  if (!ok) return null;
+function ReportRows({ reports }: { reports: CenterReport[] }) {
   return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-success-bg px-2 py-0.5 text-caption font-medium text-success-fg border border-success-fg/30">
-      <CheckCircle size={10} />
-      Trial balance ties out ✓
-    </span>
+    <>
+      {reports.map((r) => (
+        <tr key={r.key} className="border-b border-line-100 last:border-0 hover:bg-surface-sink/50">
+          <td className="px-3 py-2.5">
+            <div className="flex items-start gap-2">
+              <span className="pt-0.5"><FavouriteStar report={r} /></span>
+              <div className="min-w-0">
+                <Link href={`/reports/view/${encodeURIComponent(r.key)}`} className="text-body font-medium text-ink-900 hover:text-saffron-700 hover:underline">
+                  {r.title}
+                </Link>
+                {r.custom && <span className="ml-2 rounded-full border border-line-200 px-1.5 py-0.5 text-[11px] text-ink-500">{r.shared ? 'Shared' : 'Only you'}</span>}
+                <p className="mt-0.5 line-clamp-1 text-caption text-ink-500">{r.description}</p>
+              </div>
+            </div>
+          </td>
+          <td className="whitespace-nowrap px-3 py-2.5 text-body text-ink-600">{r.categoryLabel}</td>
+          <td className="whitespace-nowrap px-3 py-2.5 text-body text-ink-600">{r.createdBy}</td>
+          <td className="whitespace-nowrap px-3 py-2.5 text-caption text-ink-500">{lastVisited(r.lastVisitedAt)}</td>
+        </tr>
+      ))}
+    </>
   );
 }
 
-function SectionTable({
-  title,
-  rows,
-  total,
-}: {
-  title: string;
-  rows: { account: string; paise: number }[];
-  total: number;
-  isDebitNormal?: boolean;
-}) {
+function ReportList({ reports, grouped, categories, empty }: { reports: CenterReport[]; grouped: boolean; categories: CenterData['categories']; empty: React.ReactNode }) {
+  if (!reports.length) return <div className="rounded-xl border border-dashed border-line-200 bg-surface-card px-6 py-12 text-center text-body text-ink-500">{empty}</div>;
   return (
-    <div className="mb-6">
-      <h3 className="text-body font-semibold text-ink-900 mb-2">{title}</h3>
-      <table className="w-full text-left">
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.account} className="border-b border-line-100">
-              <td className="py-2 text-body text-ink-700">{r.account}</td>
-              <td className="py-2 text-right font-mono text-body text-ink-900">{fmt(r.paise)}</td>
-            </tr>
-          ))}
-        </tbody>
-        <tfoot>
-          <tr className="border-t border-line-200">
-            <td className="py-2 text-body font-bold text-ink-900">Total {title}</td>
-            <td className="py-2 text-right font-mono font-bold text-ink-900">{fmt(total)}</td>
+    <div className="overflow-x-auto rounded-xl border border-line-200 bg-surface-card">
+      <table className="w-full">
+        <thead>
+          <tr className="border-b border-line-200 bg-surface-sink text-left">
+            <th className={th}>Report name</th>
+            <th className={th}>Report category</th>
+            <th className={th}>Created by</th>
+            <th className={th}>Last visited</th>
           </tr>
-        </tfoot>
+        </thead>
+        <tbody>
+          {grouped
+            ? categories.map((c) => {
+                const list = reports.filter((r) => r.category === c.key);
+                if (!list.length) return null;
+                return (
+                  <GroupRows key={c.key} label={c.label} count={list.length}>
+                    <ReportRows reports={list} />
+                  </GroupRows>
+                );
+              })
+            : <ReportRows reports={reports} />}
+        </tbody>
       </table>
     </div>
   );
 }
 
-function ReportSkeleton() {
+function GroupRows({ label, count, children }: { label: string; count: number; children: React.ReactNode }) {
   return (
-    <div className="space-y-3 animate-pulse">
-      <div className="h-6 w-48 rounded bg-surface-sink" />
-      {[1, 2, 3, 4].map((i) => (
-        <div key={i} className="flex justify-between">
-          <div className="h-4 w-40 rounded bg-surface-sink" />
-          <div className="h-4 w-24 rounded bg-surface-sink" />
-        </div>
-      ))}
+    <>
+      <tr className="border-b border-line-200 bg-honey-50">
+        <td colSpan={4} className="px-3 py-1.5 text-caption font-semibold uppercase tracking-wide text-ink-500">
+          {label} <span className="font-mono font-normal tabular-nums text-ink-400">· {count}</span>
+        </td>
+      </tr>
+      {children}
+    </>
+  );
+}
+
+function ScheduledList({ reports }: { reports: CenterReport[] }) {
+  const qc = useQueryClient();
+  const list = useQuery({ queryKey: ['reports', 'schedules'], queryFn: () => api.get<Schedule[]>('/reports/schedules') });
+  const act = useMutation({
+    mutationFn: ({ id, action }: { id: string; action: 'stop' | 'resume' | 'send' }) => api.post(`/reports/schedules/${id}/${action}`),
+    onSuccess: (_r, v) => {
+      void qc.invalidateQueries({ queryKey: ['reports', 'schedules'] });
+      void qc.invalidateQueries({ queryKey: ['reports', 'center'] });
+      notify(v.action === 'send' ? 'Report sent' : v.action === 'stop' ? 'Schedule stopped' : 'Schedule resumed');
+    },
+    onError: (e) => notify(message(e), 'error'),
+  });
+  if (list.isLoading) return <p className="flex items-center gap-2 text-caption text-ink-400"><Loader2 size={14} className="animate-spin" /> Loading schedules…</p>;
+  if (list.isError) return <p className="text-caption text-error-fg">{message(list.error)}</p>;
+  const rows = list.data ?? [];
+  if (!rows.length) {
+    return (
+      <div className="rounded-xl border border-dashed border-line-200 bg-surface-card px-6 py-12 text-center text-body text-ink-500">
+        No report is emailed on a schedule yet. Open a report and choose <span className="font-medium text-ink-900">Schedule</span>.
+      </div>
+    );
+  }
+  const known = new Set(reports.map((r) => r.key));
+  return (
+    <div className="overflow-x-auto rounded-xl border border-line-200 bg-surface-card">
+      <table className="w-full">
+        <thead>
+          <tr className="border-b border-line-200 bg-surface-sink text-left">
+            {['Report', 'Covering', 'Sent', 'To', 'Next', ''].map((h) => <th key={h} className={th}>{h}</th>)}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((s) => (
+            <tr key={s.id} className={`border-b border-line-100 last:border-0 ${s.active ? '' : 'text-ink-400'}`}>
+              <td className="px-3 py-2.5">
+                {known.has(s.report) ? <Link href={`/reports/view/${encodeURIComponent(s.report)}`} className="text-body font-medium text-ink-900 hover:underline">{s.title}</Link> : <span className="text-body">{s.title}</span>}
+                {s.lastError && <p className="text-caption text-error-fg">Last try failed: {s.lastError}</p>}
+              </td>
+              <td className="px-3 py-2.5 text-body text-ink-600">{s.periodLabel}</td>
+              <td className="px-3 py-2.5 text-body text-ink-600">{s.frequency === 'monthly' ? `Monthly, on the ${s.day}` : `Every ${WEEKDAYS[s.day - 1]}`}</td>
+              <td className="px-3 py-2.5 text-caption text-ink-600">{s.recipients.join(', ')}</td>
+              <td className="px-3 py-2.5 font-mono text-caption tabular-nums text-ink-600">{s.active ? s.nextRunOn : 'Stopped'}{s.lastSentOn ? ` · last ${s.lastSentOn}` : ''}</td>
+              <td className="px-3 py-2.5 text-right">
+                <div className="flex justify-end gap-3 text-caption">
+                  <button className="text-ink-600 hover:text-ink-900 hover:underline" disabled={act.isPending} onClick={() => act.mutate({ id: s.id, action: 'send' })}>Send now</button>
+                  <button className="text-ink-600 hover:text-ink-900 hover:underline" disabled={act.isPending} onClick={() => act.mutate({ id: s.id, action: s.active ? 'stop' : 'resume' })}>{s.active ? 'Stop' : 'Resume'}</button>
+                </div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
 
-// ── Download helper ───────────────────────────────────────────────────────────
-
-/**
- * Fetches an export and hands it to the browser as a file.
- *
- * Goes through fetch rather than a plain link because the endpoints are
- * JWT-guarded and an <a href> cannot carry an Authorization header. Returns
- * false on failure so the caller can say so instead of silently doing nothing,
- * which is what the previous version did.
- */
-async function downloadFile(path: string, filename: string): Promise<boolean> {
-  const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
-  const apiBase = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api/v1';
-
-  try {
-    const res = await fetch(`${apiBase}${path}`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    });
-    if (!res.ok) return false;
-
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-// ── Page ──────────────────────────────────────────────────────────────────────
-
-/** Reports with a CSV/Excel endpoint behind them. */
-const EXPORTABLE = new Set<ReportType>(['pl', 'bs', 'tb', 'daybook', 'ledger']);
-
-function exportPathFor(reportType: ReportType): string {
-  switch (reportType) {
-    case 'pl':
-      return 'profit-loss';
-    case 'bs':
-      return 'balance-sheet';
-    case 'tb':
-      return 'trial-balance';
-    case 'daybook':
-      return 'day-book';
-    default:
-      return reportType;
-  }
-}
-
-export default function ReportsPage() {
-  const [reportType, setReportType] = useState<ReportType>('pl');
-  const [financialYear, setFinancialYear] = useState(currentFinancialYear);
-  const [expanded, setExpanded] = useState<string | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
-  const [ledgerAccountId, setLedgerAccountId] = useState<string>('');
-
-  const exportPath = exportPathFor(reportType);
-
-  const showToast = (msg: string) => {
-    setToast(msg);
-    setTimeout(() => setToast(null), 3500);
+function ReportsCenter() {
+  const params = useSearchParams();
+  const router = useRouter();
+  const [search, setSearch] = useState('');
+  const view = (params.get('view') as View) || 'home';
+  const category = params.get('category');
+  const go = (next: { view?: View; category?: string | null }) => {
+    const q = new URLSearchParams();
+    if (next.view && next.view !== 'home') q.set('view', next.view);
+    if (next.category) q.set('category', next.category);
+    router.replace(`/reports${q.toString() ? `?${q}` : ''}`, { scroll: false });
   };
+  const center = useQuery({ queryKey: ['reports', 'center'], queryFn: () => api.get<CenterData>('/reports/center') });
+  const data = center.data;
 
-  // ── Queries ────────────────────────────────────────────────────────────────
+  const shown = useMemo(() => {
+    if (!data) return [];
+    let list = data.reports;
+    if (view === 'favorites') list = list.filter((r) => r.favourite);
+    if (view === 'shared') list = list.filter((r) => r.custom && r.shared);
+    if (view === 'mine') list = list.filter((r) => r.custom && r.mine);
+    if (category) list = list.filter((r) => r.category === category);
+    const s = search.trim().toLowerCase();
+    if (s) list = list.filter((r) => `${r.title} ${r.description} ${r.categoryLabel}`.toLowerCase().includes(s));
+    return list;
+  }, [data, view, category, search]);
 
-  const tbQuery = useQuery<TbRow[]>({
-    queryKey: ['reports', 'trial-balance', financialYear],
-    queryFn: async () => {
-      const res = await api.get<ApiTrialBalance>(
-        `/reports/trial-balance?financialYear=${financialYear}`,
-      );
-      return (res.entries ?? []).map((e) => ({
-        account: e.accountDescription,
-        type: e.accountType,
-        debit: e.totalDebitPaise,
-        credit: e.totalCreditPaise,
-      }));
-    },
-    enabled: reportType === 'tb',
-  });
-
-  const plQuery = useQuery<PlResponse>({
-    queryKey: ['reports', 'profit-loss', financialYear],
-    queryFn: async () => {
-      const res = await api.get<ApiPl>(`/reports/profit-loss?financialYear=${financialYear}`);
-      return {
-        // Income sits on the credit side, expenses on the debit side, so flip the
-        // sign on revenue to show both as positive magnitudes.
-        income: (res.revenueLines ?? []).map((l) => ({ account: l.accountDescription, paise: -l.netPaise })),
-        expenses: (res.expenseLines ?? []).map((l) => ({ account: l.accountDescription, paise: l.netPaise })),
-        netProfitPaise: res.netIncomePaise ?? 0,
-      };
-    },
-    enabled: reportType === 'pl',
-  });
-
-  const bsQuery = useQuery<BsResponse>({
-    queryKey: ['reports', 'balance-sheet', financialYear],
-    queryFn: async () => {
-      const res = await api.get<ApiBs>(`/reports/balance-sheet?financialYear=${financialYear}`);
-      return {
-        assets: (res.assetLines ?? []).map((l) => ({ account: l.accountDescription, paise: l.netPaise })),
-        liabilities: (res.liabilityLines ?? []).map((l) => ({ account: l.accountDescription, paise: -l.netPaise })),
-        equity: [
-          ...(res.capitalLines ?? []).map((l) => ({ account: l.accountDescription, paise: -l.netPaise })),
-          ...(res.retainedEarningsPaise
-            ? [{ account: 'Retained earnings', paise: res.retainedEarningsPaise }]
-            : []),
-        ],
-        totalAssets: res.totalAssetsPaise,
-        totalLiabilities: res.totalLiabilitiesPaise,
-        totalEquity: res.totalEquityPaise,
-        isTiedOut: res.isTiedOut,
-      };
-    },
-    enabled: reportType === 'bs',
-  });
-
-  const cashFlowQuery = useQuery<CashFlowResponse>({
-    queryKey: ['reports', 'cash-flow', financialYear],
-    queryFn: async () => {
-      const res = await api.get<ApiCashFlow>(`/reports/cash-flow?financialYear=${financialYear}`);
-      return {
-        inflows: res.cashInflowsPaise ?? 0,
-        outflows: res.cashOutflowsPaise ?? 0,
-        netCashFlow: res.netCashFlowPaise ?? 0,
-      };
-    },
-    enabled: reportType === 'cashflow',
-  });
-
-  const dayBookQuery = useQuery<DayBookEntry[]>({
-    queryKey: ['reports', 'day-book', financialYear],
-    queryFn: async () => {
-      const res = await api.get<ApiDayBookEntry[] | { data?: ApiDayBookEntry[] }>(
-        `/reports/day-book?financialYear=${financialYear}`,
-      );
-      const rows = Array.isArray(res) ? res : (res.data ?? []);
-      return rows.map((e) => ({
-        date: e.date,
-        voucher: `${e.voucherType}/${e.voucherNumber}`,
-        narration: e.narration || '—',
-        amount: e.totalAmountPaise,
-        lines: (e.lines ?? []).map((l) => ({
-          desc: l.description,
-          dr: l.debitPaise,
-          cr: l.creditPaise,
-        })),
-      }));
-    },
-    enabled: reportType === 'daybook',
-  });
-
-  const ageingQuery = useQuery<AgeingResponse>({
-    queryKey: ['reports', 'ageing', financialYear],
-    queryFn: async () => {
-      // Ageing is owned by the sub-ledgers: payables by purchase, receivables by sales.
-      const [ap, ar] = await Promise.all([
-        api.get<AgeingBucket>('/purchase/ap-ageing'),
-        api.get<AgeingBucket>('/sales/ar-ageing'),
-      ]);
-      return { ap, ar };
-    },
-    enabled: reportType === 'ageing',
-  });
-
-  const ledgerAccountsQuery = useQuery<LedgerAccountOption[]>({
-    queryKey: ['gl', 'accounts'],
-    queryFn: () => api.get<LedgerAccountOption[]>('/gl/accounts'),
-    enabled: reportType === 'ledger',
-  });
-  const postingAccounts = (ledgerAccountsQuery.data ?? []).filter((a) => !a.isGroup);
-  // Open on Accounts Receivable, the ledger most often asked for, until one is picked.
-  const selectedLedgerAccount =
-    ledgerAccountId ||
-    postingAccounts.find((a) => a.systemKey === 'ACCOUNTS_RECEIVABLE')?._id ||
-    postingAccounts[0]?._id ||
-    '';
-
-  // The ledger export is for one account; without it the file came back empty.
-  const exportAccountParam =
-    reportType === 'ledger' ? `&account=${encodeURIComponent(selectedLedgerAccount)}` : '';
-
-  const ledgerQuery = useQuery<ApiLedger>({
-    queryKey: ['reports', 'ledger', financialYear, selectedLedgerAccount],
-    queryFn: () =>
-      api.get<ApiLedger>(
-        `/reports/ledger?financialYear=${financialYear}&account=${encodeURIComponent(selectedLedgerAccount)}`,
-      ),
-    enabled: reportType === 'ledger' && !!selectedLedgerAccount,
-  });
-
-  // ── Derived data ───────────────────────────────────────────────────────────
-
-  const EMPTY_BUCKET: AgeingBucket = {
-    current: 0, days1_30: 0, days31_60: 0, days61_90: 0, over90: 0, total: 0,
-  };
-
-  const tbRows = tbQuery.data ?? [];
-  // Debit and credit are totalled separately — showing one figure under both
-  // columns would hide the very imbalance a trial balance exists to reveal.
-  const tbDebitTotal = tbRows.reduce((s, e) => s + e.debit, 0);
-  const tbCreditTotal = tbRows.reduce((s, e) => s + e.credit, 0);
-
-  const pl = plQuery.data;
-  const plIncome = pl?.income ?? [];
-  const plExpenses = pl?.expenses ?? [];
-  const plTotalRevenue = plIncome.reduce((s, l) => s + l.paise, 0);
-  const plTotalExpenses = plExpenses.reduce((s, l) => s + l.paise, 0);
-  const plNet = pl?.netProfitPaise ?? plTotalRevenue - plTotalExpenses;
-
-  const bs = bsQuery.data;
-  const bsAssets = bs?.assets ?? [];
-  const bsLiabilities = bs?.liabilities ?? [];
-  const bsEquity = bs?.equity ?? [];
-  const bsTotalAssets = bs?.totalAssets ?? bsAssets.reduce((s, l) => s + l.paise, 0);
-  const bsTotalLiabilities =
-    bs?.totalLiabilities ?? bsLiabilities.reduce((s, l) => s + l.paise, 0);
-  const bsTotalEquity = bs?.totalEquity ?? bsEquity.reduce((s, l) => s + l.paise, 0);
-  const bsIsTiedOut = bs?.isTiedOut ?? bsTotalAssets === bsTotalLiabilities + bsTotalEquity;
-
-  const cf = cashFlowQuery.data ?? { inflows: 0, outflows: 0, netCashFlow: 0 };
-  const dayBook = dayBookQuery.data ?? [];
-  const ageing = ageingQuery.data ?? { ap: EMPTY_BUCKET, ar: EMPTY_BUCKET };
-
-  // ── Report-specific loading/error state ────────────────────────────────────
-
-  const activeQuery = {
-    pl: plQuery,
-    bs: bsQuery,
-    cashflow: cashFlowQuery,
-    tb: tbQuery,
-    ledger: { isLoading: false, isError: false } as const,
-    daybook: dayBookQuery,
-    ageing: ageingQuery,
-  }[reportType];
+  const titles: Record<View, string> = { home: 'All Reports', favorites: 'Favorites', shared: 'Shared Reports', mine: 'My Reports', scheduled: 'Scheduled Reports' };
+  const heading = category ? data?.categories.find((c) => c.key === category)?.label ?? 'Reports' : titles[view];
+  const scheduled = view === 'scheduled' && !category && !search.trim();
+  const count = scheduled ? data?.counts.scheduled ?? 0 : shown.length;
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between">
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-h1 font-display text-ink-900">
-            Reports
-          </h1>
-          <p className="text-body text-ink-500 mt-1">
-            All reports are derived from posted journals only.
-          </p>
+          <h1 className="text-h1 font-display text-ink-900">Reports Center</h1>
+          <p className="mt-1 text-body text-ink-500">Every report reads only posted entries. Star the ones you use, and make your own from any of them.</p>
         </div>
-        <div className="flex flex-wrap items-center justify-end gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <GuideButton guide="reports" />
-          <Link href="/reports/management" className="rounded-md border border-line-200 bg-surface-card px-3 py-1.5 text-body font-medium text-ink-900 hover:bg-surface-sink">
-            Management reports
-          </Link>
-          <select
-            value={financialYear}
-            onChange={(e) => setFinancialYear(e.target.value)}
-            className="rounded-md border border-line-200 bg-surface-card px-3 py-1.5 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-brand-500"
-          >
-            {recentFinancialYears().map((fy) => (
-              <option key={fy} value={fy}>FY {fy}</option>
+          <label className="relative">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-400" />
+            <input
+              className="h-10 w-72 rounded-md border border-line-200 bg-white pl-8 pr-3 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-saffron-600/40"
+              placeholder="Search reports"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              aria-label="Search reports"
+            />
+          </label>
+          <Button asChild>
+            <Link href="/reports/new"><Plus size={15} /> Create New Report</Link>
+          </Button>
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-5 lg:flex-row">
+        <aside className="w-full shrink-0 self-start rounded-xl border border-line-200 bg-surface-card p-2 lg:sticky lg:top-4 lg:w-64">
+          <nav className="space-y-0.5" aria-label="Reports">
+            <NavItem active={view === 'home' && !category} icon={<Home size={15} />} label="Home" onClick={() => go({})} />
+            <NavItem active={view === 'favorites' && !category} icon={<Star size={15} />} label="Favorites" count={data?.counts.favourites} onClick={() => go({ view: 'favorites' })} />
+            <NavItem active={view === 'shared' && !category} icon={<Share2 size={15} />} label="Shared Reports" count={data?.counts.shared} onClick={() => go({ view: 'shared' })} />
+            <NavItem active={view === 'mine' && !category} icon={<UserRound size={15} />} label="My Reports" count={data?.counts.mine} onClick={() => go({ view: 'mine' })} />
+            <NavItem active={view === 'scheduled' && !category} icon={<CalendarClock size={15} />} label="Scheduled Reports" count={data?.counts.scheduled} onClick={() => go({ view: 'scheduled' })} />
+          </nav>
+          <p className="mb-1 mt-4 px-2.5 text-[11px] font-semibold uppercase tracking-wider text-ink-400">Report category</p>
+          <nav className="space-y-0.5" aria-label="Report categories">
+            {(data?.categories ?? []).filter((c) => c.count > 0).map((c) => (
+              <NavItem
+                key={c.key}
+                active={category === c.key}
+                icon={<span className={`h-1.5 w-1.5 rounded-full ${category === c.key ? 'bg-saffron-600' : 'bg-line-200'}`} />}
+                label={c.label}
+                count={c.count}
+                onClick={() => go({ category: c.key })}
+              />
             ))}
-          </select>
-        </div>
-      </div>
-
-      {/* Report picker */}
-      <div className="flex gap-2 flex-wrap">
-        {REPORT_TYPES.map((r) => (
-          <button
-            key={r.id}
-            onClick={() => setReportType(r.id)}
-            className={`rounded-full px-4 py-1.5 text-body font-medium border transition-colors ${
-              reportType === r.id
-                ? 'bg-brand-600 text-white border-brand-600'
-                : 'bg-surface-card text-ink-700 border-line-200 hover:border-brand-400 hover:text-brand-600'
-            }`}
-          >
-            {r.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Export row */}
-      <div className="flex items-center gap-2 border-b border-line-200 pb-4 print:hidden">
-        <Button
-          variant="secondary"
-          size="sm"
-          disabled={!EXPORTABLE.has(reportType)}
-          title={EXPORTABLE.has(reportType) ? undefined : 'Not available for this report yet'}
-          onClick={async () => {
-            const ok = await downloadFile(
-              `/exports/${exportPath}.xlsx?financialYear=${financialYear}${exportAccountParam}`,
-              `${exportPath}-${financialYear}.xlsx`,
-            );
-            showToast(ok ? 'Downloaded Excel' : "Couldn't export — try again");
-          }}
-          className="flex items-center gap-1.5"
-        >
-          <Download size={12} /> Excel
-        </Button>
-        <Button
-          variant="secondary"
-          size="sm"
-          disabled={!EXPORTABLE.has(reportType)}
-          title={EXPORTABLE.has(reportType) ? undefined : 'Not available for this report yet'}
-          onClick={async () => {
-            const ok = await downloadFile(
-              `/exports/${exportPath}.csv?financialYear=${financialYear}${exportAccountParam}`,
-              `${exportPath}-${financialYear}.csv`,
-            );
-            showToast(ok ? 'Downloaded CSV' : "Couldn't export — try again");
-          }}
-          className="flex items-center gap-1.5"
-        >
-          <Download size={12} /> CSV
-        </Button>
-        <Button
-          variant="secondary"
-          size="sm"
-          // The browser's own print-to-PDF, driven by the print stylesheet
-          // below. Real output, and no PDF engine to ship or keep in step with
-          // the on-screen report.
-          onClick={() => window.print()}
-          className="flex items-center gap-1.5"
-        >
-          <FileText size={12} /> PDF
-        </Button>
-      </div>
-
-      {/* Loading / error states */}
-      {activeQuery.isLoading && <ReportSkeleton />}
-      {activeQuery.isError && (
-        <p className="text-body text-error-fg py-4">
-          Failed to load report. Showing cached data.
-        </p>
-      )}
-
-      {/* ── P&L ── */}
-      {reportType === 'pl' && !plQuery.isLoading && (
-        <div>
-          <div className="flex items-center gap-3 mb-6">
-            <h2 className="text-h2 font-display text-ink-900">
-              Profit & Loss — FY {financialYear}
-            </h2>
+          </nav>
+          <div className="mt-4 border-t border-line-100 px-2.5 pt-3">
+            <Link href="/reports/statements" className="flex items-center gap-2 text-caption text-ink-500 hover:text-ink-900 hover:underline">
+              <BookOpen size={13} /> Statements with charts
+            </Link>
           </div>
-          <div className="mb-8 grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <ReportBarChart
-              title="Revenue by account"
-              tone="green"
-              rows={plIncome.map((r) => ({ label: r.account, valuePaise: r.paise }))}
-              emptyMessage="No revenue posted for this year yet."
+        </aside>
+
+        <section className="min-w-0 flex-1 space-y-3">
+          <div className="flex items-baseline gap-2">
+            <h2 className="text-h3 font-display text-ink-900">{search.trim() ? `Results for “${search.trim()}”` : heading}</h2>
+            <span className="rounded-full bg-surface-sink px-2 py-0.5 font-mono text-caption tabular-nums text-ink-600">{count}</span>
+          </div>
+          {center.isLoading && <p className="flex items-center gap-2 text-caption text-ink-400"><Loader2 size={14} className="animate-spin" /> Loading reports…</p>}
+          {center.isError && <p className="text-caption text-error-fg">{message(center.error)}</p>}
+          {data && scheduled && <ScheduledList reports={data.reports} />}
+          {data && !scheduled && (
+            <ReportList
+              reports={shown}
+              grouped={!category && !search.trim() && view === 'home'}
+              categories={data.categories}
+              empty={
+                view === 'favorites' ? 'Star a report to keep it here.'
+                : view === 'mine' ? <>You have not made a report yet. <Link href="/reports/new" className="font-medium text-saffron-700 underline">Create New Report</Link>.</>
+                : view === 'shared' ? 'No one has shared a report with the organisation yet.'
+                : 'No report matches. Try another word.'
+              }
             />
-            <ReportBarChart
-              title="Expenses by account"
-              tone="saffron"
-              rows={plExpenses.map((r) => ({ label: r.account, valuePaise: r.paise }))}
-              emptyMessage="No expenses posted for this year yet."
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-8">
-            <SectionTable
-              title="Revenue"
-              rows={plIncome}
-              total={plTotalRevenue}
-            />
-            <SectionTable
-              title="Expenses"
-              rows={plExpenses}
-              total={plTotalExpenses}
-            />
-          </div>
-          <div className="border-t-2 border-ink-900 pt-4 flex justify-between items-center mt-4">
-            <span className="text-h2 font-display text-ink-900">
-              {plNet >= 0 ? 'Net profit' : 'Net loss'}
-            </span>
-            <span className={`text-h2 font-mono font-bold ${plNet >= 0 ? 'text-success-fg' : 'text-error-fg'}`}>
-              {fmt(Math.abs(plNet))}
-            </span>
-          </div>
-        </div>
-      )}
-
-      {/* ── Balance Sheet ── */}
-      {reportType === 'bs' && !bsQuery.isLoading && (
-        <div>
-          <div className="flex items-center gap-3 mb-6">
-            <h2 className="text-h2 font-display text-ink-900">
-              Balance Sheet — FY {financialYear}
-            </h2>
-            <TiedOutBadge ok={bsIsTiedOut} />
-          </div>
-          <div className="grid grid-cols-2 gap-8">
-            <div>
-              <SectionTable
-                title="Assets"
-                rows={bsAssets}
-                total={bsTotalAssets}
-              />
-            </div>
-            <div>
-              <SectionTable
-                title="Liabilities"
-                rows={bsLiabilities}
-                total={bsTotalLiabilities}
-              />
-              <SectionTable
-                title="Capital & Equity"
-                rows={bsEquity}
-                total={bsTotalEquity}
-              />
-              <div className="flex justify-between border-t-2 border-ink-900 pt-3">
-                <span className="font-bold text-body text-ink-900">Total Liabilities & Equity</span>
-                <span className="font-mono font-bold text-body text-ink-900">
-                  {fmt(bsTotalLiabilities + bsTotalEquity)}
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Cash Flow ── */}
-      {reportType === 'cashflow' && !cashFlowQuery.isLoading && (
-        <div>
-          <h2 className="text-h2 font-display text-ink-900 mb-6">
-            Cash Flow — FY {financialYear}
-          </h2>
-          <div className="max-w-sm space-y-3">
-            <div className="flex justify-between py-2 border-b border-line-100">
-              <span className="text-body text-ink-600">Cash inflows (receipts)</span>
-              <span className="font-mono font-semibold text-success-fg">{fmt(cf.inflows)}</span>
-            </div>
-            <div className="flex justify-between py-2 border-b border-line-100">
-              <span className="text-body text-ink-600">Cash outflows (payments)</span>
-              <span className="font-mono font-semibold text-error-fg">{fmt(cf.outflows)}</span>
-            </div>
-            <div className="flex justify-between py-3 border-t border-ink-900">
-              <span className="text-body font-bold text-ink-900">Net cash flow</span>
-              <span className={`font-mono font-bold ${cf.netCashFlow >= 0 ? 'text-success-fg' : 'text-error-fg'}`}>
-                {fmt(Math.abs(cf.netCashFlow))}
-              </span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Trial Balance ── */}
-      {reportType === 'tb' && !tbQuery.isLoading && (
-        <div>
-          <div className="flex items-center gap-3 mb-6">
-            <h2 className="text-h2 font-display text-ink-900">
-              Trial Balance — FY {financialYear}
-            </h2>
-            <TiedOutBadge ok={true} />
-          </div>
-
-          <div className="mb-8">
-            <ReportBarChart
-              title="Balances by account"
-              // Net of the two sides — a chart of debits alone would misread a
-              // contra balance as a large positive one.
-              rows={tbRows.map((r) => ({ label: r.account, valuePaise: r.debit - r.credit }))}
-              emptyMessage="Nothing posted for this year yet."
-            />
-          </div>
-
-          <table className="w-full text-left">
-            <thead>
-              <tr className="border-b border-line-200">
-                {['Account', 'Type', 'Debit', 'Credit', 'Net'].map((h) => (
-                  <th key={h} className="pb-2 pr-6 text-caption font-semibold text-ink-500 uppercase tracking-wide">
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {tbRows.map((row) => {
-                const net = row.debit - row.credit;
-                return (
-                  <tr key={row.account} className="border-b border-line-100 hover:bg-surface-sink/50">
-                    <td className="py-2.5 pr-6 text-body text-ink-900">{row.account}</td>
-                    <td className="py-2.5 pr-6">
-                      <span className="text-caption text-ink-500 uppercase">{row.type}</span>
-                    </td>
-                    <td className="py-2.5 pr-6 font-mono text-body text-ink-900">
-                      {row.debit > 0 ? fmt(row.debit) : '—'}
-                    </td>
-                    <td className="py-2.5 pr-6 font-mono text-body text-ink-900">
-                      {row.credit > 0 ? fmt(row.credit) : '—'}
-                    </td>
-                    <td className={`py-2.5 font-mono font-medium text-body ${net >= 0 ? 'text-ink-900' : 'text-ink-600'}`}>
-                      {fmt(Math.abs(net))} {net < 0 ? 'Cr' : 'Dr'}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-            <tfoot>
-              <tr className="border-t-2 border-ink-900">
-                <td colSpan={2} className="py-3 font-bold text-body text-ink-900">Total</td>
-                <td className="py-3 font-mono font-bold text-ink-900">{fmt(tbDebitTotal)}</td>
-                <td className="py-3 font-mono font-bold text-ink-900">{fmt(tbCreditTotal)}</td>
-                <td />
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-      )}
-
-      {/* ── Ledger ── */}
-      {reportType === 'ledger' && (
-        <div>
-          <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-h2 font-display text-ink-900">
-              Ledger — {ledgerQuery.data?.accountDescription ?? '…'} · FY {financialYear}
-            </h2>
-            <select
-              aria-label="Ledger account"
-              value={selectedLedgerAccount}
-              onChange={(e) => setLedgerAccountId(e.target.value)}
-              className="rounded-md border border-line-200 bg-surface-card px-3 py-1.5 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-brand-500"
-            >
-              {postingAccounts.map((a) => (
-                <option key={a._id} value={a._id}>
-                  {a.code} · {a.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          {ledgerQuery.isLoading || ledgerAccountsQuery.isLoading ? (
-            <ReportSkeleton />
-          ) : ledgerQuery.isError ? (
-            <p className="text-body text-error-fg">Couldn&apos;t load this ledger — try again.</p>
-          ) : (
-            <table className="w-full text-left">
-              <thead>
-                <tr className="border-b border-line-200">
-                  {['Date', 'Voucher', 'Narration', 'Debit', 'Credit', 'Balance'].map((h) => (
-                    <th key={h} className="pb-2 pr-6 text-caption font-semibold text-ink-500 uppercase tracking-wide">
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                <tr className="border-b border-line-100">
-                  <td className="py-2.5 pr-6 text-body text-ink-600" />
-                  <td className="py-2.5 pr-6 font-mono text-caption text-ink-500">Opening</td>
-                  <td className="py-2.5 pr-6 text-body text-ink-900">Brought forward</td>
-                  <td className="py-2.5 pr-6 font-mono text-body text-ink-900">—</td>
-                  <td className="py-2.5 pr-6 font-mono text-body text-ink-900">—</td>
-                  <td className="py-2.5 font-mono font-semibold text-body text-ink-900">
-                    {fmt(Math.abs(ledgerQuery.data?.openingBalancePaise ?? 0))}{' '}
-                    {(ledgerQuery.data?.openingBalancePaise ?? 0) < 0 ? 'Cr' : 'Dr'}
-                  </td>
-                </tr>
-                {(ledgerQuery.data?.entries ?? []).map((row, i) => (
-                  <tr key={`${row.journalId}-${i}`} className="border-b border-line-100 hover:bg-surface-sink/50">
-                    <td className="py-2.5 pr-6 text-body text-ink-600">{fmtDate(row.date)}</td>
-                    <td className="py-2.5 pr-6 font-mono text-caption text-ink-500">
-                      {row.voucherType.toUpperCase()}/{row.voucherNumber}
-                    </td>
-                    <td className="py-2.5 pr-6 text-body text-ink-900">{row.narration || '—'}</td>
-                    <td className="py-2.5 pr-6 font-mono text-body text-ink-900">{row.debitPaise > 0 ? fmt(row.debitPaise) : '—'}</td>
-                    <td className="py-2.5 pr-6 font-mono text-body text-ink-900">{row.creditPaise > 0 ? fmt(row.creditPaise) : '—'}</td>
-                    <td className="py-2.5 font-mono font-semibold text-body text-ink-900">
-                      {fmt(Math.abs(row.runningBalancePaise))} {row.runningBalancePaise < 0 ? 'Cr' : 'Dr'}
-                    </td>
-                  </tr>
-                ))}
-                {(ledgerQuery.data?.entries ?? []).length === 0 && (
-                  <tr>
-                    <td colSpan={6} className="py-6 text-center text-body text-ink-500">
-                      Nothing posted to this account in FY {financialYear}.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-              <tfoot>
-                <tr className="border-t-2 border-ink-900">
-                  <td colSpan={5} className="py-3 font-bold text-body text-ink-900">Closing balance</td>
-                  <td className="py-3 font-mono font-bold text-ink-900">
-                    {fmt(Math.abs(ledgerQuery.data?.closingBalancePaise ?? 0))}{' '}
-                    {(ledgerQuery.data?.closingBalancePaise ?? 0) < 0 ? 'Cr' : 'Dr'}
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
           )}
-        </div>
-      )}
-
-      {/* ── Day Book ── */}
-      {reportType === 'daybook' && !dayBookQuery.isLoading && (
-        <div>
-          <h2 className="text-h2 font-display text-ink-900 mb-6">
-            Day Book — FY {financialYear}
-          </h2>
-          <div className="space-y-3">
-            {dayBook.map((entry, i) => (
-              <div key={i} className="rounded-lg border border-line-200 bg-surface-card overflow-hidden">
-                <button
-                  onClick={() => setExpanded(expanded === entry.voucher ? null : entry.voucher)}
-                  className="w-full text-left px-4 py-3 flex items-center justify-between hover:bg-surface-sink/50 transition-colors"
-                >
-                  <div className="flex items-center gap-4">
-                    <span className="font-mono text-caption text-ink-500">{fmtDate(entry.date)}</span>
-                    <span className="font-mono text-caption font-semibold text-ink-700">{entry.voucher}</span>
-                    <span className="text-body text-ink-900">{entry.narration}</span>
-                  </div>
-                  <span className="font-mono font-semibold text-body text-ink-900 shrink-0">
-                    {fmt(entry.amount)}
-                  </span>
-                </button>
-                {expanded === entry.voucher && (
-                  <div className="border-t border-line-200 px-4 py-3 bg-surface-sink/30">
-                    <table className="w-full text-left">
-                      <tbody>
-                        {entry.lines.map((l, j) => (
-                          <tr key={j} className="text-body">
-                            <td className="py-1 pr-6 text-ink-600">{l.desc}</td>
-                            <td className="py-1 pr-6 font-mono text-ink-900">{l.dr > 0 ? fmt(l.dr) : '—'}</td>
-                            <td className="py-1 font-mono text-ink-900">{l.cr > 0 ? fmt(l.cr) : '—'}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* ── Ageing ── */}
-      {reportType === 'ageing' && !ageingQuery.isLoading && (
-        <div className="space-y-6">
-          <h2 className="text-h2 font-display text-ink-900">
-            Ageing — FY {financialYear}
-          </h2>
-          {(['AP (payables)', 'AR (receivables)'] as const).map((label, idx) => {
-            const data = idx === 0 ? ageing.ap : ageing.ar;
-            const color = idx === 0 ? 'text-error-fg' : 'text-success-fg';
-            return (
-              <div key={label}>
-                <h3 className="text-body font-semibold text-ink-900 mb-3">{label}</h3>
-                <table className="w-full text-left">
-                  <thead>
-                    <tr className="border-b border-line-200">
-                      {['Current', '1–30 days', '31–60 days', '61–90 days', '90+ days', 'Total'].map((h) => (
-                        <th key={h} className="pb-2 pr-6 text-caption font-semibold text-ink-500 uppercase tracking-wide">
-                          {h}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr>
-                      {[data.current, data.days1_30, data.days31_60, data.days61_90, data.over90, data.total].map(
-                        (v, i) => (
-                          <td key={i} className={`py-2.5 pr-6 font-mono font-semibold text-body ${i === 5 ? color : 'text-ink-900'}`}>
-                            {fmt(v)}
-                          </td>
-                        ),
-                      )}
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Toast */}
-      {toast && (
-        <div className="fixed bottom-6 right-6 z-50 rounded-md bg-success-bg border border-success-fg px-4 py-3 text-body font-medium text-success-fg shadow-lg">
-          {toast}
-        </div>
-      )}
+        </section>
+      </div>
     </div>
+  );
+}
+
+export default function ReportsCenterPage() {
+  return (
+    <Suspense>
+      <ReportsCenter />
+    </Suspense>
   );
 }

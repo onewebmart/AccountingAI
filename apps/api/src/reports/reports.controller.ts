@@ -1,4 +1,4 @@
-import { Controller, Get, Query, Request, UseGuards } from '@nestjs/common';
+import { Controller, Get, Query, Request, UseGuards, BadRequestException } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionGuard } from '../auth/guards/permission.guard';
 import { RequirePermission } from '../auth/decorators';
@@ -54,6 +54,8 @@ export class ReportsController {
     @Query('financialYear') financialYear: string,
     @Query('account') account: string,
   ) {
+    // Without an account there is no ledger to show: say so, rather than fail inside the report.
+    if (!account?.trim()) throw new BadRequestException('Pick the account.');
     return this.reportsService.getLedger(req.user.orgId, financialYear, account);
   }
 

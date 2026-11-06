@@ -5,7 +5,7 @@ import { AuditService } from '../gl/audit.service';
 import { MailerService } from '../mail/mailer.service';
 import { withOrg } from '../database/tenant.plugin';
 import { todayIst } from '../automation/schedule';
-import { CATALOG, REPORT_KEYS, RelativePeriod, ReportCatalogService, resolvePeriod } from './report-catalog.service';
+import { RelativePeriod, ReportCatalogService, resolvePeriod } from './report-catalog.service';
 import { ReportSchedule, ReportScheduleDocument } from './schemas/report-schedule.schema';
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -50,14 +50,16 @@ export class ReportSchedulesService {
 
   async list(orgId: string): Promise<Array<Record<string, unknown>>> {
     const rows = await this.model.find({ orgId }).sort({ active: -1, createdAt: -1 }).lean().exec();
+    // Titles for the Reports Center's reports and custom reports too.
+    const titles = new Map(await Promise.all([...new Set(rows.map((s) => s.report))].map(async (k) => [k, await this.catalog.titleOf(orgId, k)] as const)));
     return rows.map((s) => ({
-      id: String(s._id), report: s.report, title: CATALOG[s.report as keyof typeof CATALOG]?.title ?? s.report, period: s.period, periodLabel: PERIOD_LABEL[s.period as RelativePeriod],
+      id: String(s._id), report: s.report, title: titles.get(s.report) ?? s.report, period: s.period, periodLabel: PERIOD_LABEL[s.period as RelativePeriod],
       frequency: s.frequency, day: s.day, recipients: s.recipients, nextRunOn: s.nextRunOn, lastSentOn: s.lastSentOn, lastError: s.lastError, active: s.active,
     }));
   }
 
   async create(orgId: string, actorId: string, input: { report: string; period?: RelativePeriod; frequency: 'monthly' | 'weekly'; day: number; recipients: string[] }) {
-    if (!(REPORT_KEYS as readonly string[]).includes(input.report)) throw new BadRequestException('Pick a report.');
+    if (!(await this.catalog.exists(orgId, input.report, actorId))) throw new BadRequestException('Pick a report.');
     const period = input.period ?? 'last_month';
     if (!PERIODS.includes(period)) throw new BadRequestException('Pick a period.');
     const max = input.frequency === 'weekly' ? 7 : 28;

@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Optional } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { OrgSettings, OrgSettingsDocument } from '../org-settings/schemas/org-settings.schema';
@@ -8,6 +8,9 @@ import { ReportsService, TbEntry } from './reports.service';
 import { ReportRow, ReportTable } from './report-table';
 import { renderReportPdf } from './report-pdf';
 import { fyMonths, shiftMonth } from './management';
+// The Reports Center's own reports and custom reports (catalog/): this catalog runs them by key too.
+import { BaseCatalog, ReportCenterService } from './catalog/center.service';
+import type { RunParams } from './catalog/types';
 
 export const REPORT_KEYS = [
   'pl_monthly', 'comparison', 'expenses', 'budget_vs_actual',
@@ -37,11 +40,13 @@ export const CATALOG: Record<ReportKey, { title: string; params: 'range' | 'toda
   project_pnl: { title: 'Profit by project', params: 'range', group: 'Profit' },
 };
 
-export interface ReportParams {
+export interface ReportParams extends RunParams {
   from?: string | null;
   to?: string | null;
   financialYear?: string | null;
   through?: string | null;
+  /** Budget against actual: the budget to read; the year's default when left out. */
+  budgetId?: string | null;
 }
 
 /** A period said relative to the run date, for a schedule: it means a different month each time. */
@@ -69,14 +74,33 @@ export class ReportCatalogService {
     private management: ManagementReportsService,
     private reports: ReportsService,
     @InjectModel(OrgSettings.name) private settingsModel: Model<OrgSettingsDocument>,
+    @Optional() private center?: ReportCenterService,
   ) {}
 
   list() {
     return REPORT_KEYS.map((key) => ({ key, ...CATALOG[key] }));
   }
 
-  async run(orgId: string, key: string, p: ReportParams = {}): Promise<ReportTable> {
-    if (!(REPORT_KEYS as readonly string[]).includes(key)) throw new BadRequestException(`No report called ${key}.`);
+  /** What the Reports Center needs from this catalog: its reports, and a way to run any report for this person. */
+  base(orgId: string, viewer?: string): BaseCatalog {
+    return { list: this.list(), run: (key, p) => this.run(orgId, key, p, viewer), resolve: (period, today) => resolvePeriod(period as RelativePeriod, today) };
+  }
+
+  /** Any report a schedule may send: these, the Center's, or a custom report the person can see. */
+  async exists(orgId: string, key: string, viewer?: string): Promise<boolean> {
+    return (REPORT_KEYS as readonly string[]).includes(key) || (!!this.center && (await this.center.exists(orgId, key, viewer)));
+  }
+
+  async titleOf(orgId: string, key: string): Promise<string> {
+    return CATALOG[key as ReportKey]?.title ?? (this.center ? await this.center.title(orgId, key) : key);
+  }
+
+  /** `viewer`: the person asking, so another person's private custom report stays private. */
+  async run(orgId: string, key: string, p: ReportParams = {}, viewer?: string): Promise<ReportTable> {
+    if (!(REPORT_KEYS as readonly string[]).includes(key)) {
+      if (this.center?.has(key)) return this.center.run(orgId, key, p, viewer, this.base(orgId, viewer));
+      throw new BadRequestException(`No report called ${key}.`);
+    }
     const m = this.management;
     const r = () => m.range(p.from, p.to);
     const fy = () => p.financialYear || fyMonths(todayIst().slice(0, 7)).fy;
@@ -84,7 +108,7 @@ export class ReportCatalogService {
       case 'pl_monthly': return m.plMonthly(orgId, r());
       case 'comparison': return m.comparison(orgId, r());
       case 'expenses': return m.expenses(orgId, r());
-      case 'budget_vs_actual': return m.budgetVsActual(orgId, fy(), p.through);
+      case 'budget_vs_actual': return m.budgetVsActual(orgId, fy(), p.through, p.budgetId);
       case 'sales_by_customer': return m.byParty(orgId, 'sales', r());
       case 'sales_by_item': return m.byItem(orgId, 'sales', r());
       case 'sales_by_month': return m.byMonth(orgId, 'sales', r());
@@ -105,10 +129,10 @@ export class ReportCatalogService {
     return { name: s?.displayName?.trim() || 'Your business', gstin: s?.gstin ?? null };
   }
 
-  async pdf(orgId: string, key: string, p: ReportParams = {}) {
-    const table = await this.run(orgId, key, p);
+  async pdf(orgId: string, key: string, p: ReportParams = {}, viewer?: string) {
+    const table = await this.run(orgId, key, p, viewer);
     const today = todayIst();
-    return { filename: `${key.replace(/_/g, '-')}-${today}.pdf`, buffer: renderReportPdf(table, await this.org(orgId), today), table };
+    return { filename: `${key.replace(/[._]/g, '-')}-${today}.pdf`, buffer: renderReportPdf(table, await this.org(orgId), today), table };
   }
 
   private async trialBalance(orgId: string, financialYear: string): Promise<ReportTable> {

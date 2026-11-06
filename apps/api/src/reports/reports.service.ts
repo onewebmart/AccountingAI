@@ -89,6 +89,8 @@ export interface LedgerEntry {
   debitPaise: number;
   creditPaise: number;
   runningBalancePaise: number;
+  /** The customer or vendor a manual journal line names, if any. */
+  contact?: string | null;
 }
 
 export interface LedgerReport {
@@ -455,6 +457,7 @@ export class ReportsService {
           debitPaise: line.debitPaise,
           creditPaise: line.creditPaise,
           runningBalancePaise: running,
+          contact: line.contact?.name || null,
         });
       }
     }
