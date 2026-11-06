@@ -19,6 +19,14 @@ import { Vendor, VendorSchema } from '../purchase/schemas/vendor.schema';
 import { Customer, CustomerSchema } from '../sales/schemas/customer.schema';
 import { DocumentEntryController } from './document-entry.controller';
 import { DocumentEntryService } from './document-entry.service';
+import { DocumentFolder, DocumentFolderSchema } from './schemas/document-folder.schema';
+import { DocumentLibraryController } from './document-library.controller';
+import { DocumentLibraryService } from './document-library.service';
+import { Attachment, AttachmentSchema } from '../attachments/schemas/attachment.schema';
+import { User, UserSchema } from '../tenancy/schemas/user.schema';
+import { BankStatement, BankStatementSchema } from '../banking/schemas/bank-statement.schema';
+import { BankAccount, BankAccountSchema } from '../banking/schemas/bank-account.schema';
+import { BankStatementLine, BankStatementLineSchema } from '../banking/schemas/bank-statement-line.schema';
 
 @Module({
   imports: [
@@ -31,6 +39,14 @@ import { DocumentEntryService } from './document-entry.service';
       { name: ExtractedDocument.name, schema: ExtractedDocumentSchema },
       { name: Vendor.name, schema: VendorSchema },
       { name: Customer.name, schema: CustomerSchema },
+      // The Documents area: folders, files attached to records (filed in
+      // folders), who uploaded what, and the statements banking imported.
+      { name: DocumentFolder.name, schema: DocumentFolderSchema },
+      { name: Attachment.name, schema: AttachmentSchema },
+      { name: User.name, schema: UserSchema },
+      { name: BankStatement.name, schema: BankStatementSchema },
+      { name: BankAccount.name, schema: BankAccountSchema },
+      { name: BankStatementLine.name, schema: BankStatementLineSchema },
     ]),
     BullModule.registerQueue({ name: DOCUMENT_PROCESSING_QUEUE }),
     OcrModule,
@@ -40,8 +56,9 @@ import { DocumentEntryService } from './document-entry.service';
     IngestModule,
     CrmModule,
   ],
-  controllers: [DocumentsController, DocumentEntryController],
-  providers: [DocumentsService, StorageService, DocumentProcessingProcessor, DocumentEntryService],
+  // DocumentLibraryController first: DocumentsController's GET :id would take /documents/library and the rest.
+  controllers: [DocumentLibraryController, DocumentsController, DocumentEntryController],
+  providers: [DocumentsService, StorageService, DocumentProcessingProcessor, DocumentEntryService, DocumentLibraryService],
   exports: [DocumentsService, StorageService],
 })
 export class DocumentsModule {}

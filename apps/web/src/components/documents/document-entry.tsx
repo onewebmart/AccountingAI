@@ -163,6 +163,8 @@ interface ListedDocument {
   _id: string;
   status: string;
   enteredAs?: EnteredAs | null;
+  /** A bank statement went into banking: nothing to enter by hand. */
+  importKind?: string | null;
 }
 
 /** The read-but-not-entered document after this one, in the list's order. */
@@ -171,7 +173,7 @@ async function nextDocument(current: string): Promise<string | null> {
   const all = Array.isArray(res) ? res : res?.data ?? [];
   const i = all.findIndex((d) => d._id === current);
   const ordered = i >= 0 ? [...all.slice(i + 1), ...all.slice(0, i)] : all;
-  return ordered.find((d) => d._id !== current && canAddTo(d.status, d.enteredAs))?._id ?? null;
+  return ordered.find((d) => d._id !== current && d.importKind !== 'bank_statement' && canAddTo(d.status, d.enteredAs))?._id ?? null;
 }
 
 const withParam = (path: string, key: string, value: string) => `${path}${path.includes('?') ? '&' : '?'}${key}=${encodeURIComponent(value)}`;
@@ -487,10 +489,16 @@ export function PartyFound({ kind, chosen, selectId }: { kind: 'vendor' | 'custo
   const form = kind === 'vendor' ? '/purchases/vendors/new' : '/sales/customers/new';
   const addHref = `${form}?document=${entry.documentId}&returnTo=${encodeURIComponent(here)}`;
   const pickExisting = () => {
-    const el = document.getElementById(selectId) as (HTMLSelectElement & { showPicker?: () => void }) | null;
-    if (!el) return;
-    el.scrollIntoView({ block: 'center', behavior: 'smooth' });
-    el.focus();
+    const found = document.getElementById(selectId);
+    if (!found) return;
+    found.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    found.focus();
+    // A searchable picker is a button: clicking it opens its list.
+    if (found instanceof HTMLButtonElement) {
+      found.click();
+      return;
+    }
+    const el = found as HTMLElement & { showPicker?: () => void };
     try {
       el.showPicker?.();
     } catch {

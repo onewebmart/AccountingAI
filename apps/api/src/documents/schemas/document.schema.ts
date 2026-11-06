@@ -77,11 +77,16 @@ export class Document {
    */
   @Prop({ type: Object, default: null })
   enteredAs?: { entityType: string; entityId: string; label: string; at: Date; by: string } | null;
+
+  /** The folder a person filed it in (Documents → Folders); null in no folder. Filing changes nothing in the books. */
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'DocumentFolder', default: null })
+  folderId?: MongooseSchema.Types.ObjectId | null;
 }
 
 export const DocumentSchema = SchemaFactory.createForClass(Document);
 
 DocumentSchema.index({ orgId: 1, sha256: 1 });
 DocumentSchema.index({ orgId: 1, status: 1, createdAt: -1 });
+DocumentSchema.index({ orgId: 1, folderId: 1, createdAt: -1 });
 
 DocumentSchema.plugin(tenantIsolationPlugin);

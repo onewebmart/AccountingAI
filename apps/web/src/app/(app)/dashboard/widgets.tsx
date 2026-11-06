@@ -9,6 +9,7 @@ import { api } from '@/lib/api';
 import { formatPaise } from '@/lib/gst';
 import { cn, formatRupeesCompact } from '@/lib/utils';
 import { recentFinancialYears } from '@/lib/financial-year';
+import { usePipeline } from '@/components/documents/library';
 import { DonutChart, LineAreaChart, OTHER, PairedBarChart, RING, SERIES, SplitBar, type Slice } from './charts';
 
 // ── Shared ─────────────────────────────────────────────────────────────────
@@ -321,12 +322,16 @@ interface Project {
   unbilledHours: number;
   unbilledPaise: number;
   profitPaise: number;
+  /** Added to the dashboard watchlist on the project's form or page. */
+  watchlist?: boolean;
 }
 
-/** Active projects first: what is waiting to be billed and what each has made. */
+/** Watchlisted projects first, then active ones: what is waiting to be billed and what each has made. */
 export function ProjectsCard() {
   const q = useQuery({ queryKey: ['projects'], queryFn: () => api.get<Project[]>('/projects') });
-  const list = [...(q.data ?? [])].sort((a, b) => Number(b.status === 'active') - Number(a.status === 'active') || b.unbilledPaise - a.unbilledPaise).slice(0, 5);
+  const list = [...(q.data ?? [])]
+    .sort((a, b) => Number(!!b.watchlist) - Number(!!a.watchlist) || Number(b.status === 'active') - Number(a.status === 'active') || b.unbilledPaise - a.unbilledPaise)
+    .slice(0, 5);
   return (
     <Section title="Projects" actions={<Link href="/time/projects" className={cardLink}>See all projects</Link>} className="h-full">
       {q.isLoading ? (
@@ -421,6 +426,115 @@ export function BankCashCard() {
           </div>
         </>
       )}
+    </Section>
+  );
+}
+
+// ── Documents: reading and entry ─────────────────────────────────────────────
+
+function PipelineTile({ href, value, label, note, tone, live }: {
+  href: string;
+  value: number | null;
+  label: string;
+  note?: string | null;
+  /** Amber waits or is being read, green is done, cool red is a problem. */
+  tone: 'pending' | 'success' | 'error' | 'quiet';
+  live?: boolean;
+}) {
+  const colour = value ? { pending: 'text-pending-fg', success: 'text-success-fg', error: 'text-error-fg', quiet: 'text-ink-900' }[tone] : 'text-ink-400';
+  return (
+    <Link
+      href={href}
+      className="group flex min-h-[88px] flex-col gap-1 rounded-md border border-line-200 bg-surface-card px-3 py-2.5 transition-colors hover:bg-honey-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-marigold-400"
+    >
+      <span className="flex items-center gap-2 text-caption text-ink-500">
+        {live && !!value && <span aria-hidden className="h-2 w-2 animate-pulse rounded-full bg-marigold-400" />}
+        {label}
+      </span>
+      {/* Size and colour on separate elements: cn() would read text-h2 as a colour and drop it. */}
+      <span className="text-h2">
+        <span className={cn('font-mono font-medium tabular-nums', colour)}>{value ?? '--'}</span>
+      </span>
+      {note && (
+        <span className="truncate text-caption">
+          <span className={tone === 'error' && value ? 'text-error-fg' : 'text-ink-500'} title={note}>{note}</span>
+        </span>
+      )}
+    </Link>
+  );
+}
+
+/**
+ * The document pipeline: what is being read, what waits in Review, what the
+ * AI could not read and why, and what became a record today and this week.
+ */
+export function DocumentsCard() {
+  const q = usePipeline();
+  const p = q.data;
+  const reason = p?.couldNotRead.reasons[0]?.reason ?? null;
+  return (
+    <Section
+      title="Documents"
+      description="Reading and data entry"
+      actions={<Link href="/documents" className={cardLink}>Go to Documents</Link>}
+    >
+      {q.isError ? (
+        <Muted>The document counts could not load. Refresh the page to try again.</Muted>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <PipelineTile href="/inbox" value={p ? p.reading : null} label="Being read" note={p?.reading ? 'Reading in the background' : 'Nothing being read'} tone="pending" live />
+            <PipelineTile href="/review" value={p ? p.readyForReview : null} label="Ready for review" note={p?.readyForReview ? 'Read by AI, waiting for you' : 'Nothing waiting'} tone="pending" />
+            <PipelineTile href="/inbox?show=failed" value={p ? p.couldNotRead.count : null} label="Couldn't read" note={p?.couldNotRead.count ? reason : 'Every document was read'} tone="error" />
+            <PipelineTile
+              href="/documents"
+              value={p ? p.entered.today : null}
+              label="Entered today"
+              note={p ? `${p.entered.thisWeek} this week` : null}
+              tone="success"
+            />
+          </div>
+          <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-line-100 pt-3">
+            <Link href="/review" className={cardLink}>Review</Link>
+            <Link href="/inbox?show=failed" className={cardLink}>Couldn&apos;t read</Link>
+            <Link href="/documents?status=to-enter" className={cardLink}>Add to</Link>
+            <span className="text-caption text-ink-400">AI reads; a person approves or enters each one. Nothing posts by itself.</span>
+          </div>
+        </>
+      )}
+    </Section>
+  );
+}
+
+// ── Account watchlist ────────────────────────────────────────────────────────
+
+interface WatchedAccount {
+  _id: string;
+  name: string;
+  code?: string;
+  isGroup?: boolean;
+  watchlist?: boolean;
+  balancePaise: number;
+}
+
+/** Accounts ticked "Add to the watchlist on my dashboard" in the chart of accounts, with their balances. No card when none is. */
+export function WatchlistCard() {
+  const ledger = useQuery({ queryKey: ['gl', 'accounts'], queryFn: () => api.get<WatchedAccount[]>('/gl/accounts') });
+  const rows = (ledger.data ?? []).filter((a) => a.watchlist);
+  if (ledger.isLoading || ledger.isError || rows.length === 0) return null;
+  return (
+    <Section title="Account watchlist" description="Ledger balances today" actions={<Link href="/accountant/chart-of-accounts" className={cardLink}>Chart of accounts</Link>}>
+      <ul className="grid gap-x-6 sm:grid-cols-2 xl:grid-cols-3">
+        {rows.map((a) => (
+          <li key={a._id} className="flex items-baseline justify-between gap-3 border-b border-line-100 py-2.5">
+            <Link href={`/accountant/chart-of-accounts/${a._id}/edit`} className="min-w-0 truncate font-medium text-ink-900 hover:underline">
+              {a.name}
+              {a.code && <span className="ml-2 font-mono text-caption text-ink-400">{a.code}</span>}
+            </Link>
+            <Money paise={a.balancePaise} className={cn('whitespace-nowrap text-body', a.balancePaise < 0 ? 'text-error-fg' : 'text-ink-900')} />
+          </li>
+        ))}
+      </ul>
     </Section>
   );
 }

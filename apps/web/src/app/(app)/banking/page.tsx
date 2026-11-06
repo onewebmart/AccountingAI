@@ -169,7 +169,8 @@ const linkButton =
 
 export default function BankingPage() {
   const [toast, setToast] = useState<{ message: string; error?: boolean } | null>(null);
-  const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
+  // /banking?account=<id> (from Documents → Bank Statements) opens that account's reconciliation.
+  const [selectedAccountId, setSelectedAccountId] = useState<string | null>(() => (typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('account')));
   const [uploading, setUploading] = useState(false);
   const queryClient = useQueryClient();
 
@@ -183,7 +184,7 @@ export default function BankingPage() {
     queryFn: () => api.get<BankAccount[]>('/banking/accounts'),
   });
   const accounts = accountsQuery.data ?? [];
-  const effectiveAccountId = selectedAccountId ?? accounts[0]?._id ?? null;
+  const effectiveAccountId = (selectedAccountId && accounts.some((a) => a._id === selectedAccountId) ? selectedAccountId : accounts[0]?._id) ?? null;
 
   // Statements for the selected account, newest first.
   const statementsQuery = useQuery<ApiStatement[]>({

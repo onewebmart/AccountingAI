@@ -29,6 +29,7 @@ import { currentFinancialYear } from '@/lib/financial-year';
 import {
   BankCashCard,
   CashFlowCard,
+  DocumentsCard,
   IncomeExpenseCard,
   Money,
   OwedCard,
@@ -37,7 +38,9 @@ import {
   overdueOf,
   useApAgeing,
   useArAgeing,
+  WatchlistCard,
 } from './widgets';
+import { usePipeline } from '@/components/documents/library';
 
 // Ask your books used to be a block on this page; it is now the round button
 // at the bottom right of every page (components/assistant/ask-assistant.tsx).
@@ -61,11 +64,6 @@ interface ProposalListResponse {
   data?: { id: string }[];
   total?: number;
   // Some APIs return an array directly
-}
-
-interface DocumentListResponse {
-  data?: { id: string }[];
-  total?: number;
 }
 
 /** GET /insights — each insight is a headline plus a sentence explaining it. */
@@ -114,10 +112,10 @@ export default function DashboardPage() {
     queryFn: () => api.get<ProposalListResponse | { id: string }[]>('/proposals?status=proposed'),
   });
 
-  const { data: docsData, isLoading: docsLoading } = useQuery({
-    queryKey: ['documents', 'uploaded'],
-    queryFn: () => api.get<DocumentListResponse | { id: string }[]>('/documents'),
-  });
+  // The document pipeline's counts. GET /documents listed the latest 100 uploads, posted ones too, so
+  // "documents waiting" counted every file; this counts the ones still in the inbox for a person.
+  const pipeline = usePipeline();
+  const docsLoading = pipeline.isLoading;
 
   // Receivables and payables, asked only by roles the API lets read them.
   const ar = useArAgeing(canSales);
@@ -129,7 +127,8 @@ export default function DashboardPage() {
   });
 
   const pendingProposals = countOf(proposalsData);
-  const uploadedDocs = countOf(docsData);
+  const uploadedDocs = pipeline.data?.total ?? 0;
+  const waitingDocs = pipeline.data?.waiting ?? 0;
   const isLoadingAny = plLoading || proposalsLoading || docsLoading;
 
   /**
@@ -186,11 +185,11 @@ export default function DashboardPage() {
       active: pendingProposals > 0,
     },
     {
-      value: String(uploadedDocs),
-      label: uploadedDocs === 1 ? 'document waiting' : 'documents waiting',
+      value: String(waitingDocs),
+      label: waitingDocs === 1 ? 'document waiting' : 'documents waiting',
       href: '/inbox',
       icon: Inbox,
-      active: uploadedDocs > 0,
+      active: waitingDocs > 0,
     },
     {
       value: overduePaise > 0 ? formatRupeesCompact(overduePaise) : 'Nothing',
@@ -291,6 +290,9 @@ export default function DashboardPage() {
             )}
           </section>
 
+          {/* Data entry: documents being read, waiting in Review, not read, and entered. */}
+          <DocumentsCard />
+
           <Row>
             {canSales && <OwedCard kind="receivables" data={ar.data} loading={ar.isLoading} />}
             {canPurchase && <OwedCard kind="payables" data={ap.data} loading={ap.isLoading} />}
@@ -307,6 +309,9 @@ export default function DashboardPage() {
             <ProjectsCard />
             {canLedger && <BankCashCard />}
           </Row>
+
+          {/* Accounts on the watchlist (chart of accounts); nothing when none is. */}
+          <Row>{canLedger && <WatchlistCard />}</Row>
 
           <Row>
             <InsightsCard />

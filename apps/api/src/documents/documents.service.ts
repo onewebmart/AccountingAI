@@ -50,6 +50,8 @@ export interface DocumentListItem {
   failureReason?: string;
   /** The record a person entered from this document, when they did. */
   enteredAs?: { entityType: string; entityId: string; label: string } | null;
+  /** What an imported spreadsheet or PDF statement was: 'bank_statement' went to Banking, not Review. */
+  importKind: string | null;
   /** How it arrived: uploaded, or sent in by email or WhatsApp, and from whom. */
   source: { channel: 'upload' | 'email' | 'whatsapp'; from: string | null };
   uploadedAt: Date;
@@ -217,6 +219,7 @@ export class DocumentsService {
         // Carried to the Inbox so a failed row can say what went wrong.
         failureReason: d.failureReason,
         enteredAs: d.enteredAs ? { entityType: d.enteredAs.entityType, entityId: d.enteredAs.entityId, label: d.enteredAs.label } : null,
+        importKind: (d.importSummary as { kind?: string } | null | undefined)?.kind ?? null,
         source: { channel: d.source?.channel ?? 'upload', from: d.source?.from ?? null },
         uploadedAt: createdAt,
         createdAt,

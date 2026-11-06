@@ -26,8 +26,11 @@ export class Attachment {
   @Prop({ type: String, required: true }) uploadedBy: string;
   @Prop({ type: Date, default: null }) removedAt: Date | null;
   @Prop({ type: String, default: null }) removedBy: string | null;
+  /** The Documents folder it is filed in; null in no folder. */
+  @Prop({ type: MongooseSchema.Types.ObjectId, default: null }) folderId: Types.ObjectId | null;
 }
 
 export const AttachmentSchema = SchemaFactory.createForClass(Attachment);
 AttachmentSchema.index({ orgId: 1, entityType: 1, entityId: 1 });
+AttachmentSchema.index({ orgId: 1, folderId: 1 });
 AttachmentSchema.plugin(tenantIsolationPlugin);
