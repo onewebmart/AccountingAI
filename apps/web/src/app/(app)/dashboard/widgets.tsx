@@ -3,8 +3,9 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useQueries, useQuery } from '@tanstack/react-query';
-import { Plus } from 'lucide-react';
-import { Section } from '@/components/page/page-shell';
+import { Clock3, PiggyBank, Plus, TrendingDown, TrendingUp } from 'lucide-react';
+import { Section, StatusChip } from '@/components/page/page-shell';
+import { VOUCHER_TYPE_LABELS } from '@/components/accountant/journal-types';
 import { api } from '@/lib/api';
 import { formatPaise } from '@/lib/gst';
 import { cn, formatRupeesCompact } from '@/lib/utils';
@@ -44,11 +45,11 @@ export function Money({ paise, className }: { paise: number; className?: string 
   );
 }
 
-const cardLink = 'text-caption font-medium text-brand-600 hover:underline';
+const cardLink = 'text-caption font-medium text-brand-700 hover:underline';
 
 function NewLink({ href, label }: { href: string; label: string }) {
   return (
-    <Link href={href} className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-caption font-medium text-brand-600 hover:bg-honey-50" aria-label={label}>
+    <Link href={href} className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-caption font-medium text-brand-700 hover:bg-honey-50" aria-label={label}>
       <Plus size={14} /> New
     </Link>
   );
@@ -65,7 +66,7 @@ function YearSelect({ value, onChange, label }: { value: string; onChange: (v: s
       aria-label={label}
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="h-8 rounded-md border border-line-200 bg-surface-card px-2 text-caption text-ink-700 focus:outline-none focus:ring-2 focus:ring-saffron-600/40"
+      className="h-8 rounded-md border border-line-200 bg-surface-card px-2 text-caption text-ink-700 focus:outline-none focus:ring-2 focus:ring-brand-600/40"
     >
       <option value={YEARS[0]}>This fiscal year</option>
       <option value={YEARS[1]}>Last fiscal year ({YEARS[1]})</option>
@@ -105,7 +106,7 @@ export function OwedCard({ kind, data, loading }: { kind: 'receivables' | 'payab
   const total = data?.total ?? 0;
   return (
     <Section
-      title={r ? 'Total receivables' : 'Total payables'}
+      title={r ? 'Outstanding Invoices' : 'Upcoming Payments'}
       actions={<NewLink href={r ? '/sales/invoices/new' : '/purchases/bills/new'} label={r ? 'New invoice' : 'New bill'} />}
       className="h-full"
     >
@@ -182,7 +183,7 @@ export function CashFlowCard() {
 
   return (
     <Section
-      title="Cash flow"
+      title="Cash Flow Overview"
       description="Cash and bank at the end of each month"
       actions={<YearSelect value={fy} onChange={setFy} label="Cash flow period" />}
     >
@@ -237,11 +238,11 @@ export function IncomeExpenseCard() {
   const empty = !pl.isLoading && points.every((p) => p.a === 0 && p.b === 0);
 
   return (
-    <Section title="Income and expense" actions={<YearSelect value={fy} onChange={setFy} label="Income and expense period" />} className="flex h-full flex-col">
+    <Section title="Revenue vs Expenses" actions={<YearSelect value={fy} onChange={setFy} label="Revenue and expenses period" />} className="flex h-full flex-col">
       <div className="mb-4 grid grid-cols-2 gap-3">
         <div className="rounded-md bg-surface-sink/60 px-3 py-2">
           <p className="flex items-center gap-1.5 text-caption text-ink-500">
-            <span className="h-2 w-2 rounded-full" style={{ background: SERIES.income }} /> Total income
+            <span className="h-2 w-2 rounded-full" style={{ background: SERIES.income }} /> Total revenue
           </p>
           {pl.isLoading ? <span className="font-mono text-ink-400">--</span> : <Money paise={totalIncome} className="text-body-lg text-ink-900" />}
         </div>
@@ -255,18 +256,18 @@ export function IncomeExpenseCard() {
       {pl.isLoading ? (
         <Muted>Loading…</Muted>
       ) : pl.isError ? (
-        <Muted>Income and expenses could not load. Refresh the page to try again.</Muted>
+        <Muted>Revenue and expenses could not load. Refresh the page to try again.</Muted>
       ) : empty ? (
         <Muted>Nothing posted in this year yet. Raise an invoice or record a bill, approve it, and it shows here.</Muted>
       ) : (
         <PairedBarChart
           points={points}
           colors={[SERIES.income, SERIES.expenses]}
-          names={['Income', 'Expenses']}
-          ariaLabel={`Income and expenses by month, financial year ${fy}`}
+          names={['Revenue', 'Expenses']}
+          ariaLabel={`Revenue and expenses by month, financial year ${fy}`}
         />
       )}
-      <p className="mt-auto pt-3 text-caption text-ink-500">Income and expense values are before taxes.</p>
+      <p className="mt-auto pt-3 text-caption text-ink-500">Revenue and expense values are before taxes.</p>
     </Section>
   );
 }
@@ -340,7 +341,7 @@ export function ProjectsCard() {
         <Muted>Projects could not load. Refresh the page to try again.</Muted>
       ) : list.length === 0 ? (
         <Muted>
-          No projects yet. <Link href="/time/projects" className="font-medium text-brand-600 hover:underline">Add a project</Link> to track hours, billing and profit.
+          No projects yet. <Link href="/time/projects" className="font-medium text-brand-700 hover:underline">Add a project</Link> to track hours, billing and profit.
         </Muted>
       ) : (
         <div className="text-body">
@@ -400,7 +401,7 @@ export function BankCashCard() {
         <Muted>Balances could not load. Refresh the page to try again.</Muted>
       ) : rows.length === 0 ? (
         <Muted>
-          No bank or cash account yet. <Link href="/banking" className="font-medium text-brand-600 hover:underline">Add a bank account</Link> to see its balance here.
+          No bank or cash account yet. <Link href="/banking" className="font-medium text-brand-700 hover:underline">Add a bank account</Link> to see its balance here.
         </Muted>
       ) : (
         <>
@@ -445,7 +446,7 @@ function PipelineTile({ href, value, label, note, tone, live }: {
   return (
     <Link
       href={href}
-      className="group flex min-h-[88px] flex-col gap-1 rounded-md border border-line-200 bg-surface-card px-3 py-2.5 transition-colors hover:bg-honey-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-marigold-400"
+      className="group flex min-h-[88px] flex-col gap-1 rounded-md border border-line-200 bg-surface-card px-3 py-2.5 transition-colors hover:bg-honey-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600"
     >
       <span className="flex items-center gap-2 text-caption text-ink-500">
         {live && !!value && <span aria-hidden className="h-2 w-2 animate-pulse rounded-full bg-marigold-400" />}
@@ -535,6 +536,157 @@ export function WatchlistCard() {
           </li>
         ))}
       </ul>
+    </Section>
+  );
+}
+
+// ── KPI cards ────────────────────────────────────────────────────────────────
+
+interface YearPL {
+  totalRevenuePaise: number;
+  totalExpensesPaise: number;
+  netIncomePaise: number;
+}
+
+const KPI_TONE = {
+  revenue: { chip: 'bg-success-bg text-success-fg', value: 'text-success-fg' },
+  expenses: { chip: 'bg-expense-bg text-expense-fg', value: 'text-expense-fg' },
+  profit: { chip: 'bg-brand-50 text-brand-700', value: 'text-brand-700' },
+  outstanding: { chip: 'bg-navy-50 text-navy-900', value: 'text-navy-900' },
+} as const;
+
+function Kpi({ label, href, icon, tone, paise, loading, negative, children }: {
+  label: string;
+  href: string;
+  icon: React.ReactNode;
+  tone: keyof typeof KPI_TONE;
+  paise: number | undefined;
+  loading: boolean;
+  /** A loss: the figure turns red, whatever the card's colour. */
+  negative?: boolean;
+  children?: React.ReactNode;
+}) {
+  const t = KPI_TONE[tone];
+  return (
+    <Link
+      href={href}
+      className="group flex flex-col rounded-xl border border-line-200 bg-surface-card p-5 shadow-e1 transition-[box-shadow,border-color] duration-150 hover:border-ink-300 hover:shadow-e2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-caption font-semibold uppercase tracking-[0.06em] text-ink-500">{label}</p>
+        <span className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-lg', t.chip)}>{icon}</span>
+      </div>
+      <p className={cn('mt-2 text-h2', negative ? 'text-error-fg' : t.value)}>
+        {loading || paise === undefined ? <span className="font-mono text-ink-400">--</span> : <Money paise={paise} />}
+      </p>
+      <div className="mt-auto pt-2 text-caption text-ink-500">{children}</div>
+    </Link>
+  );
+}
+
+/**
+ * The four figures at the top: the year's revenue, expenses and net profit
+ * (the P&L's own totals), and what customers owe. Each card opens the page
+ * the figure comes from.
+ */
+export function KpiRow({ canLedger, canSales, ar, arLoading }: { canLedger: boolean; canSales: boolean; ar?: AgeingSummary; arLoading: boolean }) {
+  const fy = YEARS[0];
+  // Same query as the top expenses card, so the P&L is asked for once.
+  const pl = useQuery({
+    queryKey: ['dashboard', 'profit-loss', fy],
+    queryFn: () => api.get<YearPL>(`/reports/profit-loss?financialYear=${fy}`),
+    enabled: canLedger,
+  });
+  if (!canLedger && !canSales) return null;
+  const p = pl.data;
+  const margin = p && p.totalRevenuePaise > 0 ? Math.round((p.netIncomePaise / p.totalRevenuePaise) * 100) : null;
+  const overdue = overdueOf(ar);
+  const notDue = ar?.current ?? 0;
+  const year = <>This financial year <span className="font-mono font-medium">{fy}</span></>;
+  return (
+    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      {canLedger && (
+        <>
+          <Kpi label="Total Revenue" href="/reports/view/profit_and_loss" icon={<TrendingUp size={18} />} tone="revenue" paise={p?.totalRevenuePaise} loading={pl.isLoading}>{year}</Kpi>
+          <Kpi label="Total Expenses" href="/reports/view/profit_and_loss" icon={<TrendingDown size={18} />} tone="expenses" paise={p?.totalExpensesPaise} loading={pl.isLoading}>{year}</Kpi>
+          <Kpi label="Net Profit" href="/reports/view/profit_and_loss" icon={<PiggyBank size={18} />} tone="profit" paise={p?.netIncomePaise} loading={pl.isLoading} negative={(p?.netIncomePaise ?? 0) < 0}>
+            {margin === null ? year : <>{margin < 0 ? 'Loss' : 'Margin'} <span className={cn('font-mono font-medium', margin < 0 ? 'text-error-fg' : 'text-brand-700')}>{margin}%</span> of revenue</>}
+          </Kpi>
+        </>
+      )}
+      {canSales && (
+        <Kpi label="Outstanding Payments" href="/sales/invoices" icon={<Clock3 size={18} />} tone="outstanding" paise={ar?.total} loading={arLoading}>
+          <span className="flex flex-wrap gap-x-3 gap-y-0.5">
+            <span><span className="font-mono font-medium text-error-fg">{formatRupeesCompact(overdue)}</span> overdue</span>
+            <span><span className="font-mono font-medium text-pending-fg">{formatRupeesCompact(notDue)}</span> not yet due</span>
+          </span>
+        </Kpi>
+      )}
+    </div>
+  );
+}
+
+// ── Recent transactions ──────────────────────────────────────────────────────
+
+interface RecentJournal {
+  _id: string;
+  voucherNumber: string;
+  voucherType: string;
+  date: string;
+  description: string;
+  totalDebitPaise: number;
+  status: string;
+  reverses?: { id: string; voucherNumber: string } | null;
+}
+
+/** The latest vouchers posted to the ledger, newest first. */
+export function RecentTransactionsCard() {
+  const q = useQuery({
+    queryKey: ['journals', 'recent'],
+    queryFn: () => api.get<{ data: RecentJournal[] }>('/journals'),
+  });
+  const rows = (q.data?.data ?? []).slice(0, 6);
+  return (
+    <Section title="Recent Transactions" description="The latest vouchers posted to the ledger" actions={<Link href="/vouchers" className={cardLink}>See all vouchers</Link>}>
+      {q.isLoading ? (
+        <Muted>Loading…</Muted>
+      ) : q.isError ? (
+        <Muted>Recent transactions could not load. Refresh the page to try again.</Muted>
+      ) : rows.length === 0 ? (
+        <Muted>Nothing posted yet. Approve an entry in Review, or raise an invoice, and it shows here.</Muted>
+      ) : (
+        <div className="-mx-5 -mb-5 overflow-x-auto border-t border-line-100">
+          <table className="w-full">
+            <thead>
+              <tr className="bg-surface-sink">
+                <th className="px-5 py-2.5 text-left text-caption font-semibold uppercase tracking-[0.04em] text-ink-500">Date</th>
+                <th className="px-3 py-2.5 text-left text-caption font-semibold uppercase tracking-[0.04em] text-ink-500">Voucher</th>
+                <th className="hidden px-3 py-2.5 text-left text-caption font-semibold uppercase tracking-[0.04em] text-ink-500 md:table-cell">Description</th>
+                <th className="px-3 py-2.5 text-right text-caption font-semibold uppercase tracking-[0.04em] text-ink-500">Amount</th>
+                <th className="hidden px-5 py-2.5 text-left text-caption font-semibold uppercase tracking-[0.04em] text-ink-500 sm:table-cell">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((j) => (
+                <tr key={j._id} className="border-t border-line-100 transition-colors hover:bg-navy-50">
+                  <td className="whitespace-nowrap px-5 py-3 text-body text-ink-600">
+                    {new Date(`${j.date}T00:00:00Z`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' })}
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-3">
+                    <p className="font-mono text-body text-navy-900">{j.voucherNumber}</p>
+                    <p className="text-caption text-ink-500">{VOUCHER_TYPE_LABELS[j.voucherType] ?? j.voucherType}</p>
+                  </td>
+                  <td className="hidden max-w-[22rem] truncate px-3 py-3 text-body text-ink-700 md:table-cell" title={j.description}>{j.description}</td>
+                  <td className="whitespace-nowrap px-3 py-3 text-right"><Money paise={j.totalDebitPaise} className="text-body text-ink-900" /></td>
+                  <td className="hidden px-5 py-3 sm:table-cell">
+                    {j.status === 'reversed' ? <StatusChip tone="neutral">Reversed</StatusChip> : j.reverses ? <StatusChip tone="neutral">Reversal</StatusChip> : <StatusChip tone="success">Posted</StatusChip>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </Section>
   );
 }

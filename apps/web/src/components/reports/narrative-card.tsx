@@ -23,7 +23,7 @@ const lastMonth = () => {
 const message = (err: unknown) => (err instanceof ApiError ? err.message : 'Something went wrong. Try again.');
 
 /** The month in a few sentences: figures from the books, worded by AI when there is one, checked either way. */
-export function NarrativeCard() {
+export function NarrativeCard({ title = 'The month in words' }: { title?: string } = {}) {
   const qc = useQueryClient();
   const [period, setPeriod] = useState(lastMonth());
   const [showFacts, setShowFacts] = useState(false);
@@ -42,9 +42,9 @@ export function NarrativeCard() {
 
   const n = latest.data;
   return (
-    <section className="rounded-xl border border-line-200 bg-surface-card p-4">
+    <section className="rounded-xl border border-line-200 bg-surface-card p-4 shadow-e1">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-h3 font-display text-ink-900">The month in words</h3>
+        <h3 className="text-h3 font-display text-navy-900">{title}</h3>
         <div className="flex items-center gap-2">
           <input type="month" className="h-9 rounded-md border border-line-200 bg-white px-2 text-body" value={period} onChange={(e) => e.target.value && setPeriod(e.target.value)} />
           <Button size="sm" variant="secondary" disabled={write.isPending || !!pending} onClick={() => write.mutate()}>

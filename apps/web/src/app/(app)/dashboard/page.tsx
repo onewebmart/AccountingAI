@@ -31,9 +31,11 @@ import {
   CashFlowCard,
   DocumentsCard,
   IncomeExpenseCard,
+  KpiRow,
   Money,
   OwedCard,
   ProjectsCard,
+  RecentTransactionsCard,
   TopExpensesCard,
   overdueOf,
   useApAgeing,
@@ -163,7 +165,9 @@ export default function DashboardPage() {
 
   // ── Header ──
   const firstName = workspace?.user.name?.trim().split(/\s+/)[0];
-  const title = firstName ? `Hello, ${firstName.charAt(0).toUpperCase()}${firstName.slice(1)}` : 'Hello';
+  const welcome = firstName
+    ? `Welcome back, ${firstName.charAt(0).toUpperCase()}${firstName.slice(1)}! Here's what's happening with your business.`
+    : "Welcome back! Here's what's happening with your business.";
 
   // Brand-new books: nothing posted, nothing waiting. Say what to do first.
   const booksEmpty =
@@ -220,8 +224,8 @@ export default function DashboardPage() {
     <div className="space-y-5">
       <div>
         <PageHeader
-          title={title}
-          subtitle={workspace?.org.name}
+          title="Business Overview"
+          subtitle={welcome}
           actions={
             <Button variant="secondary" asChild>
               <Link href="/inbox">
@@ -240,8 +244,8 @@ export default function DashboardPage() {
               aria-selected={tab === key}
               onClick={() => setTab(key)}
               className={cn(
-                '-mb-px border-b-2 px-0.5 pb-2.5 text-body font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-marigold-400',
-                tab === key ? 'border-saffron-600 text-ink-900' : 'border-transparent text-ink-500 hover:text-ink-900',
+                '-mb-px border-b-2 px-0.5 pb-2.5 text-body font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600',
+                tab === key ? 'border-brand-600 text-ink-900' : 'border-transparent text-ink-500 hover:text-ink-900',
               )}
             >
               {label}
@@ -254,6 +258,9 @@ export default function DashboardPage() {
         <GettingStarted canSales={canSales} canPurchase={canPurchase} canLedger={canLedger} uploadedDocs={uploadedDocs} />
       ) : (
         <>
+          {/* The year's revenue, expenses and profit, and what customers owe. */}
+          <KpiRow canLedger={canLedger} canSales={canSales} ar={ar.data} arLoading={ar.isLoading} />
+
           {/* Needs your attention: the amber band, the human-in-the-loop queues first */}
           <section aria-labelledby="attention-title" className="rounded-xl border border-marigold-400/70 bg-honey-100/70 p-4">
             <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
@@ -305,6 +312,8 @@ export default function DashboardPage() {
             <TopExpensesCard />
           </Row>
 
+          <Row>{canLedger && <RecentTransactionsCard />}</Row>
+
           <Row>
             <ProjectsCard />
             {canLedger && <BankCashCard />}
@@ -320,7 +329,7 @@ export default function DashboardPage() {
 
           {/* The month in words: the card styles itself; match the other cards' padding. */}
           <div className="[&>section]:p-5">
-            <NarrativeCard />
+            <NarrativeCard title="Financial Performance" />
           </div>
         </>
       )}
@@ -351,7 +360,7 @@ function AttentionTile({ item }: { item: Attention }) {
   return (
     <Link
       href={item.href}
-      className="group flex min-h-[72px] flex-col justify-between gap-1 rounded-md border border-line-200 bg-surface-card px-3 py-2.5 transition-colors hover:bg-honey-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-marigold-400"
+      className="group flex min-h-[72px] flex-col justify-between gap-1 rounded-md border border-line-200 bg-surface-card px-3 py-2.5 transition-colors hover:bg-honey-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600"
     >
       <span className="flex items-center gap-2">
         <span
@@ -390,14 +399,14 @@ function InsightsCard() {
     <Section
       title={
         <span className="flex items-center gap-2">
-          What I noticed
+          AI Business Insights
           <StatusChip tone="pending">
             <Sparkles size={11} className="mr-1" /> AI
           </StatusChip>
         </span>
       }
       actions={
-        <Link href="/insights" className="text-caption font-medium text-brand-600 hover:underline">
+        <Link href="/insights" className="text-caption font-medium text-brand-700 hover:underline">
           See all insights
         </Link>
       }
@@ -418,7 +427,7 @@ function InsightsCard() {
       ) : (
         <p className="text-body text-ink-500">
           Nothing to flag yet. Observations appear once entries are posted to the ledger.{' '}
-          <Link href="/review" className="font-medium text-brand-600 hover:underline">Go to Review</Link>
+          <Link href="/review" className="font-medium text-brand-700 hover:underline">Go to Review</Link>
         </p>
       )}
       <p className="mt-auto pt-4 text-caption text-ink-400">AI suggestion — review before acting.</p>
@@ -435,7 +444,7 @@ function ForecastCard() {
   const [hover, setHover] = useState<number | null>(null);
   const weeks = data?.weeks ?? [];
   const link = (
-    <Link href="/insights#forecast" className="text-caption font-medium text-brand-600 hover:underline">
+    <Link href="/insights#forecast" className="text-caption font-medium text-brand-700 hover:underline">
       See the forecast
     </Link>
   );
@@ -471,7 +480,7 @@ function ForecastCard() {
       className="flex h-full flex-col"
     >
       <p className="text-caption text-ink-500">Cash in {weeks.length} weeks</p>
-      <p className={cn('text-h2', end < 0 ? 'text-error-fg' : 'text-pending-fg')}>
+      <p className={cn('text-h2', end < 0 ? 'text-error-fg' : 'text-navy-900')}>
         <Money paise={end} />
       </p>
       <p className={cn('mt-1 text-caption', short ? 'text-error-fg' : 'text-ink-500')}>
@@ -491,7 +500,7 @@ function ForecastCard() {
                   className={cn(
                     'absolute inset-x-0',
                     negative ? 'rounded-b-[4px] bg-error-fg' : 'rounded-t-[4px]',
-                    !negative && (hover === i ? 'bg-pending-fg' : 'bg-marigold-400'),
+                    !negative && (hover === i ? 'bg-brand-700' : 'bg-brand-600/85'),
                     negative && hover === i && 'opacity-80',
                   )}
                   style={negative ? { top: `${100 - zero}%`, height: `${Math.max(h, 2)}%` } : { bottom: `${zero}%`, height: `${Math.max(h, 2)}%` }}

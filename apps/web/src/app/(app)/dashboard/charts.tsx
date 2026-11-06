@@ -12,27 +12,27 @@ import { formatPaise } from '@/lib/gst';
  * twelve months, and a ring of a handful of parts. Values are integer paise
  * and become rupees only in the labels.
  *
- * Colours: one series is saffron; income and expenses are saffron and blue;
- * the ring uses a fixed order of hues checked for colour-blind separation,
- * and folds everything past five into a grey "Other". Every chart names its
- * values in text too (legend, totals, the line under the pointer), so colour
- * is never the only carrier.
+ * Colours: revenue is emerald and expenses orange; the cash line is
+ * emerald; the ring uses a fixed order of hues that stay apart for
+ * colour-blind readers, and folds everything past five into a grey "Other".
+ * Every chart names its values in text too (legend, totals, the line under
+ * the pointer), so colour is never the only carrier.
  */
 
 export const SERIES = {
-  income: '#E8590C', // saffron-600
-  expenses: '#2a78d6',
-  cash: '#E8590C',
-  overdue: '#C92A2A', // error-fg: overdue is a status
-  current: '#2a78d6',
+  income: '#16A36A', // revenue: emerald
+  expenses: '#EA580C', // expenses: orange
+  cash: '#16A36A',
+  overdue: '#DC2626', // error-fg: overdue is a status
+  current: '#F59E0B', // not yet due: pending, amber
 };
 
 /** The ring's hues, in order. Grey is kept for "Other". */
-export const RING = ['#2a78d6', '#1baf7a', '#6250d6', '#e87ba4', '#E8590C'];
-export const OTHER = '#A8998A';
+export const RING = ['#142D4E', '#16A36A', '#2563EB', '#EA580C', '#8B5CF6'];
+export const OTHER = '#94A3B8';
 
-const GRID = '#EBE3D7'; // line-200
-const AXIS_TEXT = '#7A6E60'; // ink-500
+const GRID = '#E2E8F0'; // line-200
+const AXIS_TEXT = '#64748B'; // ink-500
 
 /** Width of an element, kept current as the layout changes. */
 export function useWidth<T extends HTMLElement>() {
@@ -161,7 +161,7 @@ export function LineAreaChart({ points, height = 220, ariaLabel }: { points: Mon
           </defs>
           {area && <path d={area} fill="url(#cash-area)" />}
           {line && <path d={line} fill="none" stroke={SERIES.cash} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />}
-          {hover !== null && <line x1={x(hover)} x2={x(hover)} y1={M.top} y2={height - M.bottom} stroke="#C9BDB0" strokeWidth={1} />}
+          {hover !== null && <line x1={x(hover)} x2={x(hover)} y1={M.top} y2={height - M.bottom} stroke="#CBD5E1" strokeWidth={1} />}
           {known.map((p) => (
             <circle key={p.month} cx={x(p.i)} cy={y(p.value)} r={hover === p.i ? 5 : 4} fill={hover === p.i ? SERIES.cash : '#FFFFFF'} stroke={SERIES.cash} strokeWidth={2} />
           ))}
