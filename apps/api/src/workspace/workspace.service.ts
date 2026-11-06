@@ -11,6 +11,7 @@ import {
   ProposedEntryDocument,
 } from '../proposals/schemas/proposed-entry.schema';
 import { UsageMeter, UsageMeterDocument } from '../ocr/schemas/usage-meter.schema';
+import { OrgSettings, OrgSettingsDocument } from '../org-settings/schemas/org-settings.schema';
 
 /**
  * Cost model for the AI meter, mirroring platform-admin's.
@@ -88,6 +89,7 @@ export class WorkspaceService {
     @InjectModel(Document.name) private documentModel: Model<DocumentDocument>,
     @InjectModel(ProposedEntry.name) private proposalModel: Model<ProposedEntryDocument>,
     @InjectModel(UsageMeter.name) private usageMeterModel: Model<UsageMeterDocument>,
+    @InjectModel(OrgSettings.name) private settingsModel: Model<OrgSettingsDocument>,
   ) {}
 
   /**
@@ -104,7 +106,7 @@ export class WorkspaceService {
   ): Promise<Workspace> {
     const period = new Date().toISOString().slice(0, 7);
 
-    const [user, org, documents, reviewCount, meter] = await Promise.all([
+    const [user, org, documents, reviewCount, meter, settings] = await Promise.all([
       this.userModel.findById(userId).exec(),
       this.orgModel.findById(orgId).exec(),
       // Counted here rather than in the DB because the tenant plugin scopes
@@ -114,6 +116,8 @@ export class WorkspaceService {
         .countDocuments({ orgId, status: ProposedEntryStatus.PROPOSED })
         .exec(),
       this.usageMeterModel.findOne({ orgId, period }).exec(),
+      // The GSTIN is saved in the org's settings (onboarding, Settings), not on the org.
+      this.settingsModel.findOne({ orgId }).select('gstin').lean().exec(),
     ]);
 
     const email = user?.email ?? '';
@@ -139,7 +143,7 @@ export class WorkspaceService {
         // Falling back to the id would put an ObjectId in the header, which is
         // what this endpoint exists to stop.
         name: org?.name ?? 'Your workspace',
-        gstin: org?.gstin,
+        gstin: settings?.gstin || org?.gstin || undefined,
       },
       firm: firm ? { id: firm._id.toString(), name: firm.name } : undefined,
       counts: { inbox: documents, review: reviewCount },

@@ -1,9 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { Bell, Building2, Menu, Zap } from 'lucide-react';
+import { Building2, Menu, Zap } from 'lucide-react';
 import { useWorkspace } from '@/lib/use-workspace';
 import { UserMenu } from './user-menu';
+import { NotificationsBell } from './notifications-bell';
 
 /**
  * The app header.
@@ -19,7 +20,7 @@ export function Topbar({ aiUsageLimitPaise = 100_000, onMenu }: { aiUsageLimitPa
   const usagePct = Math.min((spentPaise / aiUsageLimitPaise) * 100, 100);
 
   return (
-    <header className="fixed left-0 right-0 top-0 z-30 flex h-16 items-center gap-3 border-b border-line-200 bg-surface-card/95 px-4 backdrop-blur sm:gap-4 sm:px-6 lg:left-[260px]">
+    <header className="fixed left-0 right-0 top-0 z-30 flex h-16 items-center gap-3 border-b border-line-200 bg-surface-card/95 px-4 backdrop-blur transition-[left] duration-200 ease-out group-data-[dragging=true]/shell:transition-none sm:gap-4 sm:px-6 lg:left-[var(--sidebar-w)]">
       <button type="button" onClick={onMenu} aria-label="Open menu" className="-ml-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-md text-navy-900 hover:bg-honey-50 lg:hidden">
         <Menu size={20} />
       </button>
@@ -69,21 +70,8 @@ export function Topbar({ aiUsageLimitPaise = 100_000, onMenu }: { aiUsageLimitPa
         </div>
       </Link>
 
-      {/* Notifications: the dot appears only when something actually needs you. */}
-      <Link
-        href="/review"
-        aria-label={
-          workspace?.counts.review
-            ? `${workspace.counts.review} entries waiting for review`
-            : 'Nothing waiting for review'
-        }
-        className="relative flex h-10 w-10 items-center justify-center rounded-md text-navy-900 transition-colors hover:bg-honey-50"
-      >
-        <Bell size={18} />
-        {workspace && workspace.counts.review > 0 ? (
-          <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-marigold-400 ring-2 ring-white" />
-        ) : null}
-      </Link>
+      {/* Notifications: a list of what needs you, each linking to where it is dealt with. */}
+      <NotificationsBell />
 
       <UserMenu workspace={workspace} />
     </header>

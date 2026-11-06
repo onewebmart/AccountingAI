@@ -3,6 +3,7 @@ import { IsOptional, IsString, Length } from 'class-validator';
 import { AuthGuard } from '@nestjs/passport';
 import { WorkspaceService } from './workspace.service';
 import { PracticeSetupService } from './practice-setup.service';
+import { NotificationsService } from './notifications.service';
 
 interface AuthRequest {
   user: { sub: string; orgId: string; role: string; firmRole?: string; firmId?: string };
@@ -26,11 +27,24 @@ export class WorkspaceController {
   constructor(
     private readonly workspace: WorkspaceService,
     private readonly practice: PracticeSetupService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   @Get()
   get(@Request() req: AuthRequest) {
     return this.workspace.forUser(req.user.sub, req.user.orgId, req.user.role, req.user.firmRole);
+  }
+
+  /** What needs this person's attention now, newest unread first. Each role sees only what it can act on. */
+  @Get('notifications')
+  notifications(@Request() req: AuthRequest) {
+    return this.notificationsService.list(req.user.sub, req.user.orgId, req.user.role);
+  }
+
+  /** The bell was opened: what is listed now counts as read. */
+  @Post('notifications/seen')
+  notificationsSeen(@Request() req: AuthRequest) {
+    return this.notificationsService.markSeen(req.user.sub);
   }
 
   /**

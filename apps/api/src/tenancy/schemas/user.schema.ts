@@ -39,6 +39,10 @@ export class User {
   /** Refresh token hash for revocation — rotated on every refresh */
   @Prop({ select: false })
   refreshTokenHash?: string;
+
+  /** When this person last opened the notifications: what came after is unread. */
+  @Prop({ type: Date, default: null })
+  notificationsSeenAt?: Date | null;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);
