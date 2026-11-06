@@ -161,27 +161,31 @@ Inbox and Review show how many documents are waiting.
 - **Ask your books:** type a question such as "Who owes me money?" and get the answer with the report rows behind it.
 - **The month in words:** a short summary of the month, from the books.
 - **Needs your attention:** entries to review, documents waiting, money overdue from customers, and GST mismatches. Each one links to where you sort it out.
+- **Documents:** the reading and data entry at a glance: how many documents are **Being read**, **Ready for review**, **Couldn't read** (with the reason, such as no AI credit left) and **Entered today** (and this week). Links take you to **Review**, to the documents that **Couldn't read**, and to those you can enter yourself with **Add to**.
 - **Income, expenses, cash on hand and GST due**, with a cash-flow chart, AI observations under **What I noticed**, and a cash forecast.
 
 ---
 
 ## 4. Getting documents in: Inbox
 
-**Inbox** is where bills, invoices, receipts and bank statements arrive. There are three ways in; whichever you use, each document is read by AI and waits in **Review**. Nothing posts by itself.
+**Inbox** is where bills, invoices, receipts and bank statements arrive. It is the **Files** inbox of the Documents area: the panel on its left also has **All Documents**, **Bank Statements** and your folders (see [Documents](#documents) in section 21). There are three ways in; whichever you use, each document is read by AI in the background and waits for you: a bill or invoice in **Review**, a bank statement's lines in Banking. Nothing posts by itself.
 
 **1. Upload**
-Drop files on **Drop bank statements, bills, invoices, or receipts**, or click to choose. Several at once is fine. AiBooks accepts:
+Drop files on **Drag & Drop Files Here**, or click **Choose files to upload**. Several at once is fine; each file shows its own progress, then **Sent for reading** (or **Duplicate?**, or why it was not taken). AiBooks accepts:
 - PDF;
 - photos (JPG, PNG, WEBP, TIFF, HEIC);
 - spreadsheets (CSV, XLSX, XLS);
 - Word and text files.
 
-Each file can be up to 20 MB. You can also upload from **Sales → Invoices** (**Upload invoice**), **Purchases → Bills** (**Upload bill**) and **Banking** (**Upload statement**).
+Each file can be up to 20 MB. You can also upload from **All Documents** (**Upload file**), **Bank Statements** (**Upload statement**), **Sales → Invoices** (**Upload invoice**), **Purchases → Bills** (**Upload bill**) and **Banking** (**Upload statement**).
 
-**2. Forward bills by email**
-Your business has its own address, like `bills-xxxx@yourdomain`. Copy it with **Copy address** and forward bills to it, or give it to your vendors. Each attachment is read and waits for review. If the address leaks, **Replace address** retires it at once.
+**How reading works.** Text is taken straight from the file where it has some, scans and photos go through OCR, and then AI picks out the party, number, dates, amounts and lines. A bank statement is recognised and its lines go to Banking to be matched.
+
+**2. Send documents by email**
+Your business has its own address, like `bills-xxxx@yourdomain`, shown at the bottom of the inbox: **Send your documents to …**. Copy it with **Copy address** and forward bills to it, or give it to your vendors. Each attachment is read and waits for you. If the address leaks, open **Email and WhatsApp set-up** and click **Replace address**; the old one stops working at once.
 
 **3. Send bills on WhatsApp**
+Open **Email and WhatsApp set-up** at the bottom of the inbox, then:
 1. Click **Link a phone**.
 2. From that phone, send the message shown (for example `LINK ABC123`) to the business WhatsApp number. The code works once, for 15 minutes.
 3. When it says **Phone linked**, photos and PDFs sent from that phone go to your Inbox.
@@ -192,10 +196,14 @@ A phone files to one business at a time.
 The table shows each document's status:
 - **Reading…**
 - **Ready to review**: click **Review**.
+- **Imported**: a bank statement whose lines went to Banking; **Bank Statements** shows how far they are matched.
 - **Posted**
 - **Duplicate?**: AiBooks has seen this exact file before.
-- **Couldn't read**: the reason is shown (for example, the AI service has no credit left). Click **Try again** once it is sorted.
+- **Couldn't read**: the reason is shown (for example, the AI service has no credit left). Click **Try again** once it is sorted, or enter it yourself with **Add to**.
 - **Entered**: you entered it by hand as a record (see below); the link opens that record.
+- **Rejected**: turned down in Review.
+
+When the AI could not read some documents, a red box at the top of the inbox says how many and why. **Show them** lists them. Nothing is lost: the files are kept.
 
 **Add to: enter a document as a record yourself.** On a document that has been read (or could not be), **Add to** offers New bill, New expense, New purchase order, New vendor credit, New customer, New vendor, New manual journal, New quote, New sales order and New invoice. The form opens beside the file, filled with what the AI read: the party, GSTIN, number, dates and lines. If the vendor or customer is not in your books yet, **Add new vendor** (or customer) makes them from the scan and brings you back. Check each field against the file, then save as usual: the file is kept with the record, and the AI's version of the same document is closed, so it is never in the books twice. **Save and next** moves to the next document; **Skip for now** leaves this one.
 
@@ -338,7 +346,7 @@ The strip on **Invoices** shows what customers owe by how late it is: not yet du
 
 What comes before an invoice or a bill. **None of it posts.** An order becomes a draft invoice or bill, which you post from its page.
 
-Each has a list, a **New** page, and a record page with its actions. They share the invoice's form: the customer, a number given automatically (or your own, with the cog), a **Reference#**, the dates, a **Salesperson** and a **Subject**; the same lines, **Discount** and **Adjustment**; and **Customer notes** and **Terms & conditions**. A discount or adjustment on a quote or order is carried onto the invoice made from it.
+Each has a list, a **New** page, and a record page with its actions. They share the invoice's form: the customer, a number given automatically (or your own, with the cog), a **Reference#**, the dates, a **Salesperson** and a **Subject**; the same lines, **Discount** and **Adjustment**; and **Customer notes** and **Terms & conditions**. A discount or adjustment on a quote or order is carried onto the invoice made from it. A purchase order has the bill's form instead (below), and carries its accounts, discount and adjustment onto the bills made from it.
 
 ### Quotes (Sales → Quotes)
 - **New quote:** pick the customer, the date and the **Expiry date**, a project if it is for one, add lines, then click **Save quote**.
@@ -357,11 +365,23 @@ Each has a list, a **New** page, and a record page with its actions. They share 
 For goods that move without an invoice. Click **New challan**, pick the **Challan type** (supply of liquid gas whose quantity is not known yet, job work, supply on approval, supply invoiced later, or others), add the lines and vehicle number, then **Issue challan**. On its page, mark it **Returned** when goods sent on approval or for job work come back.
 
 ### Purchase orders and goods received (Purchases → Purchase Orders)
-1. **New purchase order:** pick the vendor and the needed-by date, then **Raise purchase order**.
-2. On its page, **Send PO** emails it to the vendor.
+1. **New purchase order.** The form is laid out like the bill's:
+   - **Vendor name**, searchable, with **+ New vendor** under it.
+   - **Delivery address**: **Organisation** (your address from Settings) or **Customer**, for goods sent straight to a customer's shipping address. **Change destination to deliver** picks another customer. The address is kept on the PO as it was when you raised it.
+   - **Purchase order#** is given when you save (PO/2026-27/0001); the cog types your own, checked unused, and the series skips it. **Reference#** (the vendor's quotation, or yours), **Date**, **Delivery date**, **Payment terms** (the vendor's, unless you change them) and **Shipment preference** (choose or type: Road, Courier, Hand delivery).
+   - The lines: pick an item (its purchase description and cost price fill in) or type one; **Account** says where the bill made from it will book the line (the item's account, or Purchases); quantity, rate and tax. **Add new row**, or **Add items in bulk**.
+   - Under the totals, a **Discount** (a percent or rupees, before tax, shared across the lines) and an **Adjustment** (at most ₹99.99 either way, after tax).
+   - **Notes** (printed on the PO), **Terms & conditions**, and files to attach.
+
+   Then **Raise purchase order**. Opened from a scanned quotation (**Add to**), the file shows beside the form, which starts filled from it.
+2. On its page, which shows all of the above and the account of each line, **Send PO** emails it to the vendor. The PDF carries the reference, delivery date, terms, shipment, delivery address, discount and terms & conditions.
 3. When goods arrive, under **Receive goods** enter the quantities and the vendor's challan number, then **Record goods received**.
-4. Under **Bill**, **Make draft bill** bills what was received; post it from the bill's page.
+4. Under **Bill**, **Make draft bill** bills what was received; post it from the bill's page. The bill keeps each line's account, its order number (the PO's), the PO's payment terms (which give its due date), and each line's share of the PO's discount, in proportion to what is billed. The bill that completes a line takes exactly what is left of its discount, so the bills of a PO add up to its discount to the paisa. The PO's adjustment goes on a bill that bills all of the PO at once; a part bill rounds on its own.
+
+   For example, a PO for 120 reams at ₹250 and 4 toners at ₹3,000, with 10% off (₹4,200: ₹3,000 on the paper, ₹1,200 on the toner). 100 reams and the 4 toners arrive and are billed: the paper takes ₹2,500 of its discount (100 of 120) and the toner all ₹1,200. When the last 20 reams are billed, the paper takes the ₹500 left. The paper is booked to the account chosen on the PO at ₹22,500 on the first bill.
 5. **Close** or **Cancel PO** when nothing more will come.
+
+The list searches PO numbers, references and vendors.
 
 **3-way match.** A bill made from a PO is checked against the PO and what was received. The bill's page shows each difference in words. For example: billed but not on the PO, billed more than ordered, a rate above the PO's, or a GST rate that differs. Items to check before paying are marked **Check before paying**.
 
@@ -384,25 +404,47 @@ The vendor's page shows their details, what you owe them, and their bills, with 
 - **Scanned:** **Upload bill** on **Bills** (or use the Inbox), then approve it in **Review**.
 - **Typed:**
   1. **Purchases → Bills**, then **New bill**.
-  2. Pick the vendor and enter the vendor's bill number and the dates.
-  3. Add a line for each thing bought: item, description, HSN/SAC, quantity, rate, GST % and project, as on an invoice. **Account** says where the line is booked: the item's account, or Purchases, unless you pick another (Rent for a rent bill, Professional Fees for your CA, Computers & IT Equipment for a laptop the business keeps).
-  4. Click **Save bill**. It is a draft.
-  5. On its page, click **Post to ledger**. If an approval policy covers it, it goes for approval first.
+  2. Pick the vendor (or **+ New vendor**: the form waits, and comes back with them chosen). Enter the **Bill#** as printed on their bill, the **Order number** (our PO, or the reference they quoted), the **Bill date**, and the **Payment terms**: the vendor's to start with. The **Due date** follows the terms and the bill date until you type one. Add a **Subject** if you like (what the bill is for, in a line).
+  3. Choose where the discount goes: **At transaction level** (one discount under the totals, a percent or rupees, shared across the lines) or **At line item level** (a discount on each line, a percent or rupees). Either way it comes off before tax, so the GST and your input credit are on the value after it.
+  4. Add a line for each thing bought: item, description, HSN/SAC, **Account**, quantity, rate, discount (at line level) and tax. **Account** says where the line is booked: the item's account, or Purchases, unless you pick another (Rent for a rent bill, Professional Fees for your CA, Computers & IT Equipment for a laptop the business keeps). Under **Customer details**, name the customer a cost is for and tick **Billable** to bill it on to them; a project goes beside it.
+  5. Under the totals, an **Adjustment** of at most ₹99.99 either way rounds the total. It is not taxed.
+  6. **Notes** are for you: they are not printed. Attach the bill's files, then click **Save bill**. It is a draft.
+  7. On its page, click **Post to ledger**. If an approval policy covers it, it goes for approval first. Each line is booked to its account at its value after its discount; the adjustment goes to Round Off (a debit when it adds, a credit when it takes off), and the vendor is owed the total less any TDS.
+
+The bill's page shows the order number, subject and terms, each line's account, discount and customer (marked **Billable**), and the sub total, discount, taxable value, tax, adjustment and total. Listing the billable lines per customer, to put them on an invoice, is not there yet.
 
 TDS is deducted when the bill posts if the vendor has a TDS section set. A bill in a foreign currency is entered from [Foreign currency](#13-foreign-currency).
 
 **Bills** lists them with filters (**Unpaid**, **MSME pay-by**, **Paid**). Each shows when it is due ("Overdue N days", "Due in N days"), and for MSME vendors the 43B(h) date.
 
 ### Expenses: paid straight from bank or cash
-For money spent without a bill to enter first: a fuel receipt, a courier, bank charges, a small purchase paid by card.
-1. **Purchases → Expenses**, then **New expense**.
-2. Enter the date, the **expense account**, and the bank or cash account it was **paid through**.
-3. Enter the amount before tax and the GST rate. Tick **Inter-state (IGST)** when the supplier is in another state.
-4. To claim the GST, the supplier's GSTIN is needed: pick the vendor, or type their GSTIN. If you do not claim it, the GST is part of the expense.
-5. Optionally add a reference, notes and a project.
-6. Click **Save expense** to keep it as a draft, or **Save and post** to post it now.
+For money spent without a bill to enter first: a fuel receipt, a courier, bank charges, a small purchase paid by card. **Purchases → Expenses**, then **New expense**. The page has three tabs: **Record Expense**, **Record Mileage** and **Bulk Add Expenses**. (**Bulk add** on the list opens the third.)
 
-Posting makes one payment voucher: the expense (and input GST, when claimed) debited, the bank or cash account credited. Expenses are numbered EXP/2026-27/0001 and on, without gaps. If a payment approval policy covers it, it waits on **Approvals** first. Attach the receipt on the expense's page.
+**Record Expense**
+1. Enter the date, the **Expense account**, and the bank or cash account it was **Paid through**.
+2. Enter the amount before tax and the GST rate. Tick **Inter-state (IGST)** when the supplier is in another state.
+3. **Itemize** (beside Expense account) splits one payment across several accounts: a line each, with its own account, description, amount before tax and GST rate. **Add another line** for more; **Use one account** goes back.
+4. To claim the GST, the supplier's GSTIN is needed: pick the vendor, or type their GSTIN. If you do not claim it, the GST is part of the expense (on each line's account, when itemized).
+5. Optionally add the **Invoice# / reference**, notes (up to 500 characters) and a project.
+6. **Customer name**: the customer it was spent for. Tick **Billable** to bill it on to them later. Billable expenses not yet invoiced are listed per customer (the **Billable** filter on the list); putting them on an invoice is not built yet.
+7. Click **Save expense** to keep it as a draft, or **Save and post** to post it now.
+
+**Record Mileage** (a trip in a personal or hired vehicle)
+1. The first time, with no rate set, **Set your mileage preferences** opens first (anyone who manages the organisation can change them later from **Mileage preferences** on the tab):
+   - **Default mileage account**: where trips are booked, such as Travelling & Conveyance.
+   - **Default unit**: **Km** or **Mile**.
+   - **Mileage rates**: a rate per unit with the date it starts. A trip takes the rate in force on its date, so a new rate from 1 April leaves earlier trips as they were.
+2. Enter the date, the distance (up to two decimals), the employee who drove or the vendor (both optional), the account (the default fills in), **Paid through**, and the customer and **Billable** if it is for one.
+3. The rate in force and the amount (distance × rate, to the paisa) show as you type. To use another rate for this trip, type it in **Rate per km**. Mileage carries no GST.
+4. **Save expense** or **Save and post**.
+
+**Bulk Add Expenses** (many at once)
+1. Fill a row for each expense: **Date**, **Expense account**, **Amount**, **Paid through**, and optionally **Vendor**, **Customer name**, **Project** and **Billable**. Ten rows to start; **Add more expenses** adds five. The row menu (**⋯**) duplicates or removes a row. Blank rows are left out.
+2. Click **Save expenses** to save them all as drafts, or **Save and post** to post each one as well.
+
+Every row is checked first, as a single expense would be. **If any row is wrong, nothing is saved**: the rows that need a fix show why, in red, under themselves. Once all are right they are saved together, numbered in row order. With **Save and post**, each is posted as its own payment voucher; one held by a payment approval policy waits on **Approvals**, and the rest post. At most 100 rows at a time. The grid's amount has no GST split: for GST to claim, an itemized expense or mileage, use the other tabs.
+
+Posting makes one payment voucher: each line's expense account (and input GST, when claimed) debited, the bank or cash account credited. Expenses are numbered EXP/2026-27/0001 and on, without gaps, whichever tab they come from. If a payment approval policy covers it, it waits on **Approvals** first. Attach the receipt on the expense's page, which also shows the lines, the mileage, the customer and whether it is billable. A draft can be edited from there; a posted one cannot (reverse its voucher instead).
 
 ### Pay
 - **One bill:** on the bill's page, under **Record payment**, enter the amount and date, then **Record payment**.
@@ -418,7 +460,15 @@ Posting makes one payment voucher: the expense (and input GST, when claimed) deb
 Payments can need approval if a policy covers them.
 
 ### Vendor credits (debit notes)
-For goods returned, a short supply, or an overcharge on a posted bill: click **Debit note** on the bill's page, or **Purchases → Vendor Credits**, then **New debit note**, and choose the bill. Enter the taxable value and a reason, then **Post debit note**.
+For goods returned, a short supply, or an overcharge on a posted bill: click **Vendor credit** on the bill's page, or **Purchases → Vendor Credits**, then **New vendor credit**.
+1. Pick the vendor and the bill it corrects (**Against bill**: GST asks the note to name it). The bill's date, taxable value, total and what is still owed show under it.
+2. Enter the vendor's **Credit note#**, the **Order number**, the **Vendor credit date** and a **Subject**.
+3. **Enter it as**:
+   - **Item by item**: the lines that go back, as on a bill (item, **Account**, quantity, rate, tax), with the discount at transaction or line level and an adjustment. **Copy the bill's lines** fills them in to change. Each line comes back off its account (the one chosen, else its item's, else Purchases), and the note is taxed as the bill was: IGST, or CGST and SGST, and under reverse charge if the bill was.
+   - **An amount before tax**: the taxable value to take off and a reason; the tax follows in the bill's own proportions.
+4. Add notes and files, then **Post vendor credit**. It posts at once as a DEBIT_NOTE voucher, numbered DBN/2026-27/0001 and on without gaps.
+
+A vendor credit never takes back more taxable value, nor more of any tax, than the bill has left after earlier credits. Its GST comes off your input credit in GSTR-3B. If TDS was taken on the bill, its share comes back off TDS Payable. Anything beyond what the bill still owes becomes the vendor's credit: apply it to their next bill, or record their refund, on **Payments Made**. The list shows the vendor's credit note number beside ours.
 
 ### What you owe
 The vendor's page shows what you owe them. At the foot of **Payments Made**, **Advances and credits — vendors** lists money you paid ahead and credit from notes: **Apply advance** to a bill, or **Record refund received**.
@@ -508,28 +558,51 @@ Nothing posts until approved.
 
 ### Set up a project
 1. **Time Tracking → Projects**, then **New project**.
-2. Fill in the name, the customer (or **Internal work**), and how it is billed: **By the hour, from timesheets** or **A fixed fee**.
-3. Add the **Rate per hour** and the budget (a cap for hourly work, the fee for fixed work). **Budgeted hours** are optional.
+2. Fill in the **Project name**, the **Project code** (optional), the **Customer name** (or **Internal work (no customer)**), and a **Description** of up to 2,000 characters.
+3. Pick the **Billing method**. It decides how an hour is priced:
+   - **Fixed cost for project**: an agreed **Fee**, invoiced by hand. Time starts as not billable. The optional **Rate per hour** prices any extra time you mark billable.
+   - **Based on project hours**: one **Rate per hour** for every hour on the project.
+   - **Based on task hours**: each task has its own rate, in the **Rate per hour** column under **Project tasks**.
+   - **Based on staff hours**: each person has their own rate, in the **Rate per hour** column under **Users**.
 4. Under **Invoiced as**, pick the service item that gives its invoices their SAC code, GST rate and income account.
-5. Click **Save project**. You land on its page.
+5. **Budget**: a **Cost budget** (checked against bills, expenses and journals tagged with the project) and a **Revenue budget** (checked against time billed and not yet billed; for a fixed fee, the fee). Tick **Add budget for project hours** to set **Budgeted hours**.
+6. **Users**: the people on the project. You are added when you create it. **Add user** picks anyone on your team (**Settings → Team**).
+7. **Project tasks**: **Add project task** for each piece of work, with a description and whether its time starts as **Billable**. **Import tasks** copies the tasks of another project (names already there are skipped).
+8. Tick **Add to the watchlist on my dashboard** to show the project first in the dashboard's **Projects** card.
+9. Click **Save project**. You land on its page, which shows the billing method, budgets, tasks and users. **Add to watchlist** and **Remove from watchlist** are there too.
 
-### Log time (everyone)
-**Time Tracking → Timesheet**, or **Log time** on a project's page: pick the project, date, **Hours**, **Task** (for example "Design") and **Notes**. Tick **Billable** if the customer pays for it, then click **Log time**. Write good notes: invoice lines are worded from them.
+A task that still has billable time waiting to be invoiced cannot be removed: invoice the time first, or move it to another task.
 
-The timesheet shows everyone's time, filtered by project, person and dates, with whether each entry is billable, on a draft invoice, or invoiced. You can **Edit** or **Remove** your own entries until they are invoiced.
+Projects made before the four billing methods keep working. One billed **By the hour** reads as **Based on project hours**. Its single budget (a cap for hourly work, the fee for fixed work) reads as the revenue budget, and alerts work as before until you save a cost or revenue budget on it.
+
+### Log time
+**Time Tracking → Timesheet**, then **Log time** (or press **c**, then **t**). **Log time** on a project's page opens the same panel for that project. The **New log entry** panel opens on the right; **Esc** closes it.
+1. Pick the **Date**, the **Project name** and the **Task name**. A project with no tasks, or **Another task (type it)**, lets you type the task, for example "Design".
+2. Enter the **Time spent** as hours and minutes, like `1:30`. Or click **Set start and end time instead** and enter both; AiBooks works out the hours (to two decimals) and checks the end is after the start.
+3. **Billable** starts as the task says, or billable unless the project is a fixed fee. Change it if needed.
+4. **User** is whose time it is: you. Someone who manages projects (the **Manage sales** permission, held by accountants, CA reviewers and company admins) can pick anyone on the project instead. The entry records who logged it.
+5. Write **Notes** on what was done (invoice lines are worded from them), then click **Save**. The toast says **Time logged**.
+
+**The timer:** in the same panel, click **Start timer** instead of **Save**. You can have one timer running at a time. It is kept on the server, so it carries on through a reload and shows at the top of the timesheet and of the project's page. Click **Stop timer** there: the time from start to stop, rounded to the minute, is logged on the day it started (**Time logged from the timer**). The **×** beside it discards the timer without logging anything. A timer left running for more than a day is not logged: discard it and log the time by hand.
+
+**The list:** **View by** a period (**All**, **Today**, **This week**, **This month** or **Date range**), a customer, a project, a user and billing (**Billable**, **Unbilled**, **Invoiced**, **Not billable**). Above the list are the hours logged, the billable hours and the unbilled amount for what is shown. Each entry shows whether it is billable, on a draft invoice or invoiced. Until it is invoiced, an entry can be changed with **Edit** (the same panel) or **Remove**: by the person whose time it is, or by someone who manages projects. Every change is in the audit trail.
 
 ### Bill the time
 1. Open the project.
-2. **Unbilled time** lists the hours waiting, by task and rate.
-3. Click **Draft invoice from time**. AiBooks makes one draft invoice with a line per task, tags it with the project, and marks the time as invoiced, so it cannot be billed twice.
-4. If AI is set up, it then words each line from the time notes.
-5. **Open the draft invoice**, check it, and post it from its page.
+2. **Unbilled time** lists the hours waiting, a line per task and rate, priced by the billing method: the project's rate, each task's rate, or each person's rate (with a line per task and person).
+3. If a task or person has no rate, the page names them and **Draft invoice from time** waits until you add it on the project. An hour can also carry a rate of its own, which comes first.
+4. Click **Draft invoice from time**. AiBooks makes one draft invoice, tags it with the project, and marks the time as invoiced, so it cannot be billed twice.
+5. If AI is set up, it then words each line from the time notes.
+6. **Open the draft invoice**, check it, and post it from its page.
+
+For a fixed fee, invoice the fee from **Sales → Invoices** with the project on the line. **Draft invoice from time** bills only extra time you marked billable that has a rate.
 
 ### Track it
 The **Projects** list shows each project's income, costs, profit, hours and unbilled time.
 - Income and costs come from invoice, bill, expense and journal lines tagged with the project. Pick the project on the line when you create it.
-- Alerts warn at 80% of the budget, and when it is over.
+- Alerts warn at 80% of the cost budget, the revenue budget or the budgeted hours, and again when one is passed.
 - A note lists anyone who has logged nothing in the last week.
+- The dashboard's **Projects** card shows watchlisted projects first.
 
 **Put on hold**, **Mark completed** and **Reopen** on a project's page change its status. **Profit by project** is also a report you can download or email.
 
@@ -556,7 +629,9 @@ The same steps, for a vendor abroad. For imported services, choose the **IGST un
 On **Documents**, click **Record receipt** or **Record payment**. Enter the date, the amount in the currency, and **Rate that day**. If the rupees differ from what was booked, the difference posts as an exchange gain or loss, and the message tells you which.
 
 **Revaluation** (month-end)
-Pick the month. AiBooks values what is still open at the month-end rate. **Propose revaluation** sends the gain or loss to Review; it reverses itself on the 1st of the next month. Enter the month-end rate on **Rates** first.
+Pick the month. AiBooks values what is still open at the month-end rate. **Propose revaluation** sends the gain or loss to Review; it reverses itself on the 1st of the next month. Enter the month-end rate on **Rates** first. A currency already given its own adjustment that month is left out.
+
+To revalue one currency on any date at a rate you enter, use a **base currency adjustment** on **Accountant → Currency Adjustments** (see [Currency adjustments](#currency-adjustments)).
 
 ---
 
@@ -605,10 +680,18 @@ For rent, subscriptions, retainers and anything else that comes round again. **N
 4. Click **Save schedule**.
 
 ### Recurring bills (Purchases → Recurring Bills)
-**New recurring bill**: the vendor, the amount before tax, GST, how often, the day, the dates and when it is due. Then **Save recurring bill**. Each one is drafted as a bill.
+**New recurring bill** is laid out as a bill: the **Vendor name**, a **Profile name** ("Office rent"), **Repeat every** (a week, 2 weeks, a month, 2 months, a quarter, 6 months or a year), **Start on** (the first bill is drafted that day; the form says when the next ones fall), **Ends on** or **Never expires**, and the **Payment terms** each bill is due by. Add the lines with their accounts, tax, discount (on the lines or the whole bill) and customers, and an adjustment, then **Save recurring bill**.
+
+Each one is drafted as a bill on its date, priced on the server as a typed bill is: the same amounts, accounts, discount and adjustment. Nothing posts on its own: check it on **Bills** and post it. The list shows each schedule's lines, discount, adjustment and terms.
 
 ### Recurring expenses (Purchases → Recurring Expenses)
-**New recurring expense**: the expense account, the bank or cash account it is paid through, the amount and GST, and the schedule. Then **Save recurring expense**. Each one is drafted as an expense, marked as made by the schedule, so you can check this month's amount before posting it.
+1. Click **New recurring expense** and give it a **Profile name**.
+2. Set **Repeat every** (week, 2 weeks, month, 2 months, quarter, 6 months or year) and the **Start date**. Under it the form says the date the first one will be created, and the one after. Monthly ones fall on the start date's day (the month's last day when the month is shorter); weekly ones on its weekday.
+3. Set **Ends on**, or tick **Never expires**.
+4. Fill in the expense as on **Record Expense**: the account (or **Itemize** across accounts), **Paid through**, the amount and GST, the vendor, the customer and **Billable**, a project and notes.
+5. Click **Save recurring expense**.
+
+Each one is drafted as an expense on its date, marked as made by the schedule, so you can check this month's amount before posting it. The list shows how often, the next date, the customer and whether it ends.
 
 On each list, **Draft what's due** drafts anything due now, and you can pause, resume or end a schedule at any time.
 
@@ -629,13 +712,23 @@ For provisions and allocations that repeat, use recurring journals in [Month-end
 ### Manual journals
 For entries that are not a sale, purchase or payment: a provision, a correction, a transfer between accounts.
 1. **Accountant → Manual Journals**, then **New journal**.
-2. Enter the date and narration.
-3. Add lines: the account, a debit or a credit, and a project if it belongs to one. **Add line** for more.
-4. The debits and credits must be equal; the form shows any difference. Then click **Post journal**.
+2. Enter the **Date** and the **Notes** (why the entry is made, up to 500 characters), and a **Reference#** if you have one.
+3. **Journal#** shows the number the journal will get in the JNL series. To use a number of your own, click the cog beside it and type it; each one can be used once. The journal still gets its JNL voucher number, so that series has no gaps.
+4. Add lines: the **Account**, a **Description**, the **Contact** (a customer or vendor the line is about), and a **Debits** or **Credits** amount, plus a project if it belongs to one. **Enter** in an amount moves to the next line; **Add New Row** adds one.
+5. The totals show the **Sub Total** and **Total** of the debits and credits, and the **Difference** in red until it is zero. **Post journal** works once it is.
+6. Add the papers behind it under **Attachments**: they are kept with the journal once it posts.
 
-If an approval policy covers journals, it is **Sent for approval** and posts when approved on **Approvals**.
+If an approval policy covers journals, it is **Sent for approval** and posts when approved on **Approvals**; attach the files from its page then.
 
-The list shows every journal voucher. On a journal's page, **Reverse journal** posts the opposite entry; the original stays on record. Files you keep against a journal go in its attachments.
+**Reverse journal date.** For an accrual or a provision that cancels itself (say on the 1st of next month), set **Reverse Journal Date**, after the journal's date:
+- With **Publish reverse journal only on the reverse journal date** ticked (the usual way), the reversal posts on that date, in the 6:30 am daily run. Until then nothing of it is in the ledger, and the journal shows **Reverses** *date*. If that date is in a locked period, it waits, and posts in the first daily run after the period is unlocked.
+- Unticked, the reversal posts at once with the journal, dated the reverse date.
+
+**Accounts a journal cannot use.** Accounts Receivable, Accounts Payable, Advances from Customers, Advances to Vendors and Employee Reimbursements Payable are kept customer by customer, vendor by vendor and claim by claim, from the documents. A journal line on them would move the account without moving any invoice, bill, advance or claim, and the ageing would stop agreeing with the ledger. So the form does not offer them and the books refuse them. Use a credit note or debit note, **Record receipt** or **Record payment**, the advance or claim itself, or **Opening Balances**. A contact on any other line is a tag that shows in the account's ledger; it changes no one's balance.
+
+There is no reporting method to choose: the reports are on the accrual basis.
+
+The list shows every journal voucher, with your Journal# and Reference#. On a journal's page, **Reverse journal** posts the opposite entry; the original stays on record. A journal dated in a locked Accountant period cannot be reversed (see [Transaction locking](#20-transaction-locking-and-year-end)). Files you keep against a journal go in its attachments.
 
 ### All vouchers
 **Accountant → All Vouchers** lists every posted entry: purchase, sales, payment, receipt, contra and journal, with its number and status. Filter by type. To correct a posted entry, click **Reverse**, then **Reverse entry**. **Files** shows the documents attached to a voucher.
@@ -644,23 +737,61 @@ Voucher numbers run without gaps, per type and financial year.
 
 ### Bulk update
 For posted lines booked to the wrong account: for example a month of repairs booked to rent.
-1. **Accountant → Bulk Update**. Under **Find transactions**, pick the **Account**, optionally the dates (**From**, **To**) and **Narration or description contains**, then click **Find transactions**.
+1. **Accountant → Bulk Update**. Under **Filter transactions**, pick the **Account** (required). To narrow it, add any of:
+   - **Contact**: a customer or vendor. A line counts as theirs when it is tagged with them (a manual journal's line can carry a contact), or, untagged, when their invoice, bill, credit or debit note, receipt, payment or expense posted the voucher.
+   - **Date from** and **Date to**.
+   - **Amount from** and **Amount to** (₹): on each line's own debit or credit.
+   - **Narration or description contains**.
+
+   Click **Search**. The list shows each line's voucher, date, contact, description and amount. **Clear filters** keeps the account and resets the rest.
 2. Tick the lines to move, or **Choose every line**.
 3. Under **Move the chosen lines**, pick the account to move them to and say why.
-4. Click **Propose reclassification**.
+4. Under **Entries**, choose:
+   - **One entry per month**: each month's lines move in their own entry, dated at that month's end (today, for this month). The monthly profit and loss then moves in the months the lines are in. This is chosen for you when the lines span months.
+   - **One entry for all**: one entry for the net, dated at the end of the latest line's month.
 
-This never edits the posted vouchers. It proposes **one** reclassification entry, moving the net of the chosen lines, to the review queue; it posts when someone approves it there. A line already in a live reclassification shows as moved and cannot be moved twice. If every chosen line shares a project, the entry keeps it. Accounts kept by customer or vendor (receivables and payables) cannot be moved this way: use a credit or debit note.
+   The table under it shows each entry, its date and what it moves.
+5. Click **Propose reclassification**.
+
+This never edits the posted vouchers. The entries go to the review queue together (all or none), and each posts when someone approves it there. A month whose chosen lines net to nothing gets no entry and its lines stay free to move. If a month is locked, its entry is dated the day after the lock. A line already in a live reclassification shows as moved and cannot be moved twice. If every line in an entry shares a project, the entry keeps it. Accounts kept by customer or vendor (receivables and payables) cannot be moved this way: use a credit or debit note.
 
 ### Chart of accounts
-**Accountant → Chart of Accounts** shows your ledger groups and accounts under Assets, Liabilities, Income, Expenses and Capital, with each account's balance.
+**Accountant → Chart of Accounts** lists every account with its **Account name**, **Account code**, **Account type**, **Parent account** and balance, groups first with their accounts under them. A lock marks an account the books rely on (a system account); an eye marks one on the dashboard watchlist. Filter by **Active**, **Inactive** or **All** and by type, or search by name, code or type. Click an account to edit it.
 
-- **New account:** a name, a type and the group it sits under, then **Save account**. **Add sub-account** on a group starts one under it.
-- **Edit** changes an account's name, code and group. Its type never changes, because past entries depend on it.
-- **Deactivate account** retires one you no longer use; **Reactivate account** brings it back. Accounts the books rely on (the system accounts) cannot be deactivated.
-- **Move posted lines** on an account opens Bulk Update for it.
+**New account:**
+1. Choose the **Account Type**. What belongs in it shows beside it.
+2. Enter the **Account Name**, and an **Account Code** if you want one (left blank, the next free code for the type is used).
+3. Tick **Make this a sub-account** and choose the **Parent Account**: a group of the same kind. Untick it for a top-level account.
+4. Add a **Description** (up to 500 characters) and tick **Add to the watchlist on my dashboard** to see its balance on the dashboard.
+5. Click **Save account**. Ticking **A group** makes a header that holds accounts and takes no entries.
+
+The account types, and the statement each is reported in:
+
+| Kind (reports) | Account types |
+|---|---|
+| Asset (balance sheet) | Other Asset, Other Current Asset, Cash, Bank, Fixed Asset, Stock, Payment Clearing, Input Tax |
+| Liability (balance sheet) | Other Current Liability, Credit Card, Long Term Liability, Other Liability, Output Tax |
+| Equity (balance sheet) | Equity |
+| Income (profit and loss) | Income, Other Income |
+| Expense (profit and loss) | Expense, Cost of Goods Sold, Other Expense |
+
+Accounts made before these types existed were given one from what they are: Bank and Cash for those accounts, Input Tax for input GST, Output Tax for output GST and reverse-charge GST, Stock for stock in hand, Fixed Asset for the fixed-asset group and accumulated depreciation, Cost of Goods Sold for purchases and direct expenses, Other Income and Other Expense for gains, losses, round-off and suspense, and otherwise by the group they sit in. An asset account typed Bank or Cash can be chosen to pay expenses through.
+
+**Edit** changes the name, code, parent account, description and watchlist. The type can change only to another of the same kind (one expense type to another), because past entries depend on which statement the account is in. A system account keeps its type and cannot be deactivated; it can be renamed and moved. On the edit page, **Deactivate account** retires one you no longer use (**Reactivate account** brings it back), **Move posted lines** opens Bulk Update for it, and **Add sub-account** on a group starts one under it.
 
 ### Currency adjustments
-**Accountant → Currency Adjustments**: **Exchange rates** (**Save rate**) and the **Month-end revaluation** of open foreign invoices and bills (**Propose revaluation**). See [Foreign currency](#13-foreign-currency).
+**Accountant → Currency Adjustments** lists the **base currency adjustments**: the date, currency, rate, the gain or loss, and whether each is **In review**, **Posted** or **Reversed on the 1st**. Filter by currency and by period (this month, last month, this or last financial year).
+
+**New adjustment** revalues what is still open in one currency at a rate you enter:
+1. Click **New adjustment**. Pick the **Currency** and the **Date of adjustment** (today or earlier), type the **Exchange rate** as rupees for one unit (1 AED = 25.58 INR; the last saved rate is filled in to start from) and the **Notes**: why, or the rate's source.
+2. Click **Continue**. Each open invoice and bill in that currency shows what is still owed, the rate it is booked at, its booked rupees, its rupees at the new rate, and the gain or loss. Money owed to you worth more is a gain; money you owe worth more is a loss.
+3. Click **Propose adjustment**. The rate is saved as that currency's rate for the day, and the gain or loss goes to the review queue: it posts when someone approves it there.
+
+Example: AED 10,000 invoiced at 22.50 (₹2,25,000) and an AED 4,000 bill at 22.60 (₹90,400), revalued at 25.58. The receivable is now ₹2,55,800, up ₹30,800; the payable ₹1,02,320, up ₹11,920. The entry debits Accounts Receivable ₹30,800 and credits Foreign Exchange Gain ₹30,800, and debits Foreign Exchange Loss ₹11,920 and credits Accounts Payable ₹11,920: an unrealised gain of ₹18,880 overall.
+
+It is unrealised, the same entry and accounts as the month-end revaluation: it reverses itself on the 1st of the next month, the documents stay at their booked rate, and the real gain or loss posts when each is paid. So a currency has **one adjustment a month**: a second would count the same difference twice. A month already revalued at month-end (every currency) takes no adjustment, and a date in a locked period is refused. Bank accounts are kept in rupees, so no bank balance is revalued.
+
+Below the list: the **Month-end revaluation** of every open currency at the month-end rates (**Propose revaluation**), and the **Exchange rates** (**Save rate**). See [Foreign currency](#13-foreign-currency).
 
 ---
 
@@ -782,12 +913,33 @@ For provisions or allocations that repeat: **New recurring journal** (debit, cre
 
 **Accountant → Transaction Locking**
 
-### Lock a period
-Once a month's returns are filed:
-1. Check the list **Still open on or before** the date: documents waiting for review, unposted invoices and bills, bank lines not in the books, bank matches waiting, and depreciation not booked. Each has a link to sort it out. The list is advice; it does not stop the lock.
-2. Set **Lock through** and click **Lock through** *date*.
+### Lock a module
+Sales, Purchases, Banking and Accountant each have a card that says either **You have not locked the transactions in this module** or the date it is locked through, with the reason.
+1. On the card, click **Lock**. A panel opens at the right.
+2. Set the **Lock date** (today at the latest) and the **Reason**, for example "GSTR-1 for September filed", then click **Lock** *module*.
+3. To lift it, click **Unlock** on the card, say why, and click **Unlock** *module*. **Change date** moves the lock to another date.
 
-Nothing dated on or before the lock can then be posted, including payments, notes and reversals. **Unlock books** lifts it if you must change something. **Lock history** shows every lock and unlock.
+Once a module is locked, nothing in it dated on or before the lock date can be created, changed or deleted:
+- no entry of that module dated on or before it can be posted: payments, notes and reversals included;
+- an entry of that module dated on or before it cannot be reversed (reversing a sale or a bill would also send its invoice or bill back to draft). Correct it with a new entry dated after the lock, or unlock the module first.
+
+What each module covers:
+
+| Module | Entries |
+|---|---|
+| Sales | Invoices, credit notes, customer receipts, customer advances and refunds to customers, and advances applied to invoices |
+| Purchases | Bills, debit notes, vendor payments and advances, vendor refunds, expenses (including a bank line filed as an expense), expense claims and their reimbursement |
+| Banking | Transfers between bank, cash and the payment gateway, confirming bank matches, and other money in or out of the bank that is not one of the above (owner's money, TDS deposited, loan repaid) |
+| Accountant | Manual journals, month-end adjustments and accruals, depreciation, revaluation of foreign invoices and bills, GST set-off, and opening balances |
+
+A journal's scheduled reversal (see [Manual journals](#16-accountant-journals-bulk-update-and-the-chart-of-accounts)) is checked on its own date: if that date is locked it waits, and posts in the first daily run after the period is unlocked.
+
+### Lock the whole books
+Once a month's returns are filed you can also lock every module at once:
+1. Check the list **Still open on or before** the date: documents waiting for review, unposted invoices and bills, bank lines not in the books, bank matches waiting, and depreciation not booked. Each has a link to sort it out. The list is advice; it does not stop the lock.
+2. Under **Lock the whole books**, set **Lock through** and click **Lock books**.
+
+Nothing dated on or before that date can then be posted, in any module, including payments, notes and reversals. It applies on top of the module locks: an entry is refused when either covers it, and unlocking a module leaves the whole-books lock in place. **Unlock books** lifts it if you must change something. **Lock history** shows every lock and unlock, of the whole books and of each module, with the reason.
 
 ### Close the year
 After 31 March:
@@ -801,14 +953,54 @@ Also for the year: GSTR-9 (by 31 December), the Q4 Form 26Q, and fixed-asset tax
 
 ## 21. Reports, documents and insights
 
-### Reports
-**Reports → Reports**: the books' statements for a financial year, from posted entries only.
-- **P&L**, **Balance Sheet**, **Cash Flow**, **Trial Balance**
-- **Ledger:** pick an account
-- **Day Book:** every voucher
-- **Ageing:** what customers owe and what you owe vendors, by how late
+### Reports Center
+**Reports → Reports** opens the **Reports Center**: every report in one place, from posted entries only.
 
-Download as **Excel**, **CSV** or **PDF**.
+**The panel on the left**
+- **Home:** all reports, grouped by category.
+- **Favorites:** the reports you starred. Click the star beside a report's name to add or remove it.
+- **Shared Reports:** custom reports someone shared with the organisation.
+- **My Reports:** custom reports you made.
+- **Scheduled Reports:** every report emailed on a schedule, with **Send now**, **Stop** and **Resume**.
+- **Report category:** Business Overview, Sales, Receivables, Payments Received, Recurring Invoices, Payables, Purchases and Expenses, Taxes, Banking, Projects and Timesheet, Inventory, Accountant, Budgets, Currency, Activity, Automation.
+
+The list shows each report's **Report name**, **Report category**, **Created by** (**System Generated**, or the person) and **Last visited**. Favorites and Last visited are your own; others in the organisation have theirs. Type in **Search reports** to find one by name.
+
+**The reports, by category**
+- **Business Overview:** Profit and loss; Profit and loss (Schedule III); Horizontal profit and loss; Balance sheet; Balance sheet (Schedule III), with MSME dues shown apart; Horizontal balance sheet; Cash flow statement (indirect method); Cash in and out; Cash flow forecasting; Business performance ratios (current, quick and cash ratio, debt-equity, margins, return on equity, interest cover, debtor, creditor and inventory days); Movement of equity; P&L by month; P&L compared.
+- **Sales:** by customer, item, month and salesperson; Sales summary.
+- **Receivables:** AR ageing summary and details; Invoice, Sales order, Delivery challan, Quote and Quote item details; Customer balance summary; Receivable summary and details.
+- **Payments Received:** Payments received; Credit note details; Refund history; Time to get paid.
+- **Recurring Invoices:** Recurring invoice details.
+- **Payables:** AP ageing summary and details; Bill details; Vendor balance summary; Payable summary and details; Purchase order details; Vendor credit details; Payments made; Refund history; MSME dues (section 43B(h)).
+- **Purchases and Expenses:** Purchases by vendor, item and month; Expenses by category, customer, project and employee; Expense details; Billable expense details; Mileage expenses; Expense claim details.
+- **Taxes:** GST summary; GSTR-1 summary; GSTR-3B summary; HSN summary; ITC reconciliation (GSTR-2B); TDS deducted; TDS payable; Form 26Q summary; TDS receivable.
+- **Banking:** Reconciliation status; Bank book; Cash book.
+- **Projects and Timesheet:** Project summary; Project details; Project profit; Timesheet details; Unbilled time.
+- **Inventory:** Inventory summary; Inventory valuation summary.
+- **Accountant:** General ledger; Detailed general ledger; Account transactions; Account type summary; Journal report; Account ledger; Trial balance; Day book.
+- **Budgets:** Budget against actual.
+- **Currency:** Realised and Unrealised exchange gain or loss.
+- **Activity:** Activity log; Activity by user.
+- **Automation:** Recurring runs; Payment reminders sent.
+
+**Opening a report.** Click its name. Set the period it takes (from and to months, a financial year, an **As at** date, a month, or a quarter) and any filter it has, such as a customer, vendor, account, project or status. Then:
+- **PDF**, **CSV** or **Excel** downloads it;
+- **Schedule** emails it as a PDF on a rhythm: the period it covers (last month, last quarter, this year so far…), monthly on a day or weekly, to up to ten addresses;
+- the star adds it to Favorites;
+- **Customize** makes your own copy (below).
+
+Statements that must agree show **Ties out ✓**: the trial balance, the balance sheets, the cash flow statement.
+
+**Schedule III.** The Schedule III statements follow the Companies Act, 2013, Division I. Each account is placed under a head by its role, its group and its name (a bank account in credit is a short-term borrowing, a security deposit is a long-term advance). Choose **Show: Heads and their accounts** to see where every account went. Trade payables are split into dues of micro and small enterprises and the rest, from your vendors' MSME details. The previous year's figures sit beside this year's.
+
+**Create New Report.** Click **Create New Report**, choose one, then **Proceed**:
+- **Create from existing report:** pick a report, then choose the columns and their order, the period (chosen when opened, relative to the day it runs, or fixed), the report's own filters, conditions on rows ("Net sales at least ₹50,000"), **Group by** with subtotals (or **Show only the group totals**) and **Sort by**. A statement such as a balance sheet keeps its rows in order: only its columns and period can be chosen.
+- **Create an entirely new report:** pick a module (invoices, bills, expenses, payments, journal lines, items, customers, vendors or time entries), its fields, conditions, a field to group by with sums, and the sort. Only posted invoices, bills, expenses, payments and journal lines are read.
+
+**Preview report** shows it; give it a name and click **Save report**. It goes under **My Reports**. Tick **Share with everyone in the organisation** to put it in **Shared Reports**: others can open, download and schedule it, but only you can change or delete it (**Edit report**, **Delete**). A custom report saves only its design and reads the books afresh every time. Creating, changing, sharing and deleting it are in the audit trail.
+
+**Statements with charts** (at the foot of the panel) is the year view of the P&L, balance sheet, cash flow, trial balance, ledger, day book and ageing, with charts.
 
 ### Management reports
 **Reports → Management Reports**.
@@ -821,10 +1013,20 @@ Download as **Excel**, **CSV** or **PDF**.
 
 Download any as **PDF** or **CSV**, or **Email on a schedule**.
 
-**Budgets** (also **Accountant → Budgets**)
-1. Pick the year and type the budget for each income and expense account by month. Or **Fill from last year**, raised or cut by a percentage.
-2. Click **Save budgets**.
-3. Compare them under **Budget against actual**.
+**Budgets** (**Accountant → Budgets**; also the **Budgets** tab here)
+A year can have several budgets, each with a name (a plan and a stretch plan, say). One is the year's **default**: the first made for the year, until you **Make default** another.
+1. Click **New budget**. Give the **Name**, the **Financial year** and the **Budget period**: **Monthly**, **Quarterly**, **Half-yearly** or **Yearly**.
+2. Under **Accounts**, add the **Income accounts** and **Expense accounts** to plan (**All** adds every one). Tick **Include asset, liability and capital accounts in the budget** to plan those too, as the movement you expect in each period.
+3. Type the amounts in the grid, one column per period. Each row and each column has a total, and the profit shows under them. Or set a percentage and click **Fill from last year**: last year's figures from the books, raised or cut by it (for the accounts chosen, or every account with a figure if none is chosen yet).
+4. Click **Save budget**.
+
+A quarter's, half-year's or year's amount is kept as months: split evenly to the paisa, the remainder on the last month (₹1,000 for a quarter is ₹333.33, ₹333.33 and ₹333.34). Changing the period later re-spreads each row's amounts.
+
+In the list, **Make default**, **Archive** (kept out of the way; **Restore** brings it back) or **Delete** (gone from every list; its last figures stay in the audit trail). If the default is archived or deleted, the year's most recently changed budget becomes the default.
+
+**Budget against actual** reads the budget you pick under **Budget**, or the year's default. Asset, liability and capital rows compare the budget with each account's movement in those months. **Against actual** in the budgets list opens it for that budget.
+
+A budget made before named budgets existed is carried over, once, as **Budget** and its year (for example **Budget 2026-27**), by month, as that year's default.
 
 Budgets never touch the books.
 
@@ -865,10 +1067,26 @@ At `/exports` (also linked from Settings → Integrations), download reports as 
 Each invoice, bill and party also has a **History** link.
 
 ### Documents
-**Documents** in the sidebar lists every file in the books: bills, invoices, statements and receipts sent to the Inbox, and files attached to invoices, bills, vouchers, expenses, claims, customers and vendors.
-- Search by file name, party or number, and filter by status (**Ready to review**, **Posted**, **Attached**, **Reading**, **Duplicate?**, **Couldn't read**, **Rejected**) or by type.
-- **Open file** opens it. The link beside it takes you to where it is used: **Review** for a document waiting, **Open voucher** for one posted, or the record a file is attached to.
-- **Upload in the inbox** adds new documents.
+**Documents** in the sidebar has a panel of its own on the left:
+
+- **All Documents:** every file in the books.
+- **Inboxes:** **Files** (the Inbox, section 4) and **Bank Statements**.
+- **Folders:** your own folders, each with how many files it holds.
+
+**All Documents** lists bills, invoices, statements and receipts that came in (uploaded, emailed or sent on WhatsApp) and files attached to invoices, bills, vouchers, expenses, claims, customers and vendors. Each row shows:
+
+- **File name**, with its status (**Reading…**, **Ready to review**, **Imported**, **Posted**, **Entered**, **Attached**, **Duplicate?**, **Couldn't read**, **Rejected**). For a document that could not be read, the reason and **Try again**. Click the name to open the file.
+- **Uploaded by:** the person, or the email address or WhatsApp number it was sent from.
+- **Uploaded on:** click the heading to show the oldest first.
+- **Associated to:** what it became, as a link: **Bill SGP/1342**, **Expense EXP/…**, **Journal JNL/…**, the record a file is attached to, or for a statement its bank account and lines (the link opens its reconciliation). One still waiting says **Waiting in Review**.
+- **Folder**, with a menu to move it.
+- **Add to** on a document not yet entered, to enter it yourself (section 4).
+
+Search by file name, party, number or record; use **Filter by file type** (PDF, images, spreadsheets, Word and text) and the status list (**Not entered yet** shows what you can still enter with **Add to**). **Upload file** adds documents; inside a folder, they are filed there.
+
+**Folders.** Click **+** beside **Folders**, type a name and click **Create folder**. Point at a folder to rename it (pencil) or delete it (bin); deleting a folder moves its files to no folder and deletes no file. To file documents, use a row's **Folder** menu, or tick several, choose the folder under **Move to** and click **Move**. Folders only group files: filing changes nothing in the books, and every move is in the audit trail.
+
+**Bank Statements** lists every statement that came in: its bank account, the period, the lines imported, and how many are matched, confirmed and unmatched. **Run reconciliation** opens that account in Banking. A statement that could not be read shows why; export it from your bank as Excel or CSV, or try a clearer PDF. **Upload statement** adds one.
 
 ---
 
@@ -951,6 +1169,7 @@ Some connections run in test mode until they are set up on your server. The scre
 - Form 27Q, and filing GSTR-9 from AiBooks (it is prepared, not filed).
 - More than one stock location.
 - Exchange rates are entered by hand, not fetched.
+- Billable expenses are listed per customer, but cannot yet be added to an invoice from there: add them to the invoice by hand.
 
 ---
 

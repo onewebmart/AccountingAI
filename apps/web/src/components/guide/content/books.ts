@@ -16,11 +16,13 @@ import {
   Link2,
   ArrowLeftRight,
   Percent,
+  Play,
   Receipt,
   RefreshCw,
   Scale,
   Send,
   Sparkles,
+  Square,
   Timer,
   TrendingUp,
   Upload,
@@ -49,17 +51,31 @@ export const BOOKS_GUIDES: Record<AreaKeys<'books'>, Guide> = {
       },
     ],
     can: [
-      t('Set up work for a customer, or internal work, billed by the hour from timesheets or as a fixed fee.', 'ग्राहक का काम या अंदरूनी काम सेट करें, घंटे के हिसाब से (टाइमशीट से) या तय फ़ीस पर।'),
-      t('Turn unbilled time into one draft invoice, a line per task; the time is then marked invoiced so it is never billed twice.', 'बिना बिल का टाइम एक ड्राफ़्ट इनवॉइस में बदलें, हर टास्क की एक लाइन; फिर वह टाइम invoiced हो जाता है, ताकि दोबारा बिल न हो।'),
-      t('See each project’s income, costs, profit, hours and unbilled time.', 'हर प्रोजेक्ट की आमदनी, लागत, मुनाफ़ा, घंटे और बिना बिल का टाइम देखें।'),
-      t('Get alerts at 80% of the budget and when it is over.', 'बजट का 80% होने पर और बजट पार होने पर अलर्ट पाएँ।'),
+      t(
+        'Set up work for a customer, or internal work, billed one of four ways: a fixed fee, by project hours (one rate), by task hours (a rate per task) or by staff hours (a rate per person).',
+        'ग्राहक का काम या अंदरूनी काम सेट करें, चार में से एक तरीक़े से बिल करें: तय फ़ीस, प्रोजेक्ट के घंटे (एक रेट), टास्क के घंटे (हर टास्क का रेट) या स्टाफ़ के घंटे (हर व्यक्ति का रेट)।',
+      ),
+      t('List the people on the project and its tasks; copy tasks from another project with **Import tasks**.', 'प्रोजेक्ट पर काम करने वाले लोग और उसके टास्क लिखें; दूसरे प्रोजेक्ट से टास्क **Import tasks** से कॉपी करें।'),
+      t('Set a cost budget, a revenue budget and budgeted hours, and get alerts at 80% and when one is passed.', 'लागत का बजट, आमदनी का बजट और बजट के घंटे तय करें; 80% होने पर और बजट पार होने पर अलर्ट पाएँ।'),
+      t('Turn unbilled time into one draft invoice, priced by the billing method; the time is then marked invoiced so it is never billed twice.', 'बिना बिल का टाइम एक ड्राफ़्ट इनवॉइस में बदलें, बिलिंग के तरीक़े के रेट पर; फिर वह टाइम invoiced हो जाता है, ताकि दोबारा बिल न हो।'),
+      t('See each project’s income, costs, profit, hours and unbilled time, and put the ones you follow on the dashboard watchlist.', 'हर प्रोजेक्ट की आमदनी, लागत, मुनाफ़ा, घंटे और बिना बिल का टाइम देखें, और जिन पर नज़र रखनी है उन्हें डैशबोर्ड की watchlist में डालें।'),
       t('Tag invoice, bill, expense and journal lines to a project, so they count in its profit.', 'इनवॉइस, बिल, खर्च और जर्नल की लाइनें प्रोजेक्ट से जोड़ें, ताकि वे उसके मुनाफ़े में गिनी जाएँ।'),
     ],
     steps: [
-      t('Click **New project**. Fill in the name, the customer (or **Internal work**) and how it is billed.', '**New project** दबाएँ। नाम, ग्राहक (या **Internal work**) और बिलिंग का तरीक़ा भरें।'),
-      t('Add the rate per hour and the budget, and under **Invoiced as** pick the service item. Click **Save project**.', 'प्रति घंटा रेट और बजट भरें, और **Invoiced as** में सर्विस आइटम चुनें। **Save project** दबाएँ।'),
-      t('Everyone logs time with **Log time**, on the project’s page or on **Timesheet**.', 'सब लोग **Log time** से टाइम लिखते हैं, प्रोजेक्ट के पेज पर या **Timesheet** में।'),
-      t('Under **Unbilled time**, click **Draft invoice from time**, then **Open the draft invoice**, check it and post it.', '**Unbilled time** में **Draft invoice from time** दबाएँ, फिर **Open the draft invoice**, जाँचें और पोस्ट करें।'),
+      t('Click **New project**. Fill in the **Project name**, the **Customer name** (or **Internal work**) and the **Billing method**.', '**New project** दबाएँ। **Project name**, **Customer name** (या **Internal work**) और **Billing method** भरें।'),
+      t(
+        'Enter the rate the method needs: the **Rate per hour** for project hours, a rate on each task for task hours, a rate for each user for staff hours, or the **Fee** for a fixed cost. Under **Invoiced as**, pick the service item.',
+        'तरीक़े के हिसाब से रेट भरें: प्रोजेक्ट के घंटों के लिए **Rate per hour**, टास्क के घंटों के लिए हर टास्क पर रेट, स्टाफ़ के घंटों के लिए हर user का रेट, या तय फ़ीस के लिए **Fee**। **Invoiced as** में सर्विस आइटम चुनें।',
+      ),
+      t(
+        'Add the **Budget**, the **Users** (you are on it already) and the **Project tasks**, or **Import tasks** from another project. Tick **Add to the watchlist on my dashboard** to see it first there. Click **Save project**.',
+        '**Budget**, **Users** (आप पहले से जुड़े हैं) और **Project tasks** भरें, या दूसरे प्रोजेक्ट से **Import tasks** करें। डैशबोर्ड पर सबसे ऊपर देखने के लिए **Add to the watchlist on my dashboard** पर टिक करें। **Save project** दबाएँ।',
+      ),
+      t('Everyone logs time to the project’s tasks on **Timesheet**, by hand or with the timer.', 'सब लोग **Timesheet** में प्रोजेक्ट के टास्क पर टाइम लिखते हैं, हाथ से या टाइमर से।'),
+      t(
+        'Under **Unbilled time**, click **Draft invoice from time**, then **Open the draft invoice**, check it and post it. If a task or person has no rate, the page names them: add the rate first.',
+        '**Unbilled time** में **Draft invoice from time** दबाएँ, फिर **Open the draft invoice**, जाँचें और पोस्ट करें। किसी टास्क या व्यक्ति का रेट न हो तो पेज उसका नाम बताता है: पहले रेट भरें।',
+      ),
       t('Use **Put on hold**, **Mark completed** or **Reopen** to change its status.', 'हालत बदलने के लिए **Put on hold**, **Mark completed** या **Reopen** दबाएँ।'),
     ],
     note: t('The AI only words the invoice lines from the time notes; you check the draft and post it yourself.', 'AI सिर्फ़ टाइम के नोट्स से इनवॉइस की लाइनें लिखता है; ड्राफ़्ट आप जाँचते और पोस्ट करते हैं।'),
@@ -69,7 +85,19 @@ export const BOOKS_GUIDES: Record<AreaKeys<'books'>, Guide> = {
     section: t('Timesheet', 'टाइमशीट'),
     title: t('Life cycle of a time entry', 'टाइम एंट्री का पूरा सफ़र'),
     flow: [
-      { icon: Timer, label: t('Log time', 'टाइम लिखें'), tone: 'action' },
+      {
+        branch: [
+          { edge: t('By hand', 'हाथ से'), flow: [{ icon: Timer, label: t('Log time', 'टाइम लिखें'), tone: 'action' }] },
+          {
+            edge: t('Timer', 'टाइमर'),
+            flow: [
+              { icon: Play, label: t('Start timer', 'Start timer'), tone: 'action' },
+              { icon: Square, label: t('Stop timer', 'Stop timer'), tone: 'action' },
+            ],
+          },
+        ],
+      },
+      { icon: Clock, label: t('Time entry', 'टाइम एंट्री'), tone: 'neutral' },
       {
         branch: [
           {
@@ -85,18 +113,32 @@ export const BOOKS_GUIDES: Record<AreaKeys<'books'>, Guide> = {
       },
     ],
     can: [
-      t('Log hours against a project, with the task and notes.', 'प्रोजेक्ट पर घंटे लिखें, टास्क और नोट्स के साथ।'),
-      t('Mark time billable if the customer pays for it.', 'अगर ग्राहक पैसे देगा तो टाइम को billable चिह्नित करें।'),
-      t('See everyone’s time, filtered by project, person and dates, and whether each entry is unbilled, on a draft or invoiced.', 'सबका टाइम देखें, प्रोजेक्ट, व्यक्ति और तारीख़ से छाँटकर, और हर एंट्री बिल बाकी है, ड्राफ़्ट पर है या बिल हो गई।'),
-      t('Edit or remove your own entries until they are invoiced.', 'अपनी एंट्री बिल होने तक बदलें या हटाएँ।'),
+      t('Log time to a project’s task, as hours and minutes (like 1:30) or as a start and end time.', 'प्रोजेक्ट के टास्क पर टाइम लिखें, घंटे और मिनट में (जैसे 1:30) या शुरू और ख़त्म होने के समय से।'),
+      t('Start a timer and stop it when you are done: it keeps running if you reload or leave the page, and logs the minutes.', 'टाइमर चालू करें और काम ख़त्म होने पर रोकें: पेज रीलोड करने या छोड़ने पर भी वह चलता रहता है, और मिनट लिख देता है।'),
+      t('Mark time billable if the customer pays for it; it starts as the task says.', 'अगर ग्राहक पैसे देगा तो टाइम को billable रखें; शुरू में वह टास्क की सेटिंग के हिसाब से आता है।'),
+      t(
+        'View by period (today, this week, this month or dates you pick), customer, project, user and billing, with the hours, billable hours and unbilled amount of what is shown.',
+        'अवधि (आज, इस हफ़्ते, इस महीने या चुनी तारीख़ें), ग्राहक, प्रोजेक्ट, user और बिलिंग से छाँटकर देखें, दिखाए गए टाइम के घंटे, billable घंटे और बिना बिल की रक़म के साथ।',
+      ),
+      t(
+        'Change or remove unbilled time: your own, or anyone’s if you manage projects. A manager can also log time for anyone on the project.',
+        'बिना बिल का टाइम बदलें या हटाएँ: अपना, या अगर आप प्रोजेक्ट संभालते हैं तो किसी का भी। मैनेजर प्रोजेक्ट पर किसी के लिए भी टाइम लिख सकता है।',
+      ),
     ],
     steps: [
-      t('Pick the project, the date and the **Hours**.', 'प्रोजेक्ट, तारीख़ और **Hours** चुनें।'),
-      t('Enter the **Task** (for example “Design”) and **Notes** on what was done. Good notes make good invoice lines.', '**Task** (जैसे “Design”) और क्या काम हुआ, उसके **Notes** लिखें। अच्छे नोट्स से इनवॉइस की लाइनें अच्छी बनती हैं।'),
-      t('Tick **Billable** if the customer pays for it, then click **Log time**.', 'ग्राहक पैसे देगा तो **Billable** पर टिक करें, फिर **Log time** दबाएँ।'),
-      t('To change an entry, click **Edit**, then **Save entry**; or **Remove** it.', 'एंट्री बदलनी हो तो **Edit** दबाएँ, फिर **Save entry**; या **Remove** दबाएँ।'),
+      t('Click **Log time** (or press c, then t). The **New log entry** panel opens on the right.', '**Log time** दबाएँ (या c, फिर t दबाएँ)। दाईं ओर **New log entry** पैनल खुलता है।'),
+      t('Pick the **Date**, the **Project name** and the **Task name**, or choose **Another task** and type it.', '**Date**, **Project name** और **Task name** चुनें, या **Another task** चुनकर टाइप करें।'),
+      t('Enter the **Time spent** as hours and minutes, like 1:30, or click **Set start and end time instead**.', '**Time spent** घंटे और मिनट में भरें, जैसे 1:30, या **Set start and end time instead** दबाएँ।'),
+      t(
+        'Check **Billable**, write **Notes** on what was done, and click **Save**. Or click **Start timer** to time it now; **Stop timer** at the top of the page logs it.',
+        '**Billable** देखें, क्या काम हुआ उसके **Notes** लिखें, और **Save** दबाएँ। या अभी से समय गिनने के लिए **Start timer** दबाएँ; पेज के ऊपर **Stop timer** दबाने पर टाइम लिख जाता है।',
+      ),
+      t('To change an entry, click **Edit**, then **Save**; or **Remove** it.', 'एंट्री बदलनी हो तो **Edit** दबाएँ, फिर **Save**; या **Remove** दबाएँ।'),
     ],
-    note: t('Time is billed from the project’s page with **Draft invoice from time**.', 'टाइम का बिल प्रोजेक्ट के पेज से **Draft invoice from time** दबाकर बनता है।'),
+    note: t(
+      'Time is billed from the project’s page with **Draft invoice from time**, at the rate its billing method sets. Good notes make good invoice lines.',
+      'टाइम का बिल प्रोजेक्ट के पेज से **Draft invoice from time** दबाकर बनता है, उसके बिलिंग तरीक़े के रेट पर। अच्छे नोट्स से इनवॉइस की लाइनें अच्छी बनती हैं।',
+    ),
   },
 
   banking: {

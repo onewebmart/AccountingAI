@@ -28,6 +28,8 @@ import {
   Scale,
   ShieldCheck,
   Building2,
+  Car,
+  Rows3,
 } from 'lucide-react';
 import type { AreaKeys } from '../keys';
 import { t, type Guide } from '../types';
@@ -70,7 +72,13 @@ export const PURCHASE_GUIDES: Record<AreaKeys<'purchases'>, Guide> = {
     title: t('Life cycle of an expense', 'खर्च का पूरा सफ़र'),
     flow: [
       { icon: Receipt, label: t('Paid from bank or cash', 'बैंक या कैश से भुगतान'), tone: 'action' },
-      { icon: FilePlus2, label: t('New expense', 'नया खर्च'), tone: 'action' },
+      {
+        branch: [
+          { edge: t('One', 'एक'), flow: [{ icon: FilePlus2, label: t('Record Expense, or Itemize', 'Record Expense, या Itemize'), tone: 'action' }] },
+          { edge: t('A trip', 'यात्रा'), flow: [{ icon: Car, label: t('Record Mileage', 'Record Mileage'), tone: 'action' }] },
+          { edge: t('Many', 'कई'), flow: [{ icon: Rows3, label: t('Bulk Add Expenses', 'Bulk Add Expenses'), tone: 'action' }] },
+        ],
+      },
       {
         branch: [
           { edge: t('Later', 'बाद में'), flow: [{ icon: FilePen, label: t('Save expense: draft', 'Save expense: ड्राफ़्ट'), tone: 'neutral' }] },
@@ -92,18 +100,21 @@ export const PURCHASE_GUIDES: Record<AreaKeys<'purchases'>, Guide> = {
     ],
     can: [
       t('Record money spent without a bill to enter first: fuel, courier, bank charges, a small card purchase.', 'बिना बिल वाले खर्च दर्ज करें: पेट्रोल, कूरियर, बैंक चार्ज, कार्ड से छोटी ख़रीद।'),
+      t('**Itemize** one payment across several accounts, each line with its own GST rate.', 'एक ही पेमेंट को **Itemize** करके कई अकाउंट में बाँटें, हर लाइन का अपना GST रेट।'),
       t('Claim the GST when you have the supplier’s GSTIN; without it, the GST is part of the expense.', 'सप्लायर का GSTIN हो तो GST का क्रेडिट लें; न हो तो GST खर्च में ही जुड़ जाता है।'),
-      t('Keep it as a draft, or save and post it at once as one payment voucher.', 'इसे ड्राफ़्ट में रखें, या एक ही बार में सेव करके पेमेंट वाउचर के रूप में पोस्ट करें।'),
-      t('Tag it to a project, and attach the receipt on the expense’s page.', 'इसे किसी प्रोजेक्ट से जोड़ें, और खर्च के पेज पर रसीद लगाएँ।'),
+      t('Record a trip at your mileage rate: distance × the rate in force on its date, with no GST.', 'माइलेज रेट पर यात्रा दर्ज करें: दूरी × उस तारीख़ पर लागू रेट, GST नहीं।'),
+      t('Enter many expenses at once on **Bulk Add Expenses**: all are saved, or none if a row is wrong.', '**Bulk Add Expenses** पर एक साथ कई खर्च भरें: सब सेव होते हैं, या कोई लाइन ग़लत हो तो एक भी नहीं।'),
+      t('Pick the customer it was spent for and mark it **Billable**, to bill on to them later.', 'जिस कस्टमर के लिए खर्च हुआ उसे चुनें और **Billable** पर टिक करें, ताकि बाद में उनसे वसूला जा सके।'),
     ],
     steps: [
-      t('Click **New expense**. Enter the date, the **Expense account** and the bank or cash account it was **Paid through**.', '**New expense** दबाएँ। तारीख़, **Expense account** और जिस बैंक या कैश से पैसा गया (**Paid through**) वह भरें।'),
-      t('Enter the amount before tax and the GST rate. Tick **Inter-state (IGST)** if the supplier is in another state.', 'टैक्स से पहले की रकम और GST रेट भरें। सप्लायर दूसरे राज्य का हो तो **Inter-state (IGST)** पर टिक करें।'),
-      t('To claim the GST, pick the vendor or type the **Supplier’s GSTIN**.', 'GST क्रेडिट लेना हो तो वेंडर चुनें या **Supplier’s GSTIN** भरें।'),
-      t('Click **Save expense** for a draft, or **Save and post** to post it now.', 'ड्राफ़्ट के लिए **Save expense** दबाएँ, या अभी पोस्ट करने के लिए **Save and post**।'),
-      t('A draft posts later with **Post to ledger** on its page. Attach the receipt there too.', 'ड्राफ़्ट बाद में उसके पेज पर **Post to ledger** से पोस्ट होता है। रसीद भी वहीं लगाएँ।'),
+      t('Click **New expense**. On **Record Expense**, enter the date, the **Expense account** and the bank or cash account it was **Paid through**.', '**New expense** दबाएँ। **Record Expense** पर तारीख़, **Expense account** और जिस बैंक या कैश से पैसा गया (**Paid through**) वह भरें।'),
+      t('Enter the amount before tax and the GST rate, or click **Itemize** to split it into lines. Tick **Inter-state (IGST)** if the supplier is in another state.', 'टैक्स से पहले की रकम और GST रेट भरें, या लाइनों में बाँटने के लिए **Itemize** दबाएँ। सप्लायर दूसरे राज्य का हो तो **Inter-state (IGST)** पर टिक करें।'),
+      t('To claim the GST, pick the vendor or type the **Supplier’s GSTIN**. Pick the **Customer name** and tick **Billable** if it is to be billed on.', 'GST क्रेडिट लेना हो तो वेंडर चुनें या **Supplier’s GSTIN** भरें। कस्टमर से वसूलना हो तो **Customer name** चुनें और **Billable** पर टिक करें।'),
+      t('For a trip, open **Record Mileage**. The first time, set the account, the unit and the rates in **Mileage preferences**; then enter the distance.', 'यात्रा के लिए **Record Mileage** खोलें। पहली बार **Mileage preferences** में अकाउंट, यूनिट और रेट सेट करें; फिर दूरी भरें।'),
+      t('For many at once, open **Bulk Add Expenses**, fill a row each (**Add more expenses** for more), then **Save expenses** or **Save and post**.', 'एक साथ कई के लिए **Bulk Add Expenses** खोलें, हर खर्च की एक लाइन भरें (और चाहिए तो **Add more expenses**), फिर **Save expenses** या **Save and post** दबाएँ।'),
+      t('Click **Save expense** for a draft, or **Save and post** to post it now. A draft posts later with **Post to ledger** on its page; attach the receipt there too.', 'ड्राफ़्ट के लिए **Save expense** दबाएँ, या अभी पोस्ट करने के लिए **Save and post**। ड्राफ़्ट बाद में उसके पेज पर **Post to ledger** से पोस्ट होता है; रसीद भी वहीं लगाएँ।'),
     ],
-    note: t('Expenses are numbered EXP/2026-27/0001 and on, with no gaps.', 'खर्च के नंबर EXP/2026-27/0001 से आगे बिना किसी गैप के लगते हैं।'),
+    note: t('Expenses are numbered EXP/2026-27/0001 and on, with no gaps. Each posts as one payment voucher.', 'खर्च के नंबर EXP/2026-27/0001 से आगे बिना किसी गैप के लगते हैं। हर खर्च एक पेमेंट वाउचर के रूप में पोस्ट होता है।'),
   },
 
   recurringExpenses: {
@@ -111,21 +122,22 @@ export const PURCHASE_GUIDES: Record<AreaKeys<'purchases'>, Guide> = {
     title: t('Life cycle of a recurring expense', 'रिकरिंग खर्च का पूरा सफ़र'),
     flow: [
       { icon: Repeat, label: t('New recurring expense', 'नया रिकरिंग खर्च'), tone: 'action' },
-      { icon: CalendarClock, label: t('Monthly, quarterly or yearly', 'हर महीने, तिमाही या साल'), tone: 'wait' },
+      { icon: CalendarClock, label: t('Every week to every year', 'हर हफ़्ते से हर साल तक'), tone: 'wait' },
       { icon: FilePen, label: t('Drafted on its date at 6:30', 'तय दिन सुबह 6:30 पर ड्राफ़्ट'), tone: 'wait' },
       { icon: ClipboardCheck, label: t('Check this month’s amount', 'इस महीने की रकम जाँचें'), tone: 'action' },
       { icon: CircleCheck, label: t('Post to ledger', 'Post to ledger'), tone: 'done' },
     ],
     can: [
       t('Set up costs that come round again, paid straight from bank or cash: rent, internet, a software plan.', 'बार-बार आने वाले खर्च सेट करें जो सीधे बैंक या कैश से जाते हैं: किराया, इंटरनेट, सॉफ़्टवेयर प्लान।'),
-      t('Each one is drafted as an expense on its date, marked as made by the schedule.', 'हर बार तय दिन पर खर्च का ड्राफ़्ट बनता है, जिस पर लिखा होता है कि शेड्यूल से बना।'),
-      t('Check this month’s amount before posting; nothing posts on its own.', 'पोस्ट करने से पहले इस महीने की रकम जाँचें; अपने-आप कुछ पोस्ट नहीं होता।'),
+      t('Repeat every week, 2 weeks, month, 2 months, quarter, 6 months or year, until an end date or for good.', 'हर हफ़्ते, 2 हफ़्ते, महीने, 2 महीने, तिमाही, 6 महीने या साल दोहराएँ, किसी तारीख़ तक या हमेशा।'),
+      t('Itemize it across accounts, and mark it billable to a customer, as on a single expense.', 'एक खर्च की तरह ही इसे अकाउंट में बाँटें (Itemize), और कस्टमर के लिए Billable बनाएँ।'),
+      t('Each one is drafted as an expense on its date, marked as made by the schedule. Check it before posting; nothing posts on its own.', 'हर बार तय दिन पर खर्च का ड्राफ़्ट बनता है, जिस पर लिखा होता है कि शेड्यूल से बना। पोस्ट करने से पहले जाँचें; अपने-आप कुछ पोस्ट नहीं होता।'),
       t('Pause, resume or end a schedule at any time.', 'शेड्यूल कभी भी रोकें, फिर चालू करें या ख़त्म करें।'),
     ],
     steps: [
-      t('Click **New recurring expense** and give it a name.', '**New recurring expense** दबाएँ और नाम दें।'),
-      t('Pick the expense account, the bank or cash account it is paid through, the amount and GST.', 'Expense account, जिस बैंक या कैश से पैसा जाता है, रकम और GST भरें।'),
-      t('Set how often, the day, and the start and end dates. Click **Save recurring expense**.', 'कितनी बार, कौन-सा दिन, और शुरू व ख़त्म होने की तारीख़ भरें। **Save recurring expense** दबाएँ।'),
+      t('Click **New recurring expense** and give it a **Profile name**.', '**New recurring expense** दबाएँ और **Profile name** दें।'),
+      t('Choose **Repeat every**, the **Start date** (the form shows the date the first one is created) and an end date, or tick **Never expires**.', '**Repeat every** चुनें, **Start date** भरें (फ़ॉर्म बताता है पहला कब बनेगा), और ख़त्म होने की तारीख़ भरें या **Never expires** पर टिक करें।'),
+      t('Pick the expense account (or **Itemize**), the bank or cash account it is paid through, the amount and GST, and the vendor or customer. Click **Save recurring expense**.', 'Expense account (या **Itemize**), जिस बैंक या कैश से पैसा जाता है, रकम और GST, और वेंडर या कस्टमर भरें। **Save recurring expense** दबाएँ।'),
       t('On its date, open **Expenses**, check the draft and click **Post to ledger**. **Draft what’s due** drafts anything due now.', 'तय दिन **Expenses** खोलें, ड्राफ़्ट जाँचें और **Post to ledger** दबाएँ। **Draft what’s due** से अभी ड्यू सब ड्राफ़्ट हो जाता है।'),
     ],
   },
@@ -148,19 +160,22 @@ export const PURCHASE_GUIDES: Record<AreaKeys<'purchases'>, Guide> = {
       },
     ],
     can: [
-      t('Raise a PO with the vendor, needed-by date and lines, and email it as a PDF.', 'वेंडर, ज़रूरत की तारीख़ और लाइनों के साथ PO बनाएँ और PDF ईमेल करें।'),
+      t('Raise a PO with the vendor, where the goods go (your address or a customer’s), the delivery date, payment terms and shipment preference, and email it as a PDF.', 'वेंडर, माल कहाँ जाना है (आपका पता या किसी ग्राहक का), डिलीवरी की तारीख़, पेमेंट टर्म्स और शिपमेंट के तरीक़े के साथ PO बनाएँ और PDF ईमेल करें।'),
+      t('Give each line the account its bill will book it to, and a discount and adjustment on the whole PO. The bill made from it carries them.', 'हर लाइन का अकाउंट चुनें जिसमें उसका बिल बुक होगा, और पूरे PO पर डिस्काउंट और एडजस्टमेंट दें। उससे बना बिल ये सब साथ ले जाता है।'),
       t('Record goods as they arrive, with the vendor’s challan number (a goods received note).', 'माल आने पर वेंडर के चालान नंबर के साथ दर्ज करें (goods received note)।'),
       t('Bill only what was received, as a draft bill you post from its page.', 'सिर्फ़ मिले माल का ड्राफ़्ट बिल बनाएँ, जिसे उसके पेज से पोस्ट करें।'),
       t('Let the 3-way match flag differences between the PO, what came and the bill, before you pay.', '3-वे मिलान से PO, मिले माल और बिल के बीच का फ़र्क़ पेमेंट से पहले पकड़ें।'),
     ],
     steps: [
-      t('Click **New purchase order**, pick the vendor and the needed-by date, add the lines and click **Raise purchase order**.', '**New purchase order** दबाएँ, वेंडर और ज़रूरत की तारीख़ चुनें, लाइनें भरें और **Raise purchase order** दबाएँ।'),
+      t('Click **New purchase order** and pick the vendor. Under **Delivery address** choose **Organisation** or a **Customer**.', '**New purchase order** दबाएँ और वेंडर चुनें। **Delivery address** में **Organisation** या कोई **Customer** चुनें।'),
+      t('The number is given when you save; the cog types your own. Add the **Reference#**, **Delivery date**, **Payment terms** and **Shipment preference**.', 'नंबर सेव होने पर मिलता है; अपना नंबर देने के लिए कॉग दबाएँ। **Reference#**, **Delivery date**, **Payment terms** और **Shipment preference** भरें।'),
+      t('Add the lines: pick an item (its purchase description and cost price fill in) or type one, and the **Account** for each. Give a **Discount** or **Adjustment** under the totals, add **Notes**, **Terms & conditions** and files, then click **Raise purchase order**.', 'लाइनें भरें: आइटम चुनें (उसकी परचेज़ डिस्क्रिप्शन और लागत भर जाती है) या टाइप करें, और हर लाइन का **Account**। टोटल के नीचे **Discount** या **Adjustment** दें, **Notes**, **Terms & conditions** और फ़ाइलें जोड़ें, फिर **Raise purchase order** दबाएँ।'),
       t('On its page, click **Send PO** to email it to the vendor.', 'उसके पेज पर **Send PO** दबाकर वेंडर को ईमेल करें।'),
       t('When goods arrive, under **Receive goods** enter the quantities and the vendor’s challan number, then **Record goods received**.', 'माल आने पर **Receive goods** में मात्रा और वेंडर का चालान नंबर भरें, फिर **Record goods received** दबाएँ।'),
       t('Under **Bill**, enter the vendor’s bill number and click **Make draft bill**. Post it from the bill’s page.', '**Bill** में वेंडर का बिल नंबर भरें और **Make draft bill** दबाएँ। बिल के पेज से उसे पोस्ट करें।'),
       t('Click **Close** or **Cancel PO** when nothing more will come.', 'और माल न आना हो तो **Close** या **Cancel PO** दबाएँ।'),
     ],
-    note: t('A PO never posts. Lines to look at in the 3-way match are marked **Check before paying** on the bill.', 'PO से कोई एंट्री नहीं होती। 3-वे मिलान में जिन लाइनों पर ध्यान देना है, बिल पर **Check before paying** लिखा आता है।'),
+    note: t('A PO never posts. Each bill made from it takes its share of the discount; a bill for the whole PO at once also takes the adjustment. Lines to look at in the 3-way match are marked **Check before paying** on the bill.', 'PO से कोई एंट्री नहीं होती। उससे बने हर बिल में डिस्काउंट का उसका हिस्सा आता है; पूरे PO का एक ही बिल हो तो एडजस्टमेंट भी आता है। 3-वे मिलान में जिन लाइनों पर ध्यान देना है, बिल पर **Check before paying** लिखा आता है।'),
   },
 
   bills: {
@@ -190,23 +205,26 @@ export const PURCHASE_GUIDES: Record<AreaKeys<'purchases'>, Guide> = {
       {
         branch: [
           { edge: t('Pay', 'भुगतान'), flow: [{ icon: HandCoins, label: t('Record payment or a run', 'Record payment या रन'), tone: 'done' }] },
-          { edge: t('Wrong', 'ग़लती'), flow: [{ icon: Undo2, label: t('Debit note', 'डेबिट नोट'), tone: 'action' }] },
+          { edge: t('Wrong', 'ग़लती'), flow: [{ icon: Undo2, label: t('Vendor credit', 'वेंडर क्रेडिट'), tone: 'action' }] },
         ],
       },
     ],
     can: [
       t('Upload a bill and let AI read it into Review, or type it in yourself.', 'बिल अपलोड करें और AI उसे पढ़कर Review में रखे, या ख़ुद टाइप करें।'),
+      t('Give a discount on each line or on the whole bill, before tax: GST and your input credit are on the value after it. An **Adjustment** of up to ₹99.99 rounds the total and posts to Round Off.', 'हर लाइन पर या पूरे बिल पर टैक्स से पहले डिस्काउंट दें: GST और इनपुट क्रेडिट डिस्काउंट के बाद की रकम पर लगते हैं। ₹99.99 तक का **Adjustment** टोटल को राउंड करता है और Round Off में जाता है।'),
+      t('Book each line to its account, and mark a cost **Billable** to the customer it is for.', 'हर लाइन को उसके अकाउंट में बुक करें, और जिस ग्राहक के लिए ख़र्च है उसके लिए **Billable** चुनें।'),
       t('Post it to the ledger. If an approval policy covers it, a second person approves it first.', 'उसे लेजर में पोस्ट करें। अगर मंज़ूरी की पॉलिसी लागू है, तो पहले कोई दूसरा व्यक्ति मंज़ूरी देता है।'),
       t('TDS is deducted when it posts, if the vendor has a TDS section.', 'वेंडर का TDS सेक्शन हो, तो पोस्ट होते समय TDS कट जाता है।'),
       t('See when each bill is due, and for MSME vendors the 43B(h) pay-by date.', 'हर बिल की ड्यू डेट देखें, और MSME वेंडर के लिए 43B(h) की आख़िरी तारीख़।'),
-      t('Pay it in part or in full, or correct it with a debit note.', 'थोड़ा या पूरा भुगतान करें, या डेबिट नोट से सुधारें।'),
+      t('Pay it in part or in full, or correct it with a vendor credit (debit note).', 'थोड़ा या पूरा भुगतान करें, या वेंडर क्रेडिट (डेबिट नोट) से सुधारें।'),
     ],
     steps: [
       t('Scanned: click **Upload bill**, then approve it in **Review** with **Approve & post**.', 'स्कैन बिल: **Upload bill** दबाएँ, फिर **Review** में **Approve & post** दबाएँ।'),
-      t('Typed: click **New bill**, pick the vendor, enter their bill number, dates and lines, then **Save bill**. It is a draft.', 'टाइप करके: **New bill** दबाएँ, वेंडर चुनें, उनका बिल नंबर, तारीख़ और लाइनें भरें, फिर **Save bill**। यह ड्राफ़्ट है।'),
+      t('Typed: click **New bill** and pick the vendor (or **+ New vendor**). Enter the **Bill#**, the **Order number**, the **Bill date** and the **Payment terms**: the due date follows the terms until you type one.', 'टाइप करके: **New bill** दबाएँ और वेंडर चुनें (या **+ New vendor**)। **Bill#**, **Order number**, **Bill date** और **Payment terms** भरें: जब तक आप ड्यू डेट ख़ुद न भरें, वह टर्म्स के हिसाब से बदलती है।'),
+      t('Choose the discount **At transaction level** or **At line item level**, add the lines with their **Account**, **Tax** and **Customer details**, then the **Adjustment** and notes, and click **Save bill**. It is a draft.', 'डिस्काउंट **At transaction level** या **At line item level** चुनें, लाइनें उनके **Account**, **Tax** और **Customer details** के साथ भरें, फिर **Adjustment** और नोट्स, और **Save bill** दबाएँ। यह ड्राफ़्ट है।'),
       t('On the bill’s page, click **Post to ledger**. If an approval policy covers it, the page says so, and it posts once approved on **Approvals**.', 'बिल के पेज पर **Post to ledger** दबाएँ। अगर मंज़ूरी की पॉलिसी लागू है, तो पेज पर यह लिखा आएगा, और **Approvals** में मंज़ूरी मिलते ही पोस्ट होगा।'),
       t('To pay, enter the amount and date and click **Record payment**, or pay many bills from **Payments Made** or **Payment Runs**.', 'पेमेंट के लिए रकम और तारीख़ भरकर **Record payment** दबाएँ, या **Payments Made** या **Payment Runs** से कई बिल एक साथ चुकाएँ।'),
-      t('For goods returned or an overcharge, click **Debit note** on the bill’s page.', 'माल वापसी या ज़्यादा चार्ज के लिए बिल के पेज पर **Debit note** दबाएँ।'),
+      t('For goods returned or an overcharge, click **Vendor credit** on the bill’s page.', 'माल वापसी या ज़्यादा चार्ज के लिए बिल के पेज पर **Vendor credit** दबाएँ।'),
     ],
     note: t('The AI never posts a bill by itself: a person approves every one in Review.', 'AI कभी अपने-आप बिल पोस्ट नहीं करता: हर बिल को Review में कोई व्यक्ति मंज़ूर करता है।'),
   },
@@ -216,20 +234,21 @@ export const PURCHASE_GUIDES: Record<AreaKeys<'purchases'>, Guide> = {
     title: t('Life cycle of a recurring bill', 'रिकरिंग बिल का पूरा सफ़र'),
     flow: [
       { icon: Repeat, label: t('New recurring bill', 'नया रिकरिंग बिल'), tone: 'action' },
-      { icon: CalendarClock, label: t('Monthly, quarterly or yearly', 'हर महीने, तिमाही या साल'), tone: 'wait' },
+      { icon: CalendarClock, label: t('Every week, month, quarter or year', 'हर हफ़्ते, महीने, तिमाही या साल'), tone: 'wait' },
       { icon: FilePen, label: t('Bill drafted at 6:30', 'सुबह 6:30 पर बिल ड्राफ़्ट'), tone: 'wait' },
       { icon: CircleCheck, label: t('You check and post', 'आप जाँचकर पोस्ट करें'), tone: 'done' },
       { icon: HandCoins, label: t('Pay it', 'भुगतान करें'), tone: 'action' },
     ],
     can: [
       t('Set up bills that repeat: rent, a subscription, a maintenance contract.', 'बार-बार आने वाले बिल सेट करें: किराया, सब्सक्रिप्शन, मेंटेनेंस कॉन्ट्रैक्ट।'),
-      t('Each one is drafted as a bill on its date, ready on **Bills** to check and post.', 'हर बार तय दिन पर बिल ड्राफ़्ट बनता है, जो **Bills** में जाँचने और पोस्ट करने के लिए तैयार रहता है।'),
+      t('Each one is drafted as a bill on its date, priced like a typed bill (each line’s account, discount and customer, and the adjustment), ready on **Bills** to check and post.', 'हर बार तय दिन पर बिल ड्राफ़्ट बनता है, टाइप किए बिल की तरह (हर लाइन का अकाउंट, डिस्काउंट और ग्राहक, और एडजस्टमेंट), जो **Bills** में जाँचने और पोस्ट करने के लिए तैयार रहता है।'),
       t('Nothing posts on its own.', 'अपने-आप कुछ पोस्ट नहीं होता।'),
       t('Pause, resume or end a schedule at any time.', 'शेड्यूल कभी भी रोकें, फिर चालू करें या ख़त्म करें।'),
     ],
     steps: [
-      t('Click **New recurring bill** and give it a name.', '**New recurring bill** दबाएँ और नाम दें।'),
-      t('Pick the vendor, the amount before tax and the GST rate, how often, the day, the dates and when each bill is due.', 'वेंडर, टैक्स से पहले की रकम, GST रेट, कितनी बार, दिन, तारीख़ें और हर बिल कब ड्यू होगा, भरें।'),
+      t('Click **New recurring bill**, pick the vendor and give it a **Profile name**.', '**New recurring bill** दबाएँ, वेंडर चुनें और **Profile name** दें।'),
+      t('Choose **Repeat every** (a week up to a year), **Start on** (the first bill is drafted that day), **Ends on** or **Never expires**, and the **Payment terms**.', '**Repeat every** (हफ़्ते से साल तक), **Start on** (पहला बिल उसी दिन ड्राफ़्ट होता है), **Ends on** या **Never expires**, और **Payment terms** चुनें।'),
+      t('Add the lines as on a bill: item, **Account**, quantity, rate, tax and customer, the discount on the lines or the whole bill, and the adjustment.', 'बिल की तरह लाइनें भरें: आइटम, **Account**, मात्रा, रेट, टैक्स और ग्राहक, लाइनों पर या पूरे बिल पर डिस्काउंट, और एडजस्टमेंट।'),
       t('Click **Save recurring bill**.', '**Save recurring bill** दबाएँ।'),
       t('On its date, open **Bills**, check the draft and click **Post to ledger**. **Draft what’s due** drafts anything due now.', 'तय दिन **Bills** खोलें, ड्राफ़्ट जाँचें और **Post to ledger** दबाएँ। **Draft what’s due** से अभी ड्यू सब ड्राफ़्ट हो जाता है।'),
     ],
@@ -315,8 +334,8 @@ export const PURCHASE_GUIDES: Record<AreaKeys<'purchases'>, Guide> = {
           { flow: [{ icon: Percent, label: t('Overcharged', 'ज़्यादा चार्ज'), tone: 'neutral' }] },
         ],
       },
-      { icon: FilePlus2, label: t('New debit note on a posted bill', 'पोस्ट हुए बिल पर डेबिट नोट'), tone: 'action' },
-      { icon: CircleCheck, label: t('Post debit note', 'Post debit note'), tone: 'done' },
+      { icon: FilePlus2, label: t('New vendor credit on a posted bill', 'पोस्ट हुए बिल पर नया वेंडर क्रेडिट'), tone: 'action' },
+      { icon: CircleCheck, label: t('Post vendor credit', 'Post vendor credit'), tone: 'done' },
       {
         branch: [
           { edge: t('Within what you owe', 'बकाया के अंदर'), flow: [{ icon: CircleCheck, label: t('You owe less', 'देनदारी घटी'), tone: 'done' }] },
@@ -332,17 +351,19 @@ export const PURCHASE_GUIDES: Record<AreaKeys<'purchases'>, Guide> = {
     ],
     can: [
       t('Correct a posted bill for goods returned, a short supply or an overcharge, without editing the bill.', 'माल वापसी, कम सप्लाई या ज़्यादा चार्ज के लिए पोस्ट हुए बिल को बिना बदले सुधारें।'),
-      t('Enter the amount before tax; the GST follows the bill’s own rates.', 'टैक्स से पहले की रकम भरें; GST बिल के रेट के हिसाब से लगता है।'),
+      t('Enter it item by item (taxed as the bill was, each line coming back off its account, with a discount and adjustment), or as an amount before tax with the GST in the bill’s own proportions.', 'इसे आइटम के हिसाब से भरें (बिल की तरह टैक्स, हर लाइन अपने अकाउंट से वापस, डिस्काउंट और एडजस्टमेंट के साथ), या टैक्स से पहले की एक रकम के रूप में, जिस पर GST बिल के अनुपात में लगता है।'),
+      t('It never takes back more value or GST than the bill has left, and your input credit in GSTR-3B drops by its GST.', 'यह बिल में बची रकम या GST से ज़्यादा वापस नहीं लेता, और GSTR-3B में आपका इनपुट क्रेडिट उसके GST जितना घटता है।'),
       t('Use a credit left with the vendor against a bill, or record the refund they send.', 'वेंडर के पास बचा क्रेडिट किसी बिल पर लगाएँ, या उनसे मिला रिफ़ंड दर्ज करें।'),
-      t('See every debit note with its reason and bill.', 'हर डेबिट नोट उसकी वजह और बिल के साथ देखें।'),
+      t('See every vendor credit with the vendor’s credit note number, its reason and bill.', 'हर वेंडर क्रेडिट वेंडर के क्रेडिट नोट नंबर, वजह और बिल के साथ देखें।'),
     ],
     steps: [
-      t('Click **New debit note** (or **Debit note** on a posted bill’s page) and choose the bill.', '**New debit note** दबाएँ (या पोस्ट हुए बिल के पेज पर **Debit note**) और बिल चुनें।'),
-      t('Enter the amount before tax to take off, the date and the reason.', 'घटाने वाली रकम (टैक्स से पहले), तारीख़ और वजह भरें।'),
-      t('Click **Post debit note**. It posts straight away.', '**Post debit note** दबाएँ। यह तुरंत पोस्ट होता है।'),
+      t('Click **New vendor credit** (or **Vendor credit** on a posted bill’s page), pick the vendor and the bill it corrects.', '**New vendor credit** दबाएँ (या पोस्ट हुए बिल के पेज पर **Vendor credit**), वेंडर और वह बिल चुनें जिसे यह सुधारता है।'),
+      t('Enter the vendor’s **Credit note#**, the **Order number**, the date and the **Subject**.', 'वेंडर का **Credit note#**, **Order number**, तारीख़ और **Subject** भरें।'),
+      t('**Item by item**: add the lines (or **Copy the bill’s lines** and change them), with the discount and adjustment. **An amount before tax**: enter the amount and the reason.', '**Item by item**: लाइनें भरें (या **Copy the bill’s lines** दबाकर बदलें), डिस्काउंट और एडजस्टमेंट के साथ। **An amount before tax**: रकम और वजह भरें।'),
+      t('Click **Post vendor credit**. It posts straight away.', '**Post vendor credit** दबाएँ। यह तुरंत पोस्ट होता है।'),
       t('If a credit is left, use **Apply advance** or **Record refund received** on **Payments Made**.', 'क्रेडिट बचे तो **Payments Made** पर **Apply advance** या **Record refund received** दबाएँ।'),
     ],
-    note: t('Goods sent back leave stock through **Stock → Adjust stock**: a debit note carries amounts, not quantities.', 'वापस भेजा माल **Stock → Adjust stock** से स्टॉक से घटाएँ: डेबिट नोट में सिर्फ़ रकम होती है, मात्रा नहीं।'),
+    note: t('Goods sent back leave stock through **Stock → Adjust stock**: a vendor credit does not move stock.', 'वापस भेजा माल **Stock → Adjust stock** से स्टॉक से घटाएँ: वेंडर क्रेडिट से स्टॉक नहीं घटता।'),
   },
 
   claims: {

@@ -1,6 +1,5 @@
 import {
   BarChart3,
-  BookOpen,
   Building2,
   CalendarClock,
   CircleCheck,
@@ -16,7 +15,6 @@ import {
   MessageSquareText,
   Paperclip,
   Receipt,
-  Search,
   ShieldCheck,
   Sparkles,
   TrendingUp,
@@ -31,34 +29,36 @@ import { t, type Guide } from '../types';
 
 export const REPORT_GUIDES: Record<AreaKeys<'reports'>, Guide> = {
   reports: {
-    section: t('Reports', 'रिपोर्ट'),
-    title: t('Where a report’s figures come from', 'रिपोर्ट के आंकड़े कहाँ से आते हैं'),
+    section: t('Reports Center', 'रिपोर्ट सेंटर'),
+    title: t('Finding, reading and making a report', 'रिपोर्ट ढूँढना, पढ़ना और बनाना'),
     flow: [
       { icon: CircleCheck, label: t('Posted entries only', 'सिर्फ़ पोस्ट हुई एंट्री'), tone: 'done' },
-      { icon: CalendarClock, label: t('Pick the financial year', 'वित्त वर्ष चुनें'), tone: 'action' },
+      { icon: Filter, label: t('Pick a category or search', 'कैटेगरी चुनें या खोजें'), tone: 'action' },
+      { icon: CalendarClock, label: t('Set the period and filters', 'अवधि और फ़िल्टर चुनें'), tone: 'action' },
       {
         branch: [
-          { flow: [{ icon: BarChart3, label: t('P&L, balance sheet, cash flow', 'P&L, बैलेंस शीट, कैश फ़्लो'), tone: 'action' }] },
-          { flow: [{ icon: BookOpen, label: t('Trial balance, ledger, day book', 'ट्रायल बैलेंस, लेजर, डे बुक'), tone: 'action' }] },
-          { flow: [{ icon: Wallet, label: t('Ageing', 'एजिंग'), tone: 'action' }] },
+          { edge: t('Read', 'पढ़ें'), flow: [{ icon: Download, label: t('PDF, CSV or Excel', 'PDF, CSV या Excel'), tone: 'done' }] },
+          { edge: t('Send', 'भेजें'), flow: [{ icon: Mail, label: t('Schedule', 'Schedule'), tone: 'action' }] },
+          { edge: t('Make your own', 'अपनी बनाएँ'), flow: [{ icon: BarChart3, label: t('Create New Report', 'Create New Report'), tone: 'action' }] },
         ],
       },
-      { icon: Download, label: t('Excel, CSV or PDF', 'Excel, CSV या PDF'), tone: 'done' },
     ],
     can: [
-      t('Read the P&L, balance sheet, cash flow and trial balance for a financial year.', 'वित्त वर्ष का P&L, बैलेंस शीट, कैश फ़्लो और ट्रायल बैलेंस देखें।'),
-      t('Open any account’s ledger, and the day book of every voucher.', 'किसी भी अकाउंट का लेजर, और हर वाउचर की डे बुक खोलें।'),
-      t('See ageing: what customers owe you and what you owe vendors, by how late.', 'एजिंग देखें: ग्राहकों पर कितना बाकी और वेंडरों को कितना देना है, कितने दिन से।'),
-      t('Download any report as Excel, CSV or PDF.', 'कोई भी रिपोर्ट Excel, CSV या PDF में डाउनलोड करें।'),
+      t('Open any of nearly ninety reports, by category: Business Overview, Sales, Receivables, Payments Received, Recurring Invoices, Payables, Purchases and Expenses, Taxes, Banking, Projects and Timesheet, Inventory, Accountant, Budgets, Currency, Activity and Automation.', 'कैटेगरी के हिसाब से लगभग नब्बे रिपोर्ट खोलें: Business Overview, Sales, Receivables, Payments Received, Recurring Invoices, Payables, Purchases and Expenses, Taxes, Banking, Projects and Timesheet, Inventory, Accountant, Budgets, Currency, Activity और Automation।'),
+      t('Read the P&L and balance sheet in the Schedule III format, side by side (horizontal), the cash flow statement, business ratios and movement of equity.', 'P&L और बैलेंस शीट Schedule III फ़ॉर्मेट में, आमने-सामने (horizontal), कैश फ़्लो स्टेटमेंट, बिज़नेस रेशियो और इक्विटी का मूवमेंट देखें।'),
+      t('Star the reports you use (**Favorites**); **Last visited** shows when you last opened each. Both are yours alone.', 'जो रिपोर्ट आप इस्तेमाल करते हैं उन्हें स्टार करें (**Favorites**); **Last visited** बताता है आपने हर रिपोर्ट आख़िरी बार कब खोली। दोनों सिर्फ़ आपके हैं।'),
+      t('Download any report as PDF, CSV or Excel, or email it on a schedule (**Scheduled Reports** lists them).', 'कोई भी रिपोर्ट PDF, CSV या Excel में डाउनलोड करें, या तय समय पर ईमेल करें (**Scheduled Reports** में सब दिखते हैं)।'),
+      t('Make your own report from an existing one, or an entirely new one from invoices, bills, expenses, payments, journal lines, items, customers, vendors or time. Keep it under **My Reports**, or share it with the organisation (**Shared Reports**).', 'किसी मौजूदा रिपोर्ट से अपनी रिपोर्ट बनाएँ, या इनवॉइस, बिल, खर्च, पेमेंट, जर्नल लाइन, आइटम, ग्राहक, वेंडर या समय से बिल्कुल नई। उसे **My Reports** में रखें, या संगठन के साथ शेयर करें (**Shared Reports**)।'),
     ],
     steps: [
-      t('Pick the financial year.', 'वित्त वर्ष चुनें।'),
-      t('Choose a report: **P&L**, **Balance Sheet**, **Cash Flow**, **Trial Balance**, **Ledger**, **Day Book** or **Ageing**.', 'रिपोर्ट चुनें: **P&L**, **Balance Sheet**, **Cash Flow**, **Trial Balance**, **Ledger**, **Day Book** या **Ageing**।'),
-      t('For **Ledger**, pick the account.', '**Ledger** के लिए अकाउंट चुनें।'),
-      t('Download it as **Excel**, **CSV** or **PDF**.', 'इसे **Excel**, **CSV** या **PDF** में डाउनलोड करें।'),
-      t('For month-by-month, comparisons and budgets, open **Management reports**.', 'महीने-वार, तुलना और बजट के लिए **Management reports** खोलें।'),
+      t('Pick a category on the left, or type in **Search reports**. Click a report’s name to open it.', 'बाईं ओर कैटेगरी चुनें, या **Search reports** में लिखें। रिपोर्ट खोलने के लिए उसके नाम पर क्लिक करें।'),
+      t('Set the period (months, a year, a date or a quarter) and any filter, such as a customer or an account.', 'अवधि चुनें (महीने, साल, तारीख़ या तिमाही) और कोई फ़िल्टर, जैसे ग्राहक या अकाउंट।'),
+      t('Download it with **PDF**, **CSV** or **Excel**. To email it regularly, click **Schedule**: the period, how often, and up to ten addresses.', '**PDF**, **CSV** या **Excel** से डाउनलोड करें। इसे नियमित ईमेल करने के लिए **Schedule** दबाएँ: अवधि, कितनी बार, और दस पतों तक।'),
+      t('To make it your own, click **Customize** (or **Create New Report** → **Create from existing report** → **Proceed**): choose the columns and their order, the period, the filters, conditions on rows, grouping and sorting. Name it and click **Save report**.', 'इसे अपना बनाने के लिए **Customize** दबाएँ (या **Create New Report** → **Create from existing report** → **Proceed**): कॉलम और उनका क्रम, अवधि, फ़िल्टर, पंक्तियों की शर्तें, ग्रुपिंग और सॉर्टिंग चुनें। नाम दें और **Save report** दबाएँ।'),
+      t('For a report from scratch, choose **Create an entirely new report**, pick a module, its fields and conditions, group by a field with totals, and sort. **Preview report** shows it before you save.', 'बिल्कुल नई रिपोर्ट के लिए **Create an entirely new report** चुनें, मॉड्यूल, उसके फ़ील्ड और शर्तें चुनें, किसी फ़ील्ड से टोटल के साथ ग्रुप करें, और सॉर्ट करें। सेव करने से पहले **Preview report** से देखें।'),
+      t('The classic year view with charts is under **Statements with charts**; month-by-month, budgets and Ask your books are in **Management reports**.', 'चार्ट वाला पुराना साल-वार व्यू **Statements with charts** में है; महीने-वार, बजट और Ask your books **Management reports** में हैं।'),
     ],
-    note: t('A draft invoice or an entry waiting in Review is not in any report until it is posted.', 'ड्राफ़्ट इनवॉइस या Review में रुकी एंट्री तब तक किसी रिपोर्ट में नहीं आती जब तक वह पोस्ट न हो।'),
+    note: t('A draft invoice or an entry waiting in Review is not in any report until it is posted. A custom report saves only its design: it reads the books afresh every time, and only its maker can change it.', 'ड्राफ़्ट इनवॉइस या Review में रुकी एंट्री तब तक किसी रिपोर्ट में नहीं आती जब तक वह पोस्ट न हो। कस्टम रिपोर्ट सिर्फ़ अपना डिज़ाइन सेव करती है: हर बार किताबें नए सिरे से पढ़ती है, और उसे सिर्फ़ बनाने वाला बदल सकता है।'),
   },
 
   managementReports: {
@@ -83,7 +83,7 @@ export const REPORT_GUIDES: Record<AreaKeys<'reports'>, Guide> = {
     can: [
       t('See profit by month, compared with the period before and last year, expenses by category, and profit by project.', 'महीने-वार मुनाफ़ा, पिछली अवधि और पिछले साल से तुलना, कैटेगरी-वार खर्च, और प्रोजेक्ट-वार मुनाफ़ा देखें।'),
       t('See sales and purchases by customer, vendor, item and month, and how long each party takes to pay.', 'ग्राहक, वेंडर, आइटम और महीने के हिसाब से बिक्री-ख़रीद देखें, और हर पार्टी कितने दिन में पेमेंट करती है।'),
-      t('Compare budgets with actuals.', 'बजट और असल की तुलना करें।'),
+      t('Compare a budget with actuals: under **Budget against actual**, pick the year and the **Budget** (the year’s default unless you pick another).', 'बजट और असल की तुलना करें: **Budget against actual** में साल और **Budget** चुनें (कोई और न चुनें तो साल का default)।'),
       t('Email any report as a PDF on a schedule, to up to ten addresses.', 'कोई भी रिपोर्ट तय समय पर PDF में ईमेल करें, दस पतों तक।'),
       t('Ask a question in plain words, and read the month in words, from the books.', 'सीधे शब्दों में सवाल पूछें, और किताबों से महीने का सार पढ़ें।'),
     ],
@@ -160,31 +160,35 @@ export const REPORT_GUIDES: Record<AreaKeys<'reports'>, Guide> = {
     flow: [
       {
         branch: [
-          { flow: [{ icon: Upload, label: t('Sent to the Inbox', 'Inbox में भेजा'), tone: 'action' }] },
+          { flow: [{ icon: Upload, label: t('Uploaded or sent in', 'अपलोड किया या भेजा'), tone: 'action' }] },
           { flow: [{ icon: Paperclip, label: t('Attached to a record', 'रिकॉर्ड से जुड़ा'), tone: 'action' }] },
         ],
       },
-      { icon: FolderOpen, label: t('Listed in Documents', 'Documents में लिस्ट'), tone: 'done' },
-      { icon: Search, label: t('Search and filter', 'खोजें और छाँटें'), tone: 'action' },
+      { icon: FolderOpen, label: t('All Documents', 'All Documents'), tone: 'action' },
       {
         branch: [
-          { edge: t('Waiting', 'इंतज़ार'), flow: [{ icon: ClipboardCheck, label: t('Review', 'Review'), tone: 'wait' }] },
-          { edge: t('Posted', 'पोस्ट'), flow: [{ icon: Receipt, label: t('Open voucher', 'Open voucher'), tone: 'done' }] },
-          { edge: t('Attached', 'जुड़ा'), flow: [{ icon: FileText, label: t('Open its record', 'उसका रिकॉर्ड खोलें'), tone: 'action' }] },
+          { edge: t('Waiting', 'इंतज़ार'), flow: [{ icon: ClipboardCheck, label: t('Review or Add to', 'Review या Add to'), tone: 'wait' }] },
+          { edge: t('Statement', 'स्टेटमेंट'), flow: [{ icon: Wallet, label: t('Bank reconciliation', 'बैंक मिलान'), tone: 'wait' }] },
+          { edge: t('Done', 'हो गया'), flow: [{ icon: Receipt, label: t('Bill, expense or voucher', 'बिल, खर्च या वाउचर'), tone: 'done' }] },
         ],
       },
+      { icon: Filter, label: t('Filed in a folder, if you like', 'चाहें तो फ़ोल्डर में रखें'), tone: 'action' },
     ],
     can: [
-      t('Find every file in the books: bills, invoices, statements and receipts sent to the Inbox, and files attached to records.', 'किताबों की हर फ़ाइल ढूँढें: Inbox में आए बिल, इनवॉइस, स्टेटमेंट और रसीदें, और रिकॉर्ड से जुड़ी फ़ाइलें।'),
-      t('Search by file name, party or number, and filter by status or type.', 'फ़ाइल के नाम, पार्टी या नंबर से खोजें, और हालत या प्रकार से छाँटें।'),
-      t('Open the file, or jump to where it is used.', 'फ़ाइल खोलें, या सीधे वहाँ जाएँ जहाँ वह इस्तेमाल हुई है।'),
+      t('See every file in one list: uploads and files kept against records, with who brought each in, when, and what it became (**Associated to**).', 'हर फ़ाइल एक लिस्ट में देखें: अपलोड और रिकॉर्ड से जुड़ी फ़ाइलें, किसने और कब लाई, और वह क्या बनी (**Associated to**)।'),
+      t('Filter by file type or status, and search by file name, party, number or record.', 'फ़ाइल के प्रकार या हालत से छाँटें, और फ़ाइल के नाम, पार्टी, नंबर या रिकॉर्ड से खोजें।'),
+      t('File documents in folders: make, rename and delete folders in the panel on the left.', 'डॉक्यूमेंट फ़ोल्डर में रखें: बाईं पट्टी में फ़ोल्डर बनाएँ, नाम बदलें और हटाएँ।'),
+      t('See the bank statements that came in under **Bank Statements**: the account, the period, and how many lines are matched.', '**Bank Statements** में आए बैंक स्टेटमेंट देखें: खाता, अवधि, और कितनी लाइनें मिल चुकी हैं।'),
+      t('Enter a document yourself with **Add to**, or read it again with **Try again** when it could not be read.', '**Add to** से डॉक्यूमेंट ख़ुद दर्ज करें, या न पढ़ा गया हो तो **Try again** से दोबारा पढ़वाएँ।'),
     ],
     steps: [
-      t('Type in the search box, or pick a status such as **Ready to review**, **Posted** or **Attached**.', 'सर्च बॉक्स में लिखें, या **Ready to review**, **Posted** या **Attached** जैसी हालत चुनें।'),
-      t('Click **Open file** to see it.', 'देखने के लिए **Open file** दबाएँ।'),
-      t('Click **Review**, **Open voucher**, or the record link beside it to go where it is used.', 'जहाँ वह इस्तेमाल हुई वहाँ जाने के लिए **Review**, **Open voucher**, या बगल का रिकॉर्ड लिंक दबाएँ।'),
-      t('To add new documents, click **Upload in the inbox**.', 'नए डॉक्यूमेंट जोड़ने के लिए **Upload in the inbox** दबाएँ।'),
+      t('Click a file name to open the file. Click the link under **Associated to** to open what it became: the bill, expense or voucher, or the statement’s reconciliation.', 'फ़ाइल खोलने के लिए उसके नाम पर क्लिक करें। **Associated to** का लिंक दबाएँ, वह खुलेगा जो यह बनी: बिल, खर्च या वाउचर, या स्टेटमेंट का मिलान।'),
+      t('Pick a type in **Filter by file type**, or a status such as **Not entered yet** or **Couldn’t read**. Click **Uploaded on** to show the oldest first.', '**Filter by file type** में प्रकार चुनें, या **Not entered yet** या **Couldn’t read** जैसी हालत। पुरानी फ़ाइलें पहले देखने के लिए **Uploaded on** दबाएँ।'),
+      t('To make a folder, click **+** beside **Folders**, type the name and click **Create folder**. Point at a folder to rename or delete it; deleting moves its files to no folder.', 'फ़ोल्डर बनाने के लिए **Folders** के बगल में **+** दबाएँ, नाम लिखें और **Create folder** दबाएँ। नाम बदलने या हटाने के लिए फ़ोल्डर पर पॉइंटर ले जाएँ; हटाने पर उसकी फ़ाइलें बिना फ़ोल्डर के हो जाती हैं।'),
+      t('To file one document, use its **Folder** menu. To file several, tick them, choose a folder under **Move to** and click **Move**.', 'एक डॉक्यूमेंट रखने के लिए उसका **Folder** मेन्यू इस्तेमाल करें। कई रखने हों तो उन्हें टिक करें, **Move to** में फ़ोल्डर चुनें और **Move** दबाएँ।'),
+      t('Click **Upload file** to add documents. Inside a folder, they are filed there.', 'डॉक्यूमेंट जोड़ने के लिए **Upload file** दबाएँ। किसी फ़ोल्डर के अंदर हों तो वे उसी में रखे जाते हैं।'),
     ],
+    note: t('Folders only group files. Filing a document changes nothing in the books, and every move is in the audit trail.', 'फ़ोल्डर सिर्फ़ फ़ाइलें समूह में रखते हैं। फ़ाइल रखने से किताबों में कुछ नहीं बदलता, और हर बदलाव ऑडिट ट्रेल में दर्ज होता है।'),
   },
 
   settings: {
