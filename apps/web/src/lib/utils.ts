@@ -1,5 +1,19 @@
 import { type ClassValue, clsx } from 'clsx';
-import { twMerge } from 'tailwind-merge';
+import { extendTailwindMerge } from 'tailwind-merge';
+
+/**
+ * tailwind-merge only knows Tailwind's own sizes, so it read our type scale
+ * (text-caption, text-h2…) as colours and dropped it whenever a colour class
+ * came after it: a chip asked for text-caption and rendered at body size.
+ * The design system's sizes, from tailwind.config.ts, are named here.
+ */
+const twMerge = extendTailwindMerge({
+  extend: {
+    classGroups: {
+      'font-size': [{ text: ['display-xl', 'display-lg', 'display', 'h1', 'h2', 'h3', 'body-lg', 'body', 'label', 'caption', 'mono-data'] }],
+    },
+  },
+});
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
