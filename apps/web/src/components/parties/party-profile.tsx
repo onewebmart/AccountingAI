@@ -473,7 +473,7 @@ export function PrefillBanner({ kind, onPrefill, busy }: { kind: PartyKind; onPr
       <span>
         Prefill {Who} details from the GST portal using the {Who}&apos;s GSTIN.
       </span>
-      <button type="button" onClick={onPrefill} disabled={busy} className="inline-flex items-center gap-0.5 font-medium text-saffron-700 hover:underline disabled:opacity-60">
+      <button type="button" onClick={onPrefill} disabled={busy} className="inline-flex items-center gap-0.5 font-medium text-brand-800 hover:underline disabled:opacity-60">
         {busy ? 'Looking it up…' : 'Prefill'} <ChevronRight size={14} />
       </button>
     </div>
@@ -533,7 +533,7 @@ export function TypeChoice({ kind, value, onChange }: { kind: PartyKind; value: 
     <div role="radiogroup" aria-label={kind === 'customer' ? 'Customer type' : 'Vendor type'} className="flex items-center gap-5 py-2">
       {(['business', 'individual'] as const).map((v) => (
         <label key={v} className="flex cursor-pointer items-center gap-2 text-body text-ink-900">
-          <input type="radio" className="h-4 w-4 accent-saffron-600" checked={value === v} onChange={() => onChange(v)} />
+          <input type="radio" className="h-4 w-4 accent-brand-600" checked={value === v} onChange={() => onChange(v)} />
           {v === 'business' ? 'Business' : 'Individual'}
         </label>
       ))}
@@ -652,8 +652,8 @@ export function TabStrip<T extends string>({ tabs, active, onChange, label }: { 
           aria-selected={active === key}
           onClick={() => onChange(key)}
           className={cn(
-            '-mb-px border-b-2 px-0.5 pb-2.5 text-body font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-marigold-400',
-            active === key ? 'border-saffron-600 text-ink-900' : 'border-transparent text-ink-500 hover:text-ink-900',
+            '-mb-px border-b-2 px-0.5 pb-2.5 text-body font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600',
+            active === key ? 'border-brand-600 text-ink-900' : 'border-transparent text-ink-500 hover:text-ink-900',
           )}
         >
           {text}
@@ -746,7 +746,7 @@ export function AddressTab({ billing, shipping, onChange, kind }: {
       <div>
         <div className="mb-3 flex items-baseline justify-between gap-2">
           <h3 className="text-body font-semibold text-ink-900">Shipping address</h3>
-          <button type="button" className="inline-flex items-center gap-1 text-caption font-medium text-saffron-700 hover:underline" onClick={() => onChange({ shipping: { ...billing } })}>
+          <button type="button" className="inline-flex items-center gap-1 text-caption font-medium text-brand-800 hover:underline" onClick={() => onChange({ shipping: { ...billing } })}>
             <Copy size={12} /> Copy billing address
           </button>
         </div>
@@ -756,7 +756,7 @@ export function AddressTab({ billing, shipping, onChange, kind }: {
   );
 }
 
-const cell = 'w-full rounded-sm border border-line-200 bg-white px-2 py-1.5 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-saffron-600/40';
+const cell = 'w-full rounded-sm border border-line-200 bg-white px-2 py-1.5 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-brand-600/40';
 
 export function ContactPersonsTab({ rows, onChange }: { rows: ContactForm[]; onChange: (rows: ContactForm[]) => void }) {
   const set = (i: number, k: keyof ContactForm, v: string) => onChange(rows.map((r, j) => (j === i ? { ...r, [k]: v } : r)));
@@ -804,7 +804,7 @@ export function ContactPersonsTab({ rows, onChange }: { rows: ContactForm[]; onC
       </div>
       <button
         type="button"
-        className="mt-3 inline-flex items-center gap-1 text-body font-medium text-saffron-700 hover:underline disabled:opacity-50"
+        className="mt-3 inline-flex items-center gap-1 text-body font-medium text-brand-800 hover:underline disabled:opacity-50"
         disabled={rows.length >= 50}
         onClick={() => onChange([...rows, emptyContact()])}
       >
@@ -937,7 +937,7 @@ export function profileDetailItems(r: PartyRecordBase, kind: PartyKind): Array<[
   if (r.language && r.language !== 'en') items.push(['Language', languageLabel(r.language) ?? r.language]);
   if (r.website) {
     const href = /^https?:\/\//i.test(r.website) ? r.website : `https://${r.website}`;
-    items.push(['Website', <a key="w" href={href} target="_blank" rel="noopener noreferrer" className="text-saffron-700 hover:underline">{r.website}</a>]);
+    items.push(['Website', <a key="w" href={href} target="_blank" rel="noopener noreferrer" className="text-brand-800 hover:underline">{r.website}</a>]);
   }
   if (social) items.push(['Social', social]);
   items.push(['Billing address', <AddressView key="b" a={billing} />]);

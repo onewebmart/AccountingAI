@@ -252,9 +252,9 @@ export default function ExportsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-start justify-between">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-h1 font-display text-ink-900">
+          <h1 className="text-h1 font-display text-navy-900">
             Exports & Tally
           </h1>
           <p className="text-body text-ink-500 mt-1">
@@ -274,9 +274,9 @@ export default function ExportsPage() {
       </div>
 
       {/* Two-column layout: Exports panel + Tally connector */}
-      <div className="grid grid-cols-5 gap-6">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
         {/* Left: Export panel (3/5) */}
-        <div className="col-span-3 space-y-4">
+        <div className="min-w-0 space-y-4 lg:col-span-3">
           <h2 className="text-body font-semibold text-ink-900">Export reports</h2>
           <p className="text-caption text-ink-500">
             All exports are derived from posted journals only. Data is accurate as of the latest approved entry.
@@ -337,7 +337,7 @@ export default function ExportsPage() {
         </div>
 
         {/* Right: Tally connector card (2/5) */}
-        <div className="col-span-2">
+        <div className="min-w-0 lg:col-span-2">
           <div className="rounded-lg border border-line-200 bg-surface-card p-5 space-y-4">
             {/* Connector header */}
             <div className="flex items-start justify-between">
@@ -407,7 +407,7 @@ export default function ExportsPage() {
       </div>
 
       {/* Tally sync log */}
-      <div className="space-y-3">
+      <div className="space-y-3 overflow-x-auto">
         <h2 className="text-body font-semibold text-ink-900">Sync log</h2>
         {syncRecordsQuery.isLoading ? (
           <div className="space-y-2 animate-pulse">

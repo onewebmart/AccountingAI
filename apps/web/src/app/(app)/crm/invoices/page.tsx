@@ -87,9 +87,9 @@ const STATUS_STYLES: Record<PracticeInvoiceStatus, string> = {
   [PracticeInvoiceStatus.DRAFT]: 'bg-surface-sink text-ink-500',
   [PracticeInvoiceStatus.SENT]: 'bg-honey-100 text-ink-700',
   [PracticeInvoiceStatus.PARTIALLY_PAID]: 'bg-pending-bg text-pending-fg',
-  [PracticeInvoiceStatus.PAID]: 'bg-[#E6F4EA] text-[#1E7B34]',
-  [PracticeInvoiceStatus.OVERDUE]: 'bg-[#C92A2A]/10 text-[#C92A2A]',
-  [PracticeInvoiceStatus.LEGAL_NOTICE]: 'bg-[#C92A2A] text-white',
+  [PracticeInvoiceStatus.PAID]: 'bg-[#F0FDF4] text-[#15803D]',
+  [PracticeInvoiceStatus.OVERDUE]: 'bg-[#DC2626]/10 text-[#DC2626]',
+  [PracticeInvoiceStatus.LEGAL_NOTICE]: 'bg-[#DC2626] text-white',
   [PracticeInvoiceStatus.CANCELLED]: 'bg-surface-sink text-ink-400 line-through',
 };
 
@@ -108,8 +108,8 @@ function AgeingStrip({ ageing }: { ageing: Ageing }) {
     { label: 'Not yet due', value: ageing.buckets.notYetDuePaise, tone: 'text-ink-700' },
     { label: '0–30 days', value: ageing.buckets.days0to30Paise, tone: 'text-pending-fg' },
     { label: '31–60 days', value: ageing.buckets.days31to60Paise, tone: 'text-pending-fg' },
-    { label: '61–90 days', value: ageing.buckets.days61to90Paise, tone: 'text-[#C92A2A]' },
-    { label: 'Over 90 days', value: ageing.buckets.over90Paise, tone: 'text-[#C92A2A]' },
+    { label: '61–90 days', value: ageing.buckets.days61to90Paise, tone: 'text-[#DC2626]' },
+    { label: 'Over 90 days', value: ageing.buckets.over90Paise, tone: 'text-[#DC2626]' },
   ];
 
   return (
@@ -122,13 +122,13 @@ function AgeingStrip({ ageing }: { ageing: Ageing }) {
           <p className="text-caption text-ink-500">Billed</p>
         </div>
         <div className="rounded-xl border border-line-200 bg-surface-card px-4 py-3">
-          <p className="font-mono text-h3 font-bold text-[#1E7B34]">
+          <p className="font-mono text-h3 font-bold text-[#15803D]">
             {formatPaise(ageing.collectedPaise)}
           </p>
           <p className="text-caption text-ink-500">Collected</p>
         </div>
         <div className="rounded-xl border border-line-200 bg-surface-card px-4 py-3">
-          <p className="font-mono text-h3 font-bold text-saffron-700">
+          <p className="font-mono text-h3 font-bold text-brand-800">
             {formatPaise(ageing.outstandingPaise)}
           </p>
           <p className="text-caption text-ink-500">Outstanding</p>
@@ -286,7 +286,7 @@ function NewInvoiceDialog({
           </div>
 
           {error ? (
-            <p className="rounded-lg bg-[#C92A2A]/5 px-3 py-2 text-body text-[#C92A2A]">
+            <p className="rounded-lg bg-[#DC2626]/5 px-3 py-2 text-body text-[#DC2626]">
               {error.message}
             </p>
           ) : null}
@@ -378,7 +378,7 @@ export default function InvoicesPage() {
       <FadeIn>
         <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h1 className="font-heading text-h1 text-ink-900">Invoices</h1>
+            <h1 className="font-heading text-h1 text-navy-900">Invoices</h1>
             <p className="mt-1 text-body text-ink-500">
               Your own fee billing and what is still owed. Reminders climb a ladder: seven days
               before, on the due date, then a week and a fortnight late.
@@ -404,7 +404,7 @@ export default function InvoicesPage() {
       </FadeIn>
 
       {collections.isSuccess ? (
-        <p className="mb-4 rounded-lg bg-[#E6F4EA] px-3 py-2 text-body text-[#1E7B34]">
+        <p className="mb-4 rounded-lg bg-[#F0FDF4] px-3 py-2 text-body text-[#15803D]">
           Queued {collections.data.remindersQueued} reminder(s)
           {collections.data.escalated > 0
             ? ` · ${collections.data.escalated} flagged for legal escalation`
@@ -416,7 +416,7 @@ export default function InvoicesPage() {
         </p>
       ) : null}
       {pay.error || issue.error ? (
-        <p className="mb-4 rounded-lg bg-[#C92A2A]/5 px-3 py-2 text-body text-[#C92A2A]">
+        <p className="mb-4 rounded-lg bg-[#DC2626]/5 px-3 py-2 text-body text-[#DC2626]">
           {((pay.error ?? issue.error) as Error).message}
         </p>
       ) : null}
@@ -472,7 +472,7 @@ export default function InvoicesPage() {
                     <TableCell className="text-body text-ink-700">
                       {formatDate(inv.dueDate)}
                       {late > 0 && inv.status !== PracticeInvoiceStatus.DRAFT ? (
-                        <span className="ml-1 text-[11px] text-[#C92A2A]">({late}d late)</span>
+                        <span className="ml-1 text-[11px] text-[#DC2626]">({late}d late)</span>
                       ) : null}
                     </TableCell>
                     <TableCell className="font-mono text-body text-ink-700">

@@ -86,9 +86,9 @@ These override every feature request, shortcut, or convenience. If a feature can
 
 ## Design system reminders
 
-- Brand colors: saffron (`#E8590C`) primary, marigold (`#FAB005`) pending/AI, warm off-white (`#FFFCF6`) page background.
-- **Amber = pending/AI-proposed. Green = confirmed/posted.** Error states are always cool red (`#C92A2A`), never orange.
-- Fonts: Bricolage Grotesque (headings) + Hanken Grotesk (body) + JetBrains Mono (numbers/IDs). Never substitute Inter.
+- Brand (rebranded Nov 2026, replaces the saffron palette): navy `#142D4E` (sidebar, headings) and dark navy `#0B1F36` (hero, footer) for the frame; emerald `#16A36A` for primary buttons (hover `#128456`, which is also the shade for green text). Page background `#F5F7FA`, cards white with `#E2E8F0` borders. Text `#1E293B` / secondary `#64748B`. The values live in `apps/web/tailwind.config.ts` and `globals.css`; the class names `brand-*`, `navy-*`, `ink-*`, `line-*`, `surface-*` carry them.
+- **Amber = pending/AI-proposed. Green = confirmed/posted.** Warning amber `#B45309`, success `#15803D`, info `#2563EB`. Error states are always red (`#DC2626`), never orange. Expenses on the dashboard are orange (`expense-*`).
+- Fonts: Manrope Bold (headings) + Inter (body, buttons semibold). Amounts and IDs are Inter SemiBold with tabular figures (the `font-mono` class).
 - Review queue (§9.6 of design system) is the signature page — build it first as the reference.
 - Every button label is the action verb: **Approve & post**, **Send invoice**, **Run reconciliation**.
 - Toasts mirror button copy: **Approve & post** → toast: **Posted to ledger**.

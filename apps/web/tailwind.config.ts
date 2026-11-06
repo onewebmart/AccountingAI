@@ -10,74 +10,90 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Brand — warm
-        saffron: {
-          500: '#F76707',
-          600: '#E8590C',
-          700: '#C84A06',
+        // Brand: navy and emerald. Navy carries the frame (sidebar, hero,
+        // footer); emerald is the one action colour. Values mirror the custom
+        // properties in globals.css.
+        navy: {
+          50: '#F3F6FA',
+          100: '#E7EDF4',
+          200: '#C9D6E3',
+          300: '#9FB3C8',
+          600: '#3A5A7C',
+          700: '#264563', // active sidebar item
+          800: '#1D3A5F',
+          900: '#142D4E', // primary navy
+          950: '#0B1F36', // dark navy
         },
-        marigold: {
-          300: '#FFD43B',
-          400: '#FAB005',
-        },
-        honey: {
-          50: '#FFFBF2',
-          100: '#FFF4DC',
-        },
-        // `brand` is what most pages wrote (focus rings, active tabs, primary
-        // cards), but it was never defined, so those classes rendered nothing.
-        // It is the saffron scale under the name the pages use.
+        // Emerald: primary buttons and accents. 600 is the button, 700 its
+        // hover and the shade used for green text (4.7:1 on white; 600 is
+        // 3.2:1, too light for body-size text).
         brand: {
-          50: '#FFF4E6',
-          200: '#FFC078',
-          400: '#FF922B',
-          500: '#F76707',
-          600: '#E8590C',
-          700: '#C84A06',
+          50: '#F0FDF4',
+          100: '#DCFCE7',
+          200: '#BBF7D0',
+          400: '#34B37E',
+          500: '#1BAA70',
+          600: '#16A36A',
+          700: '#128456',
+          800: '#0E6A45',
+          900: '#0B5236',
         },
-        // Neutrals
+        // Amber: pending, waiting on a person, AI-proposed. Never an error.
+        marigold: {
+          300: '#FCD34D',
+          400: '#F59E0B',
+        },
+        // Pale fills: 50 a neutral hover, 100 the amber wash behind pending things.
+        honey: {
+          50: '#F4F7FA',
+          100: '#FFFBEB',
+        },
+        // Neutrals: slate, cool to sit with navy.
         ink: {
-          // 300 and 600 are used across the pages and were missing.
-          300: '#C9BDB0',
-          400: '#A8998A',
-          500: '#7A6E60',
-          600: '#5A5045',
-          700: '#3A322A',
-          900: '#1F1A15',
+          300: '#CBD5E1',
+          400: '#8492A6',
+          500: '#64748B', // secondary text
+          600: '#475569',
+          700: '#334155',
+          900: '#1E293B', // primary text
         },
         line: {
-          // Row dividers: a step lighter than borders. Used on 30-odd tables
-          // but never defined, so the dividers were missing.
-          100: '#F3EDE3',
-          200: '#EBE3D7',
+          100: '#EEF2F6', // row dividers
+          200: '#E2E8F0', // borders
         },
         surface: {
           card: '#FFFFFF',
-          page: '#FFFCF6',
-          sink: '#F6EFE3',
+          page: '#F5F7FA',
+          sink: '#F1F5F9',
         },
         roast: {
-          900: '#241A11',
+          900: '#0B1F36',
         },
         // Semantic states.
         // Kept as literal hex rather than var(--token) so Tailwind's opacity
         // modifiers (border-error-fg/20) resolve; the values mirror the
         // custom properties of the same name in globals.css.
         pending: {
-          fg: '#945800',
-          bg: '#FFF4DC',
+          fg: '#B45309',
+          bg: '#FFFBEB',
         },
         success: {
-          fg: '#1E7A47',
-          bg: '#E6F6EE',
+          fg: '#15803D',
+          bg: '#F0FDF4',
         },
         error: {
-          fg: '#C92A2A',
-          bg: '#FBE9E9',
+          fg: '#DC2626',
+          bg: '#FEF2F2',
         },
         info: {
-          fg: '#3B5BC0',
-          bg: '#E9EDFB',
+          fg: '#2563EB',
+          bg: '#EFF6FF',
+        },
+        // Dashboard figures: expenses are orange.
+        expense: {
+          fg: '#C2410C',
+          DEFAULT: '#EA580C',
+          bg: '#FFF7ED',
         },
         // shadcn compatibility mappings
         border: 'hsl(var(--border))',
@@ -115,25 +131,25 @@ const config: Config = {
         },
       },
       fontFamily: {
-        display: ['var(--font-display)', 'sans-serif'],
-        // `font-heading` is used in 54 places and was defined nowhere, so every
-        // one of those headings silently fell back to the browser's default
-        // sans — Bricolage never rendered on them. Aliased rather than renamed
-        // across 14 files: both names now resolve to the display face.
-        heading: ['var(--font-display)', 'sans-serif'],
-        body: ['var(--font-body)', 'sans-serif'],
-        mono: ['var(--font-mono)', 'monospace'],
+        // Manrope for headings, Inter for everything else. `heading` and
+        // `display` are the same face under the two names the pages use.
+        display: ['var(--font-display)', 'system-ui', 'sans-serif'],
+        heading: ['var(--font-display)', 'system-ui', 'sans-serif'],
+        body: ['var(--font-body)', 'system-ui', 'sans-serif'],
+        // Amounts and IDs: Inter with tabular figures (globals.css), so
+        // columns of money line up. The class keeps its old name.
+        mono: ['var(--font-body)', 'system-ui', 'sans-serif'],
       },
       fontSize: {
         // Two sizes above the old ceiling, for the landing page and empty
         // states. Line-height tightens as size grows, which is what stops a
         // large headline reading as a scaled-up paragraph.
-        'display-xl': ['clamp(2.75rem, 6vw, 4.5rem)', { lineHeight: '0.98', fontWeight: '700' }],
-        'display-lg': ['clamp(2.25rem, 4.5vw, 3.25rem)', { lineHeight: '1.02', fontWeight: '700' }],
-        display: ['2.75rem', { lineHeight: '1.05', fontWeight: '700' }],
-        h1: ['2rem', { lineHeight: '1.15', fontWeight: '600' }],
-        h2: ['1.5rem', { lineHeight: '1.2', fontWeight: '600' }],
-        h3: ['1.25rem', { lineHeight: '1.3', fontWeight: '600' }],
+        'display-xl': ['clamp(2.75rem, 6vw, 4.5rem)', { lineHeight: '1.05', fontWeight: '800' }],
+        'display-lg': ['clamp(2.25rem, 4.5vw, 3.25rem)', { lineHeight: '1.1', fontWeight: '800' }],
+        display: ['2.75rem', { lineHeight: '1.1', fontWeight: '700' }],
+        h1: ['2rem', { lineHeight: '1.2', fontWeight: '700' }],
+        h2: ['1.5rem', { lineHeight: '1.25', fontWeight: '700' }],
+        h3: ['1.25rem', { lineHeight: '1.35', fontWeight: '700' }],
         'body-lg': ['1.0625rem', { lineHeight: '1.55' }],
         body: ['0.9375rem', { lineHeight: '1.55' }],
         label: ['0.8125rem', { lineHeight: '1.4', fontWeight: '500' }],
@@ -153,18 +169,21 @@ const config: Config = {
       borderRadius: {
         sm: '6px',
         md: '10px',
+        // Cards: 12px (rounded-xl) and 16px (rounded-lg, rounded-2xl).
+        xl: '12px',
         lg: '16px',
+        '2xl': '16px',
         full: '9999px',
       },
       boxShadow: {
-        e1: '0 1px 2px rgba(36,26,17,.06), 0 1px 1px rgba(36,26,17,.04)',
-        e2: '0 6px 20px rgba(36,26,17,.10)',
-        e3: '0 16px 48px rgba(36,26,17,.18)',
+        e1: '0 1px 2px rgba(15,23,42,.04), 0 1px 3px rgba(15,23,42,.06)',
+        e2: '0 8px 24px rgba(15,23,42,.08)',
+        e3: '0 20px 48px rgba(15,23,42,.16)',
       },
       keyframes: {
         'amber-to-green': {
-          '0%': { borderLeftColor: '#FAB005' },
-          '100%': { borderLeftColor: '#1E7A47' },
+          '0%': { borderLeftColor: '#F59E0B' },
+          '100%': { borderLeftColor: '#15803D' },
         },
         'fade-in': {
           from: { opacity: '0' },

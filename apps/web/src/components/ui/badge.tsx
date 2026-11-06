@@ -11,14 +11,14 @@ const badgeVariants = cva(
   {
     variants: {
       variant: {
-        pending: 'bg-[#FFF4DC] text-[#945800]',        // Amber — awaiting review
-        posted: 'bg-[#E6F6EE] text-[#1E7A47]',         // Green — confirmed
-        overdue: 'bg-[#FBE9E9] text-[#C92A2A]',        // Red — danger
-        matched: 'bg-[#E6F6EE] text-[#1E7A47]',        // Green
-        attention: 'bg-[#FBE9E9] text-[#C92A2A]',      // Red
+        pending: 'bg-[#FFFBEB] text-[#945800]',        // Amber — awaiting review
+        posted: 'bg-[#F0FDF4] text-[#15803D]',         // Green — confirmed
+        overdue: 'bg-[#FEF2F2] text-[#DC2626]',        // Red — danger
+        matched: 'bg-[#F0FDF4] text-[#15803D]',        // Green
+        attention: 'bg-[#FEF2F2] text-[#DC2626]',      // Red
         draft: 'bg-surface-sink text-ink-400',          // Muted
-        info: 'bg-[#E9EDFB] text-[#3B5BC0]',           // Info
-        duplicate: 'bg-[#FBE9E9] text-[#C92A2A]',      // Red
+        info: 'bg-[#EFF6FF] text-[#3B5BC0]',           // Info
+        duplicate: 'bg-[#FEF2F2] text-[#DC2626]',      // Red
       },
     },
     defaultVariants: {

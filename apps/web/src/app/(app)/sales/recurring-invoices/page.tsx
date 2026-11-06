@@ -121,13 +121,13 @@ function PaymentReminders() {
         ) : (
           <div className="mb-4 flex flex-wrap items-center gap-6">
             <label className="flex items-center gap-3">
-              <input type="checkbox" className="h-4 w-4 accent-saffron-600" checked={s?.enabled ?? false} disabled={!s || update.isPending} onChange={(e) => update.mutate({ enabled: e.target.checked })} />
+              <input type="checkbox" className="h-4 w-4 accent-brand-600" checked={s?.enabled ?? false} disabled={!s || update.isPending} onChange={(e) => update.mutate({ enabled: e.target.checked })} />
               <span className="text-body font-medium text-ink-900">Send reminders automatically</span>
             </label>
             <label className="flex items-center gap-2 text-body text-ink-700">
               Send by
               <select
-                className="rounded-md border border-line-200 bg-white px-2 py-1 text-body focus:outline-none focus:ring-2 focus:ring-saffron-600/40"
+                className="rounded-md border border-line-200 bg-white px-2 py-1 text-body focus:outline-none focus:ring-2 focus:ring-brand-600/40"
                 value={s?.channel ?? 'auto'}
                 disabled={!s || update.isPending}
                 onChange={(e) => update.mutate({ channel: e.target.value as ReminderSettings['channel'] })}

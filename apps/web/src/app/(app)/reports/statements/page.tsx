@@ -480,7 +480,7 @@ export default function StatementsPage() {
       <div className="flex items-start justify-between">
         <div>
           <Link href="/reports" className="text-caption text-ink-500 hover:text-ink-900 hover:underline">← Reports Center</Link>
-          <h1 className="text-h1 font-display text-ink-900">
+          <h1 className="text-h1 font-display text-navy-900">
             Statements
           </h1>
           <p className="text-body text-ink-500 mt-1">
@@ -513,7 +513,7 @@ export default function StatementsPage() {
             className={`rounded-full px-4 py-1.5 text-body font-medium border transition-colors ${
               reportType === r.id
                 ? 'bg-brand-600 text-white border-brand-600'
-                : 'bg-surface-card text-ink-700 border-line-200 hover:border-brand-400 hover:text-brand-600'
+                : 'bg-surface-card text-ink-700 border-line-200 hover:border-brand-400 hover:text-brand-700'
             }`}
           >
             {r.label}
@@ -599,7 +599,7 @@ export default function StatementsPage() {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-8">
+          <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
             <SectionTable
               title="Revenue"
               rows={plIncome}
@@ -631,7 +631,7 @@ export default function StatementsPage() {
             </h2>
             <TiedOutBadge ok={bsIsTiedOut} />
           </div>
-          <div className="grid grid-cols-2 gap-8">
+          <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
             <div>
               <SectionTable
                 title="Assets"

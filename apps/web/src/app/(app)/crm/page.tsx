@@ -87,16 +87,16 @@ function StatTile({
 }) {
   const toneClass = {
     neutral: 'text-ink-900',
-    good: 'text-[#1E7B34]',
+    good: 'text-[#15803D]',
     pending: 'text-pending-fg',
-    bad: 'text-[#C92A2A]',
+    bad: 'text-[#DC2626]',
   }[tone];
 
   return (
     <HoverLift className="h-full">
       <Link
         href={href}
-        className="group block h-full rounded-xl border border-line-200 bg-surface-card p-4 transition-colors hover:border-saffron-600"
+        className="group block h-full rounded-xl border border-line-200 bg-surface-card p-4 transition-colors hover:border-brand-600"
       >
         <div className="flex items-center gap-2 text-ink-500">
           {icon}
@@ -135,7 +135,7 @@ function PracticeSetup() {
   if (done) {
     return (
       <div className="rounded-xl border border-line-200 bg-surface-card px-6 py-14 text-center">
-        <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#E6F4EA] text-[#1E7B34]">
+        <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#F0FDF4] text-[#15803D]">
           <Users size={26} />
         </span>
         <p className="mt-4 font-heading text-h3 text-ink-900">Practice created</p>
@@ -152,7 +152,7 @@ function PracticeSetup() {
 
   return (
     <div className="rounded-xl border border-line-200 bg-surface-card px-6 py-14 text-center">
-      <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-honey-100 text-saffron-700">
+      <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-honey-100 text-brand-800">
         <Users size={26} />
       </span>
       <p className="mt-4 font-heading text-h3 text-ink-900">
@@ -182,7 +182,7 @@ function PracticeSetup() {
       </form>
 
       {enable.error ? (
-        <p className="mt-3 text-body text-[#C92A2A]">{(enable.error as Error).message}</p>
+        <p className="mt-3 text-body text-[#DC2626]">{(enable.error as Error).message}</p>
       ) : null}
     </div>
   );
@@ -206,7 +206,7 @@ export default function CrmDashboardPage() {
         <FadeIn>
           <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
             <div>
-              <h1 className="font-heading text-h1 text-ink-900">Practice</h1>
+              <h1 className="font-heading text-h1 text-navy-900">Practice</h1>
               <p className="mt-1 text-body text-ink-500">
                 The CA-firm side of the product.
               </p>
@@ -235,8 +235,8 @@ export default function CrmDashboardPage() {
 
   if (error || !data) {
     return (
-      <div className="rounded-xl border border-[#C92A2A]/30 bg-[#C92A2A]/5 p-6">
-        <p className="font-medium text-[#C92A2A]">Couldn&apos;t load the dashboard</p>
+      <div className="rounded-xl border border-[#DC2626]/30 bg-[#DC2626]/5 p-6">
+        <p className="font-medium text-[#DC2626]">Couldn&apos;t load the dashboard</p>
         <p className="mt-1 text-body text-ink-500">{(error as Error)?.message}</p>
       </div>
     );
@@ -247,7 +247,7 @@ export default function CrmDashboardPage() {
       <FadeIn>
         <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h1 className="font-heading text-h1 text-ink-900">Dashboard</h1>
+            <h1 className="font-heading text-h1 text-navy-900">Dashboard</h1>
             <p className="mt-1 text-body text-ink-500">Where your practice stands today.</p>
           </div>
           <GuideButton guide="practiceHome" />
@@ -317,7 +317,7 @@ export default function CrmDashboardPage() {
             <h2 className="font-heading text-body font-semibold text-ink-900">
               Upcoming compliance deadlines
             </h2>
-            <Link href="/crm/compliance" className="text-caption font-medium text-saffron-700 hover:underline">
+            <Link href="/crm/compliance" className="text-caption font-medium text-brand-800 hover:underline">
               View all
             </Link>
           </div>
@@ -360,7 +360,7 @@ export default function CrmDashboardPage() {
         <div className="space-y-4">
           <section className="rounded-xl border border-line-200 bg-surface-card p-4">
             <div className="mb-3 flex items-center gap-2">
-              <Bot size={15} className="text-saffron-600" />
+              <Bot size={15} className="text-brand-700" />
               <h2 className="font-heading text-body font-semibold text-ink-900">Agent activity</h2>
             </div>
             <dl className="space-y-2 text-body">
@@ -370,7 +370,7 @@ export default function CrmDashboardPage() {
               </div>
               <div className="flex justify-between">
                 <dt className="text-ink-500">Auto-resolve rate</dt>
-                <dd className="font-mono text-[#1E7B34]">{data.agent.autoResolveRate}%</dd>
+                <dd className="font-mono text-[#15803D]">{data.agent.autoResolveRate}%</dd>
               </div>
               <div className="flex justify-between">
                 <dt className="text-ink-500">Messages sent</dt>
@@ -390,7 +390,7 @@ export default function CrmDashboardPage() {
             </dl>
             <Link
               href="/crm/agent"
-              className="mt-3 block text-caption font-medium text-saffron-700 hover:underline"
+              className="mt-3 block text-caption font-medium text-brand-800 hover:underline"
             >
               Open conversations
             </Link>
@@ -398,7 +398,7 @@ export default function CrmDashboardPage() {
 
           <section className="rounded-xl border border-line-200 bg-surface-card p-4">
             <div className="mb-3 flex items-center gap-2">
-              <TrendingUp size={15} className="text-saffron-600" />
+              <TrendingUp size={15} className="text-brand-700" />
               <h2 className="font-heading text-body font-semibold text-ink-900">Lead pipeline</h2>
             </div>
             <div className="flex items-end justify-between">
@@ -407,7 +407,7 @@ export default function CrmDashboardPage() {
                 <p className="text-caption text-ink-500">Active leads</p>
               </div>
               <div className="text-right">
-                <p className="font-mono text-h2 font-bold text-saffron-700">
+                <p className="font-mono text-h2 font-bold text-brand-800">
                   {formatPaise(data.leads.pipelineValuePaise)}
                 </p>
                 <p className="text-caption text-ink-500">Pipeline value</p>
@@ -415,7 +415,7 @@ export default function CrmDashboardPage() {
             </div>
             <Link
               href="/crm/leads"
-              className="mt-3 block text-caption font-medium text-saffron-700 hover:underline"
+              className="mt-3 block text-caption font-medium text-brand-800 hover:underline"
             >
               Open pipeline
             </Link>
@@ -423,7 +423,7 @@ export default function CrmDashboardPage() {
 
           <section className="rounded-xl border border-line-200 bg-surface-card p-4">
             <div className="mb-3 flex items-center gap-2">
-              <FileText size={15} className="text-saffron-600" />
+              <FileText size={15} className="text-brand-700" />
               <h2 className="font-heading text-body font-semibold text-ink-900">Documents</h2>
             </div>
             <dl className="space-y-2 text-body">
@@ -445,7 +445,7 @@ export default function CrmDashboardPage() {
             </dl>
             <Link
               href="/crm/documents"
-              className="mt-3 block text-caption font-medium text-saffron-700 hover:underline"
+              className="mt-3 block text-caption font-medium text-brand-800 hover:underline"
             >
               Open document hub
             </Link>

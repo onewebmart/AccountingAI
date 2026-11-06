@@ -40,7 +40,7 @@ export default function ForgotPasswordPage() {
         title="Check your email"
         subtitle={`If an account exists for ${email}, a reset link is on its way. It expires in an hour.`}
         footer={
-          <Link href="/auth/login" className="font-medium text-saffron-600 hover:underline">
+          <Link href="/auth/login" className="font-medium text-brand-700 hover:underline">
             ← Back to sign in
           </Link>
         }
@@ -59,7 +59,7 @@ export default function ForgotPasswordPage() {
       footer={
         <>
           Remembered it?{' '}
-          <Link href="/auth/login" className="font-medium text-saffron-600 hover:underline">
+          <Link href="/auth/login" className="font-medium text-brand-700 hover:underline">
             Sign in
           </Link>
         </>

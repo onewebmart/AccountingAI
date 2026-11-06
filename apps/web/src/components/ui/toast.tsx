@@ -37,9 +37,9 @@ const Toast = React.forwardRef<
         'data-[swipe=cancel]:translate-x-0 data-[swipe=end]:translate-x-[var(--radix-toast-swipe-end-x)]',
         'data-[swipe=move]:translate-x-[var(--radix-toast-swipe-move-x)] data-[swipe=move]:transition-none',
         'data-[state=open]:animate-fade-in data-[state=closed]:animate-fade-out',
-        variant === 'success' && 'border-l-4 border-l-[#1E7A47]',
-        variant === 'error' && 'border-l-4 border-l-[#C92A2A]',
-        variant === 'default' && 'border-l-4 border-l-saffron-600',
+        variant === 'success' && 'border-l-4 border-l-[#15803D]',
+        variant === 'error' && 'border-l-4 border-l-[#DC2626]',
+        variant === 'default' && 'border-l-4 border-l-brand-600',
         className,
       )}
       {...props}
@@ -57,7 +57,7 @@ const ToastAction = React.forwardRef<
     className={cn(
       'inline-flex shrink-0 items-center justify-center rounded-sm px-3 py-1 text-body font-medium',
       'border border-line-200 bg-transparent hover:bg-honey-50',
-      'focus:outline-none focus:ring-2 focus:ring-marigold-400',
+      'focus:outline-none focus:ring-2 focus:ring-brand-600',
       className,
     )}
     {...props}
@@ -73,7 +73,7 @@ const ToastClose = React.forwardRef<
     ref={ref}
     className={cn(
       'absolute right-2 top-2 rounded-sm p-1 text-ink-400 hover:text-ink-900',
-      'focus:outline-none focus:ring-2 focus:ring-marigold-400',
+      'focus:outline-none focus:ring-2 focus:ring-brand-600',
       className,
     )}
     toast-close=""

@@ -200,7 +200,7 @@ export function BulkGrid({ rows, onChange, errors }: { rows: BulkRow[]; onChange
                   <td className={cn(cell, 'pt-3.5 text-center')}>
                     <input
                       type="checkbox"
-                      className="h-4 w-4 accent-saffron-600 disabled:opacity-30"
+                      className="h-4 w-4 accent-brand-600 disabled:opacity-30"
                       checked={r.billable}
                       disabled={!r.customerId}
                       title={r.customerId ? 'Bill it on to the customer' : 'Choose a customer first'}
@@ -235,7 +235,7 @@ export function BulkGrid({ rows, onChange, errors }: { rows: BulkRow[]; onChange
           </tfoot>
         </table>
       </TableCard>
-      <button type="button" className="mt-3 inline-flex items-center gap-1 text-body font-medium text-saffron-700 hover:underline" onClick={() => onChange([...rows, ...Array.from({ length: 5 }, () => blankRow())])}>
+      <button type="button" className="mt-3 inline-flex items-center gap-1 text-body font-medium text-brand-800 hover:underline" onClick={() => onChange([...rows, ...Array.from({ length: 5 }, () => blankRow())])}>
         <Plus size={15} /> Add more expenses
       </button>
     </div>

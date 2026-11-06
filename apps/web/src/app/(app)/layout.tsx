@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { Sidebar } from '@/components/shell/sidebar';
 import { Topbar } from '@/components/shell/topbar';
@@ -17,6 +17,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { data: workspace } = useWorkspace();
   const router = useRouter();
   const pathname = usePathname();
+  // Below lg the sidebar is a drawer; it closes when the page changes.
+  const [navOpen, setNavOpen] = useState(false);
+  useEffect(() => setNavOpen(false), [pathname]);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -43,11 +46,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         reviewCount={workspace?.counts.review ?? 0}
         firmName={workspace?.firm?.name}
         role={workspace?.user.role}
+        open={navOpen}
+        onClose={() => setNavOpen(false)}
       />
-      <Topbar />
-      <main className="ml-[260px] pt-16">
+      <Topbar onMenu={() => setNavOpen(true)} />
+      <main className="pt-16 lg:ml-[260px]">
         {/* pb-28 lets the end of every page scroll clear of the Ask your books button. */}
-        <div className="mx-auto max-w-content px-6 pb-28 pt-8">
+        <div className="mx-auto max-w-content px-4 pb-28 pt-6 sm:px-6 sm:pt-8">
           <PageTransition>{children}</PageTransition>
         </div>
       </main>

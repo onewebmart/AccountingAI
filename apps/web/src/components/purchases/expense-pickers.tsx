@@ -91,7 +91,7 @@ export function CustomerPicker(props: PickerProps) {
 export function BillableToggle({ checked, onChange, customerName }: { checked: boolean; onChange: (v: boolean) => void; customerName?: string | null }) {
   return (
     <label className="flex items-start gap-2 text-body text-ink-900">
-      <input type="checkbox" className="mt-0.5 h-4 w-4 accent-saffron-600" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      <input type="checkbox" className="mt-0.5 h-4 w-4 accent-brand-600" checked={checked} onChange={(e) => onChange(e.target.checked)} />
       <span>
         Billable
         <span className="block text-caption text-ink-500">To bill on to {customerName ?? 'the customer'}. It waits under their billable expenses until invoiced.</span>

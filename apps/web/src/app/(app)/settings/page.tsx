@@ -607,7 +607,7 @@ function IntegrationsTab() {
             <p className="text-body font-semibold text-ink-900">Tally connector</p>
             <p className="text-caption text-ink-500 mt-0.5">Sync approved vouchers directly into Tally ERP.</p>
           </div>
-          <a href="/exports" className="inline-flex items-center gap-1 text-caption font-medium text-brand-600 hover:underline">
+          <a href="/exports" className="inline-flex items-center gap-1 text-caption font-medium text-brand-700 hover:underline">
             Configure <ChevronRight size={12} />
           </a>
         </div>
@@ -695,8 +695,8 @@ function BrandingTab() {
         <div>
           <label className="block text-caption font-medium text-ink-700 mb-1">Accent colour</label>
           <div className="flex items-center gap-3">
-            <input type="color" defaultValue="#E8590C" className="h-9 w-16 rounded cursor-pointer border border-line-200" />
-            <span className="text-caption font-mono text-ink-500">#E8590C</span>
+            <input type="color" defaultValue="#16A36A" className="h-9 w-16 rounded cursor-pointer border border-line-200" />
+            <span className="text-caption font-mono text-ink-500">#16A36A</span>
           </div>
           <p className="text-caption text-ink-400 mt-1">Used for buttons and highlights in the client portal.</p>
         </div>
@@ -751,7 +751,7 @@ export default function SettingsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-h1 font-display text-ink-900">
+          <h1 className="text-h1 font-display text-navy-900">
             Settings
           </h1>
           <p className="text-body text-ink-500 mt-1">
@@ -785,7 +785,7 @@ export default function SettingsPage() {
                       : 'text-ink-600 hover:bg-surface-sink hover:text-ink-900'
                   }`}
                 >
-                  <span className={activeTab === tab.id ? 'text-brand-600' : 'text-ink-400'}>{tab.icon}</span>
+                  <span className={activeTab === tab.id ? 'text-brand-700' : 'text-ink-400'}>{tab.icon}</span>
                   {tab.label}
                 </button>
               </li>

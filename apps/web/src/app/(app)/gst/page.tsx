@@ -415,15 +415,15 @@ export default function GstPage() {
       )}
 
       {/* Tab bar */}
-      <div className="border-b border-line-200">
-        <nav className="flex gap-6">
+      <div className="overflow-x-auto border-b border-line-200">
+        <nav className="flex gap-6 whitespace-nowrap">
           {TABS.map((t) => (
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
               className={`pb-3 text-body font-medium border-b-2 transition-colors ${
                 tab === t.id
-                  ? 'border-brand-600 text-brand-600'
+                  ? 'border-brand-600 text-brand-700'
                   : 'border-transparent text-ink-500 hover:text-ink-900'
               }`}
             >
@@ -734,7 +734,7 @@ export default function GstPage() {
             <div className="flex items-end justify-between gap-4">
               <p className="text-caption text-ink-500">
                 In cash, after input credit is set off as GSTR-3B does it.{' '}
-                <button type="button" className="text-brand-600 hover:underline" onClick={() => setTab('returns')}>
+                <button type="button" className="text-brand-700 hover:underline" onClick={() => setTab('returns')}>
                   See the 3B
                 </button>
               </p>

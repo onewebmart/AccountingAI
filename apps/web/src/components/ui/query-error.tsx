@@ -113,7 +113,7 @@ export function TableError({
             <button
               type="button"
               onClick={onRetry}
-              className="mt-2 inline-flex items-center gap-1.5 text-caption font-medium text-saffron-600 hover:underline"
+              className="mt-2 inline-flex items-center gap-1.5 text-caption font-medium text-brand-700 hover:underline"
             >
               <RefreshCw size={13} />
               Try again

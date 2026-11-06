@@ -21,7 +21,7 @@ interface Revaluation {
 interface Line { description: string; qty: string; price: string }
 
 const message = (err: unknown) => (err instanceof ApiError ? err.message : err instanceof Error ? err.message : 'Something went wrong. Try again.');
-const field = 'w-full rounded-md border border-line-200 bg-white px-3 py-2 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-saffron-600/40';
+const field = 'w-full rounded-md border border-line-200 bg-white px-3 py-2 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-brand-600/40';
 const label = 'mb-1 block text-caption font-medium text-ink-700';
 const card = 'rounded-xl border border-line-200 bg-surface-card p-4';
 const today = () => new Date().toISOString().slice(0, 10);
@@ -265,13 +265,13 @@ export default function CurrencyPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-h1 font-display text-ink-900">Foreign currency</h1>
+          <h1 className="text-h1 font-display text-navy-900">Foreign currency</h1>
           <p className="text-body text-ink-500">Invoices and bills in other currencies. The books stay in rupees at each document&apos;s rate; payments book the exchange gain or loss.</p>
         </div>
         <GuideButton guide="foreignCurrency" />
       </div>
       <div className="flex flex-wrap gap-1 border-b border-line-200">
-        {TABS.map(([id, l]) => <button key={id} onClick={() => setTab(id)} className={`px-4 py-2 text-body font-medium ${tab === id ? 'border-b-2 border-saffron-600 text-ink-900' : 'text-ink-500 hover:text-ink-900'}`}>{l}</button>)}
+        {TABS.map(([id, l]) => <button key={id} onClick={() => setTab(id)} className={`px-4 py-2 text-body font-medium ${tab === id ? 'border-b-2 border-brand-600 text-ink-900' : 'text-ink-500 hover:text-ink-900'}`}>{l}</button>)}
       </div>
       {tab === 'documents' && <DocumentsTab onToast={showToast} />}
       {tab === 'invoice' && <DocumentForm kind="invoice" onDone={(m) => { showToast(m); setTab('documents'); }} />}

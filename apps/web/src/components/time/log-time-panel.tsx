@@ -180,7 +180,7 @@ function PanelBody({ entry, projects, defaultProjectId, timer, onClose }: { entr
         </div>
         <DialogPrimitive.Close
           aria-label="Close"
-          className="grid h-10 w-10 shrink-0 place-items-center rounded-md text-ink-500 transition-colors hover:bg-surface-sink hover:text-ink-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-marigold-400"
+          className="grid h-10 w-10 shrink-0 place-items-center rounded-md text-ink-500 transition-colors hover:bg-surface-sink hover:text-ink-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600"
         >
           <X size={18} aria-hidden />
         </DialogPrimitive.Close>
@@ -238,14 +238,14 @@ function PanelBody({ entry, projects, defaultProjectId, timer, onClose }: { entr
             <p className="mt-1 text-caption text-ink-500">
               {minutes != null ? <>Time spent: <span className="font-mono tabular-nums text-ink-900">{hhmm(minutes / 60)}</span></> : f.startTime && f.endTime ? <span className="text-error-fg">The end time is after the start time, the same day.</span> : 'The hours follow from the times.'}
               {' · '}
-              <button type="button" className="font-medium text-saffron-600 hover:underline" onClick={() => setF({ ...f, useClock: false, spent: minutes != null ? hhmm(minutes / 60) : f.spent })}>Enter time spent instead</button>
+              <button type="button" className="font-medium text-brand-700 hover:underline" onClick={() => setF({ ...f, useClock: false, spent: minutes != null ? hhmm(minutes / 60) : f.spent })}>Enter time spent instead</button>
             </p>
           </div>
         ) : (
           <Field label="Time spent" required hint={
             <>
               Hours and minutes, like <span className="font-mono">1:30</span>.{' '}
-              <button type="button" className="font-medium text-saffron-600 hover:underline" onClick={() => setF({ ...f, useClock: true })}>Set start and end time instead</button>
+              <button type="button" className="font-medium text-brand-700 hover:underline" onClick={() => setF({ ...f, useClock: true })}>Set start and end time instead</button>
             </>
           }>
             <input
@@ -260,7 +260,7 @@ function PanelBody({ entry, projects, defaultProjectId, timer, onClose }: { entr
         )}
 
         <label className="flex items-center gap-2 text-body text-ink-900">
-          <input type="checkbox" className="h-4 w-4 accent-saffron-600" checked={f.billable} onChange={(e) => setF({ ...f, billable: e.target.checked })} /> Billable
+          <input type="checkbox" className="h-4 w-4 accent-brand-600" checked={f.billable} onChange={(e) => setF({ ...f, billable: e.target.checked })} /> Billable
           {pickedTask && <span className="text-caption text-ink-500">(the task starts {pickedTask.billable ? 'billable' : 'not billable'})</span>}
         </label>
 

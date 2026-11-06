@@ -2,79 +2,81 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ─── Google Fonts ─────────────────────────────────────────────────── */
-@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700&family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+/* Fonts come from next/font in layout.tsx (Manrope, Inter), which sets
+   --font-display and --font-body on <html>. */
 
 /* ─── Design System Tokens ─────────────────────────────────────────── */
 :root {
-  /* Brand — warm */
-  --saffron-600: #e8590c;
-  --saffron-500: #f76707;
-  --saffron-700: #c84a06;
-  --marigold-400: #fab005;
-  --marigold-300: #ffd43b;
-  --honey-100: #fff4dc;
-  --honey-50: #fffbf2;
+  /* Brand: navy frame, emerald action */
+  --navy-950: #0b1f36;
+  --navy-900: #142d4e;
+  --navy-700: #264563;
+  --brand-600: #16a36a;
+  --brand-700: #128456;
+  --brand-50: #f0fdf4;
+  /* The old names, kept for the few inline styles that use them. */
+  --saffron-600: #16a36a;
+  --saffron-500: #128456;
+  --saffron-700: #0e6a45;
+  --marigold-400: #f59e0b;
+  --marigold-300: #fcd34d;
+  --honey-100: #fffbeb;
+  --honey-50: #f4f7fa;
 
   /* Neutrals */
-  --ink-900: #1f1a15;
-  --ink-700: #3a322a;
-  --ink-500: #7a6e60;
-  --ink-400: #a8998a;
-  --line-200: #ebe3d7;
+  --ink-900: #1e293b;
+  --ink-700: #334155;
+  --ink-500: #64748b;
+  --ink-400: #8492a6;
+  --line-200: #e2e8f0;
   --surface-card: #ffffff;
-  --surface-page: #fffcf6;
-  --surface-sink: #f6efe3;
-  --roast-900: #241a11;
+  --surface-page: #f5f7fa;
+  --surface-sink: #f1f5f9;
+  --roast-900: #0b1f36;
 
   /* Semantic states */
-  --success-fg: #1e7a47;
-  --success-bg: #e6f6ee;
-  --error-fg: #c92a2a;
-  --error-bg: #fbe9e9;
-  --info-fg: #3b5bc0;
-  --info-bg: #e9edfb;
-  --pending-fg: #945800;
-  --pending-bg: #fff4dc;
+  --success-fg: #15803d;
+  --success-bg: #f0fdf4;
+  --error-fg: #dc2626;
+  --error-bg: #fef2f2;
+  --info-fg: #2563eb;
+  --info-bg: #eff6ff;
+  --pending-fg: #b45309;
+  --pending-bg: #fffbeb;
 
   /* Radius */
   --r-sm: 6px;
   --r-md: 10px;
   --r-lg: 16px;
 
-  /* Typography */
-  --font-display: 'Bricolage Grotesque', sans-serif;
-  --font-body: 'Hanken Grotesk', sans-serif;
-  --font-mono: 'JetBrains Mono', monospace;
-
-  /* ─── shadcn/ui CSS variable mappings (warm-themed) ─── */
-  --background: 40 100% 99%; /* surface-page #FFFCF6 */
-  --foreground: 28 19% 10%;  /* ink-900 #1F1A15 */
+  /* ─── shadcn/ui CSS variable mappings ─── */
+  --background: 216 33% 97%; /* surface-page #F5F7FA */
+  --foreground: 217 33% 17%; /* ink-900 #1E293B */
 
   --card: 0 0% 100%;
-  --card-foreground: 28 19% 10%;
+  --card-foreground: 217 33% 17%;
 
   --popover: 0 0% 100%;
-  --popover-foreground: 28 19% 10%;
+  --popover-foreground: 217 33% 17%;
 
-  --primary: 20 90% 48%;     /* saffron-600 #E8590C */
+  --primary: 155 76% 36%;    /* brand-600 #16A36A */
   --primary-foreground: 0 0% 100%;
 
-  --secondary: 36 47% 94%;   /* surface-sink #F6EFE3 */
-  --secondary-foreground: 28 19% 10%;
+  --secondary: 210 40% 96%;  /* surface-sink #F1F5F9 */
+  --secondary-foreground: 217 33% 17%;
 
-  --muted: 36 47% 94%;
-  --muted-foreground: 25 11% 48%; /* ink-500 */
+  --muted: 210 40% 96%;
+  --muted-foreground: 215 16% 47%; /* ink-500 */
 
-  --accent: 36 47% 94%;
-  --accent-foreground: 28 19% 10%;
+  --accent: 210 40% 96%;
+  --accent-foreground: 217 33% 17%;
 
-  --destructive: 0 72% 47%;  /* error-fg #C92A2A */
+  --destructive: 0 72% 51%;  /* error-fg #DC2626 */
   --destructive-foreground: 0 0% 100%;
 
-  --border: 32 30% 88%;      /* line-200 #EBE3D7 */
-  --input: 32 30% 88%;
-  --ring: 42 95% 50%;        /* marigold-400 #FAB005 */
+  --border: 214 32% 91%;     /* line-200 #E2E8F0 */
+  --input: 214 32% 91%;
+  --ring: 155 76% 36%;       /* brand-600 */
 
   --radius: 0.625rem;        /* r-md 10px */
 }
@@ -101,11 +103,6 @@
   h1, h2, h3, h4, h5, h6 {
     font-family: var(--font-display);
     color: var(--ink-900);
-    /* Bricolage carries an optical-size axis (12–96) that was loaded and never
-       engaged. Letting it track the rendered size is what makes large type read
-       as drawn for that size rather than scaled up: tighter apertures and
-       joints in a headline, more open ones in a label. */
-    font-optical-sizing: auto;
     text-wrap: balance;
   }
 
@@ -116,7 +113,6 @@
   .text-display-lg,
   .text-display {
     letter-spacing: -0.03em;
-    font-optical-sizing: auto;
   }
   .text-h1 { letter-spacing: -0.02em; }
   .text-h2 { letter-spacing: -0.015em; }
@@ -127,17 +123,29 @@
     font-variant-numeric: tabular-nums;
   }
 
-  /* Money / ID values always in JetBrains Mono */
-  .mono-data, [data-mono] {
-    font-family: var(--font-mono);
+  /* Amounts and IDs: Inter SemiBold with tabular figures, so columns of
+     money line up. An explicit font-medium or font-normal on the element
+     still wins (utilities come after base). */
+  .font-mono, .mono-data, [data-mono] {
+    font-family: var(--font-body);
     font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum' 1, 'cv11' 1;
+    font-weight: 600;
+    letter-spacing: -0.005em;
+  }
+
+  /* Buttons and links that act: smooth, subtle transitions. */
+  button, a {
+    transition-property: color, background-color, border-color, box-shadow;
+    transition-duration: 150ms;
+    transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
   }
 }
 
 /* ─── Focus ring ───────────────────────────────────────────────────── */
 @layer base {
   :focus-visible {
-    outline: 2px solid var(--marigold-400);
+    outline: 2px solid var(--brand-600);
     outline-offset: 2px;
   }
 }
@@ -151,7 +159,7 @@
   background: var(--surface-sink);
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--line-200);
+  background: #cbd5e1;
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
@@ -171,15 +179,15 @@
 
 /* ─── Utility classes ──────────────────────────────────────────────── */
 @layer utilities {
-  /* Pending row indicator — 3px left border in marigold */
+  /* Pending row indicator — 3px left border in amber */
   .pending-row {
     border-left: 3px solid var(--marigold-400);
   }
 
   /* Active sidebar item */
   .sidebar-active {
-    background: rgba(250, 176, 5, 0.08);
-    border-left: 3px solid var(--saffron-600);
+    background: var(--navy-700);
+    box-shadow: inset 3px 0 0 var(--brand-600);
     color: white;
   }
 

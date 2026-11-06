@@ -188,7 +188,7 @@ export default function PaymentRunsPage() {
             <div className="divide-y divide-line-100 rounded-md border border-line-200">
               {candidates.map((c) => (
                 <label key={c.billId} className="flex cursor-pointer items-start gap-3 px-3 py-2">
-                  <input type="checkbox" className="mt-1 h-4 w-4 accent-saffron-600" checked={!!picked[c.billId]} onChange={(e) => setPicked({ ...picked, [c.billId]: e.target.checked })} />
+                  <input type="checkbox" className="mt-1 h-4 w-4 accent-brand-600" checked={!!picked[c.billId]} onChange={(e) => setPicked({ ...picked, [c.billId]: e.target.checked })} />
                   <span className="min-w-0 flex-1">
                     <span className="flex flex-wrap items-center gap-2 text-body text-ink-900">
                       {c.vendorName} <span className="font-mono text-caption text-ink-500">{c.billNumber ?? ''}</span>

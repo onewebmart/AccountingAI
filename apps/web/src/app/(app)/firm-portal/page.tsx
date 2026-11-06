@@ -45,7 +45,7 @@ interface FirmConfig {
 const DEFAULT_CONFIG: FirmConfig = {
   name: '',
   logoUrl: '',
-  accentColor: '#E8590C',
+  accentColor: '#16A36A',
   customDomain: '',
   clientPortalEnabled: true,
 };
@@ -55,7 +55,7 @@ const DEFAULT_CONFIG: FirmConfig = {
 function UrgencyDot({ count }: { count: number }) {
   if (count === 0) return null;
   return (
-    <span className="inline-flex items-center justify-center h-5 min-w-[20px] px-1 rounded-full bg-[#C92A2A] text-white text-[11px] font-semibold font-mono">
+    <span className="inline-flex items-center justify-center h-5 min-w-[20px] px-1 rounded-full bg-[#DC2626] text-white text-[11px] font-semibold font-mono">
       {count}
     </span>
   );
@@ -63,7 +63,7 @@ function UrgencyDot({ count }: { count: number }) {
 
 function GstBadge({ days }: { days: number }) {
   if (days > 7) {
-    return <span className="text-caption text-stone-400 font-mono">GST in {days}d</span>;
+    return <span className="text-caption text-slate-400 font-mono">GST in {days}d</span>;
   }
   if (days >= 0) {
     return (
@@ -82,35 +82,35 @@ function ClientCard({ client, onOpen }: { client: ClientSummary; onOpen: (orgId:
   return (
     <button
       onClick={() => onOpen(client.orgId)}
-      className={`w-full text-left rounded-xl border bg-white p-5 transition-all hover:shadow-md hover:border-[#E8590C]/40 active:scale-[0.99] ${
-        hasUrgency ? 'border-amber-200' : 'border-stone-200'
+      className={`w-full text-left rounded-xl border bg-white p-5 transition-all hover:shadow-md hover:border-[#16A36A]/40 active:scale-[0.99] ${
+        hasUrgency ? 'border-amber-200' : 'border-slate-200'
       }`}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
-          <div className="h-10 w-10 rounded-lg bg-stone-100 flex items-center justify-center shrink-0">
-            <Building2 className="h-5 w-5 text-stone-500" />
+          <div className="h-10 w-10 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
+            <Building2 className="h-5 w-5 text-slate-500" />
           </div>
           <div className="min-w-0">
-            <p className="font-semibold text-stone-900 truncate font-[Bricolage_Grotesque]">{client.name}</p>
+            <p className="font-semibold text-slate-900 truncate font-[Bricolage_Grotesque]">{client.name}</p>
             <div className="flex items-center gap-2 mt-1 flex-wrap">
               <GstBadge days={client.gstDueDays} />
             </div>
           </div>
         </div>
-        <ChevronRight className="h-4 w-4 text-stone-400 shrink-0 mt-1" />
+        <ChevronRight className="h-4 w-4 text-slate-400 shrink-0 mt-1" />
       </div>
 
-      <div className="flex items-center gap-4 mt-4 pt-4 border-t border-stone-100">
+      <div className="flex items-center gap-4 mt-4 pt-4 border-t border-slate-100">
         <div className="flex items-center gap-1.5">
-          <FileCheck className="h-4 w-4 text-stone-400" />
-          <span className="text-body text-stone-600">Pending review</span>
+          <FileCheck className="h-4 w-4 text-slate-400" />
+          <span className="text-body text-slate-600">Pending review</span>
           <UrgencyDot count={client.pendingReviewCount} />
           {client.pendingReviewCount === 0 && <CheckCircle2 className="h-4 w-4 text-emerald-500" />}
         </div>
         <div className="flex items-center gap-1.5">
-          <AlertCircle className="h-4 w-4 text-stone-400" />
-          <span className="text-body text-stone-600">Overdue AP</span>
+          <AlertCircle className="h-4 w-4 text-slate-400" />
+          <span className="text-body text-slate-600">Overdue AP</span>
           <UrgencyDot count={client.overdueApCount} />
           {client.overdueApCount === 0 && <CheckCircle2 className="h-4 w-4 text-emerald-500" />}
         </div>
@@ -166,37 +166,37 @@ function ClientsTab() {
     <div className="space-y-5">
       {/* Summary bar */}
       <div className="grid grid-cols-3 gap-4">
-        <div className="rounded-xl border border-stone-200 bg-white p-4">
-          <p className="text-h2 font-bold text-stone-900 font-[Bricolage_Grotesque]">{clients.length}</p>
-          <p className="text-body text-stone-500 mt-0.5">Total clients</p>
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <p className="text-h2 font-bold text-slate-900 font-[Bricolage_Grotesque]">{clients.length}</p>
+          <p className="text-body text-slate-500 mt-0.5">Total clients</p>
         </div>
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
           <p className="text-h2 font-bold text-amber-800 font-[Bricolage_Grotesque]">{urgentCount}</p>
           <p className="text-body text-amber-700 mt-0.5">Need attention</p>
         </div>
-        <div className="rounded-xl border border-stone-200 bg-white p-4">
-          <p className="text-h2 font-bold text-stone-900 font-[Bricolage_Grotesque]">
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <p className="text-h2 font-bold text-slate-900 font-[Bricolage_Grotesque]">
             {clients.reduce((sum, c) => sum + c.pendingReviewCount, 0)}
           </p>
-          <p className="text-body text-stone-500 mt-0.5">Entries pending</p>
+          <p className="text-body text-slate-500 mt-0.5">Entries pending</p>
         </div>
       </div>
 
       {/* Search + Add */}
       <div className="flex gap-3">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-stone-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search clients..."
-            className="w-full pl-9 pr-3 py-2 rounded-lg border border-stone-200 bg-white text-body text-stone-900 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-[#E8590C]/30 focus:border-[#E8590C]"
+            className="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-200 bg-white text-body text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#16A36A]/30 focus:border-[#16A36A]"
           />
         </div>
         <Button
           onClick={() => setAddingClient(true)}
-          className="bg-[#E8590C] hover:bg-[#D04E0B] text-white gap-2"
+          className="bg-[#16A36A] hover:bg-[#128456] text-white gap-2"
         >
           <Plus className="h-4 w-4" />
           Add client
@@ -205,10 +205,10 @@ function ClientsTab() {
 
       {/* Add client inline form */}
       {addingClient && (
-        <div className="rounded-xl border-2 border-dashed border-[#E8590C]/40 bg-[#E8590C]/5 p-4">
+        <div className="rounded-xl border-2 border-dashed border-[#16A36A]/40 bg-[#16A36A]/5 p-4">
           <div className="flex items-start justify-between mb-3">
-            <p className="text-body font-medium text-stone-700">New client</p>
-            <button onClick={() => { setAddingClient(false); setNewClientName(''); setNewClientGstin(''); }} className="text-stone-400 hover:text-stone-600">
+            <p className="text-body font-medium text-slate-700">New client</p>
+            <button onClick={() => { setAddingClient(false); setNewClientName(''); setNewClientGstin(''); }} className="text-slate-400 hover:text-slate-600">
               <X className="h-4 w-4" />
             </button>
           </div>
@@ -218,7 +218,7 @@ function ClientsTab() {
               value={newClientName}
               onChange={(e) => setNewClientName(e.target.value)}
               placeholder="Company name, e.g. Patel Industries Pvt Ltd"
-              className="flex-1 px-3 py-2 rounded-lg border border-stone-200 text-body focus:outline-none focus:ring-2 focus:ring-[#E8590C]/30 focus:border-[#E8590C]"
+              className="flex-1 px-3 py-2 rounded-lg border border-slate-200 text-body focus:outline-none focus:ring-2 focus:ring-[#16A36A]/30 focus:border-[#16A36A]"
               autoFocus
             />
             <input
@@ -227,11 +227,11 @@ function ClientsTab() {
               onChange={(e) => setNewClientGstin(e.target.value.toUpperCase())}
               placeholder="GSTIN (optional)"
               maxLength={15}
-              className="w-48 px-3 py-2 rounded-lg border border-stone-200 text-body font-mono focus:outline-none focus:ring-2 focus:ring-[#E8590C]/30 focus:border-[#E8590C]"
+              className="w-48 px-3 py-2 rounded-lg border border-slate-200 text-body font-mono focus:outline-none focus:ring-2 focus:ring-[#16A36A]/30 focus:border-[#16A36A]"
             />
             <Button
               disabled={!newClientName.trim() || addClientMutation.isPending}
-              className="bg-[#E8590C] hover:bg-[#D04E0B] text-white"
+              className="bg-[#16A36A] hover:bg-[#128456] text-white"
               onClick={handleAddClient}
             >
               {addClientMutation.isPending ? 'Creating…' : 'Create client'}
@@ -252,7 +252,7 @@ function ClientsTab() {
           ))}
         </div>
       ) : (
-        <div className="text-center py-16 text-stone-400">
+        <div className="text-center py-16 text-slate-400">
           <Users className="h-10 w-10 mx-auto mb-3 opacity-40" />
           <p className="text-body">No clients match your search</p>
         </div>
@@ -289,49 +289,49 @@ function BrandingTab() {
 
   return (
     <div className="space-y-6 max-w-xl">
-      <div className="rounded-xl border border-stone-200 bg-white p-6 space-y-5">
-        <h3 className="font-semibold text-stone-900 font-[Bricolage_Grotesque]">Client portal branding</h3>
+      <div className="rounded-xl border border-slate-200 bg-white p-6 space-y-5">
+        <h3 className="font-semibold text-slate-900 font-[Bricolage_Grotesque]">Client portal branding</h3>
 
         <div className="space-y-1">
-          <label className="text-body font-medium text-stone-700">Logo URL</label>
+          <label className="text-body font-medium text-slate-700">Logo URL</label>
           <input
             type="url"
             value={display.logoUrl ?? ''}
             onChange={(e) => setForm({ ...form, logoUrl: e.target.value })}
             placeholder="https://cdn.yourfirm.in/logo.png"
-            className="w-full px-3 py-2 rounded-lg border border-stone-200 text-body focus:outline-none focus:ring-2 focus:ring-[#E8590C]/30 focus:border-[#E8590C]"
+            className="w-full px-3 py-2 rounded-lg border border-slate-200 text-body focus:outline-none focus:ring-2 focus:ring-[#16A36A]/30 focus:border-[#16A36A]"
           />
-          <p className="text-caption text-stone-400">Shown in the client portal header</p>
+          <p className="text-caption text-slate-400">Shown in the client portal header</p>
         </div>
 
         <div className="space-y-1">
-          <label className="text-body font-medium text-stone-700">Accent colour</label>
+          <label className="text-body font-medium text-slate-700">Accent colour</label>
           <div className="flex items-center gap-3">
             <input
               type="color"
-              value={display.accentColor ?? '#E8590C'}
+              value={display.accentColor ?? '#16A36A'}
               onChange={(e) => setForm({ ...form, accentColor: e.target.value })}
-              className="h-9 w-16 cursor-pointer rounded border border-stone-200 p-0.5"
+              className="h-9 w-16 cursor-pointer rounded border border-slate-200 p-0.5"
             />
             <input
               type="text"
               value={display.accentColor ?? ''}
               onChange={(e) => setForm({ ...form, accentColor: e.target.value })}
-              placeholder="#E8590C"
-              className="flex-1 px-3 py-2 rounded-lg border border-stone-200 text-body font-mono focus:outline-none focus:ring-2 focus:ring-[#E8590C]/30 focus:border-[#E8590C]"
+              placeholder="#16A36A"
+              className="flex-1 px-3 py-2 rounded-lg border border-slate-200 text-body font-mono focus:outline-none focus:ring-2 focus:ring-[#16A36A]/30 focus:border-[#16A36A]"
             />
           </div>
         </div>
 
         <div className="flex items-center justify-between pt-1">
           <div>
-            <p className="text-body font-medium text-stone-700">Client portal</p>
-            <p className="text-caption text-stone-400 mt-0.5">Allow clients to view their books via the portal</p>
+            <p className="text-body font-medium text-slate-700">Client portal</p>
+            <p className="text-caption text-slate-400 mt-0.5">Allow clients to view their books via the portal</p>
           </div>
           <button
             onClick={() => setForm({ ...form, clientPortalEnabled: !display.clientPortalEnabled })}
             className={`relative h-6 w-11 rounded-full transition-colors ${
-              display.clientPortalEnabled ? 'bg-emerald-500' : 'bg-stone-300'
+              display.clientPortalEnabled ? 'bg-emerald-500' : 'bg-slate-300'
             }`}
           >
             <span
@@ -345,17 +345,17 @@ function BrandingTab() {
         <Button
           onClick={() => updateMutation.mutate(form)}
           disabled={updateMutation.isPending}
-          className="w-full bg-[#E8590C] hover:bg-[#D04E0B] text-white"
+          className="w-full bg-[#16A36A] hover:bg-[#128456] text-white"
         >
           {saved ? 'Saved' : updateMutation.isPending ? 'Saving…' : 'Save branding'}
         </Button>
       </div>
 
       {/* Live preview */}
-      <div className="rounded-xl border border-stone-200 overflow-hidden">
+      <div className="rounded-xl border border-slate-200 overflow-hidden">
         <div
           className="h-10 flex items-center px-4 gap-2"
-          style={{ backgroundColor: display.accentColor ?? '#E8590C' }}
+          style={{ backgroundColor: display.accentColor ?? '#16A36A' }}
         >
           {display.logoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -364,8 +364,8 @@ function BrandingTab() {
             <span className="text-white font-semibold text-body font-[Bricolage_Grotesque]">{display.name}</span>
           )}
         </div>
-        <div className="p-4 bg-[#FFFCF6]">
-          <p className="text-caption text-stone-400 text-center">Portal preview</p>
+        <div className="p-4 bg-[#F5F7FA]">
+          <p className="text-caption text-slate-400 text-center">Portal preview</p>
         </div>
       </div>
     </div>
@@ -413,27 +413,27 @@ function DomainTab() {
 
   return (
     <div className="space-y-6 max-w-xl">
-      <div className="rounded-xl border border-stone-200 bg-white p-6 space-y-5">
-        <h3 className="font-semibold text-stone-900 font-[Bricolage_Grotesque]">Custom domain</h3>
+      <div className="rounded-xl border border-slate-200 bg-white p-6 space-y-5">
+        <h3 className="font-semibold text-slate-900 font-[Bricolage_Grotesque]">Custom domain</h3>
 
-        <div className="rounded-lg bg-stone-50 border border-stone-200 p-4">
-          <p className="text-caption font-medium text-stone-500 uppercase tracking-wide mb-1">Default portal URL</p>
-          <p className="text-body font-mono text-stone-700">{defaultDomain}</p>
+        <div className="rounded-lg bg-slate-50 border border-slate-200 p-4">
+          <p className="text-caption font-medium text-slate-500 uppercase tracking-wide mb-1">Default portal URL</p>
+          <p className="text-body font-mono text-slate-700">{defaultDomain}</p>
         </div>
 
         <div className="space-y-1">
-          <label className="text-body font-medium text-stone-700">Custom domain</label>
+          <label className="text-body font-medium text-slate-700">Custom domain</label>
           <div className="flex items-center gap-2">
-            <Globe className="h-4 w-4 text-stone-400 shrink-0" />
+            <Globe className="h-4 w-4 text-slate-400 shrink-0" />
             <input
               type="text"
               value={displayDomain}
               onChange={(e) => setDomain(e.target.value)}
               placeholder="portal.yourfirm.in"
-              className="flex-1 px-3 py-2 rounded-lg border border-stone-200 text-body font-mono focus:outline-none focus:ring-2 focus:ring-[#E8590C]/30 focus:border-[#E8590C]"
+              className="flex-1 px-3 py-2 rounded-lg border border-slate-200 text-body font-mono focus:outline-none focus:ring-2 focus:ring-[#16A36A]/30 focus:border-[#16A36A]"
             />
           </div>
-          <p className="text-caption text-stone-400">
+          <p className="text-caption text-slate-400">
             Add a CNAME record pointing to <span className="font-mono">{defaultDomain}</span>
           </p>
         </div>
@@ -442,12 +442,12 @@ function DomainTab() {
           <div className="rounded-lg bg-amber-50 border border-amber-200 p-4 space-y-2">
             <p className="text-caption font-semibold text-amber-800">DNS setup required</p>
             <div className="grid grid-cols-[auto,1fr] gap-x-4 gap-y-1 text-caption font-mono">
-              <span className="text-stone-500">Type</span>
-              <span className="text-stone-800">CNAME</span>
-              <span className="text-stone-500">Name</span>
-              <span className="text-stone-800">{displayDomain.split('.')[0]}</span>
-              <span className="text-stone-500">Value</span>
-              <span className="text-stone-800">{defaultDomain}</span>
+              <span className="text-slate-500">Type</span>
+              <span className="text-slate-800">CNAME</span>
+              <span className="text-slate-500">Name</span>
+              <span className="text-slate-800">{displayDomain.split('.')[0]}</span>
+              <span className="text-slate-500">Value</span>
+              <span className="text-slate-800">{defaultDomain}</span>
             </div>
           </div>
         )}
@@ -455,7 +455,7 @@ function DomainTab() {
         <Button
           onClick={handleSave}
           disabled={updateMutation.isPending}
-          className="w-full bg-[#E8590C] hover:bg-[#D04E0B] text-white"
+          className="w-full bg-[#16A36A] hover:bg-[#128456] text-white"
         >
           {saved ? 'Saved' : updateMutation.isPending ? 'Saving…' : 'Save domain'}
         </Button>
@@ -483,31 +483,31 @@ export default function FirmPortalPage() {
   const firmName = firmConfig?.name || 'Your firm';
 
   return (
-    <div className="min-h-screen bg-[#FFFCF6] p-6 md:p-8">
+    <div className="min-h-screen bg-[#F5F7FA] p-6 md:p-8">
       {/* Header */}
       <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-3 mb-1">
-            <div className="h-8 w-8 rounded-lg bg-[#E8590C] flex items-center justify-center">
+            <div className="h-8 w-8 rounded-lg bg-[#16A36A] flex items-center justify-center">
               <Building2 className="h-4 w-4 text-white" />
             </div>
-            <h1 className="text-h2 font-bold text-stone-900 font-[Bricolage_Grotesque]">{firmName}</h1>
+            <h1 className="text-h2 font-bold text-slate-900 font-[Bricolage_Grotesque]">{firmName}</h1>
           </div>
-          <p className="text-stone-500 text-body ml-11">Manage your clients and white-label portal settings</p>
+          <p className="text-slate-500 text-body ml-11">Manage your clients and white-label portal settings</p>
         </div>
         <GuideButton guide="firmBranding" />
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-stone-200 mb-6">
+      <div className="flex gap-1 border-b border-slate-200 mb-6">
         {TABS.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
             onClick={() => setActiveTab(id)}
             className={`flex items-center gap-2 px-4 py-2.5 text-body font-medium transition-colors border-b-2 -mb-px ${
               activeTab === id
-                ? 'border-[#E8590C] text-[#E8590C]'
-                : 'border-transparent text-stone-500 hover:text-stone-700'
+                ? 'border-[#16A36A] text-[#16A36A]'
+                : 'border-transparent text-slate-500 hover:text-slate-700'
             }`}
           >
             <Icon className="h-4 w-4" />

@@ -119,7 +119,7 @@ export function toApiLines(lines: InvoiceLine[], money: LineMoney): { lines: Arr
   return { lines: out, problem: null };
 }
 
-const cell = 'w-full rounded-md border border-line-200 bg-white px-2 py-1.5 text-caption text-ink-900 focus:outline-none focus:ring-2 focus:ring-saffron-600/40';
+const cell = 'w-full rounded-md border border-line-200 bg-white px-2 py-1.5 text-caption text-ink-900 focus:outline-none focus:ring-2 focus:ring-brand-600/40';
 
 /**
  * The lines of an invoice: item, description, HSN/SAC, quantity, rate, GST

@@ -59,7 +59,7 @@ export default function CustomerPortalPage({ params }: { params: { token: string
             <FileDown size={13} /> PDF
           </a>
           {i.payUrl && (
-            <a className="rounded-md bg-saffron-600 px-3 py-1 text-caption font-semibold text-white hover:bg-saffron-700" href={i.payUrl} target="_blank" rel="noopener noreferrer">
+            <a className="rounded-md bg-brand-600 px-3 py-1 text-caption font-semibold text-white hover:bg-brand-700" href={i.payUrl} target="_blank" rel="noopener noreferrer">
               Pay now
             </a>
           )}
@@ -88,7 +88,7 @@ export default function CustomerPortalPage({ params }: { params: { token: string
     <main className="mx-auto max-w-3xl space-y-6 px-4 py-10">
       <header>
         <p className="text-caption uppercase tracking-wide text-ink-500">Invoices from</p>
-        <h1 className="text-h1 font-display text-ink-900">{view.business.name}</h1>
+        <h1 className="text-h1 font-display text-navy-900">{view.business.name}</h1>
         <p className="text-caption text-ink-500">
           {[view.business.address, view.business.gstin && `GSTIN ${view.business.gstin}`, view.business.email, view.business.phone].filter(Boolean).join(' · ')}
         </p>

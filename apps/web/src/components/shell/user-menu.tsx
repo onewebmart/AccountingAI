@@ -44,7 +44,7 @@ export function UserMenu({ workspace }: { workspace?: Workspace }) {
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label="Account menu"
-        className="flex h-9 w-9 items-center justify-center rounded-full bg-saffron-600 text-body font-semibold text-white transition-opacity hover:opacity-90"
+        className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-600 text-body font-semibold text-white transition-opacity hover:opacity-90"
       >
         {initials}
       </button>
@@ -90,7 +90,7 @@ export function UserMenu({ workspace }: { workspace?: Workspace }) {
               setOpen(false);
               void logout();
             }}
-            className="flex w-full items-center gap-2.5 border-t border-line-200 px-4 py-2.5 text-left text-body text-[#C92A2A] hover:bg-[#C92A2A]/5"
+            className="flex w-full items-center gap-2.5 border-t border-line-200 px-4 py-2.5 text-left text-body text-[#DC2626] hover:bg-[#DC2626]/5"
           >
             <LogOut size={15} />
             Sign out

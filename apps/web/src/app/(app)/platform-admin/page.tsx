@@ -243,7 +243,7 @@ function OrgsTab({
                 <div className="flex items-center gap-3">
                   <button
                     onClick={() => onManage(org)}
-                    className="inline-flex items-center gap-1 text-caption font-medium text-brand-600 hover:underline"
+                    className="inline-flex items-center gap-1 text-caption font-medium text-brand-700 hover:underline"
                   >
                     Manage <ChevronRight size={12} />
                   </button>
@@ -564,7 +564,7 @@ export default function PlatformAdminPage() {
         </p>
         <Link
           href="/dashboard"
-          className="mt-6 inline-block text-body font-medium text-saffron-600 hover:underline"
+          className="mt-6 inline-block text-body font-medium text-brand-700 hover:underline"
         >
           Back to dashboard
         </Link>

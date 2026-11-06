@@ -624,7 +624,7 @@ export function SalesDocumentForm({ kind }: { kind: SalesDocKind }) {
               <div className="space-y-1.5">
                 <input type="date" className={inputClass} value={f.neverExpires ? '' : f.endDate} min={f.date} disabled={f.neverExpires} onChange={(e) => set({ endDate: e.target.value })} />
                 <label className="flex items-center gap-2 text-caption text-ink-700">
-                  <input type="checkbox" className="h-4 w-4 accent-saffron-600" checked={f.neverExpires} onChange={(e) => set({ neverExpires: e.target.checked })} />
+                  <input type="checkbox" className="h-4 w-4 accent-brand-600" checked={f.neverExpires} onChange={(e) => set({ neverExpires: e.target.checked })} />
                   Never expires
                 </label>
               </div>
@@ -739,7 +739,7 @@ export function SalesDocumentForm({ kind }: { kind: SalesDocKind }) {
         </Section>
       )}
 
-      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_28rem]">
+      <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_28rem]">
         <Section>
           <div className="space-y-4">
             <Field label="Customer notes" hint={k.notesHint}>

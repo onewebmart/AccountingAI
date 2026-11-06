@@ -67,7 +67,7 @@ export function TimerChip() {
         type="button"
         onClick={() => stop.mutate()}
         disabled={stop.isPending || discard.isPending}
-        className="inline-flex items-center gap-1 rounded-full bg-saffron-600 px-2.5 py-1 font-medium text-white hover:bg-saffron-500 disabled:opacity-50"
+        className="inline-flex items-center gap-1 rounded-full bg-brand-600 px-2.5 py-1 font-medium text-white hover:bg-brand-700 disabled:opacity-50"
       >
         <Square size={10} fill="currentColor" aria-hidden /> {stop.isPending ? 'Stopping…' : 'Stop timer'}
       </button>

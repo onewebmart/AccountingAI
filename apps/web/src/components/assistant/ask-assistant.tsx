@@ -210,7 +210,7 @@ function Assistant({ storeKey }: { storeKey: string }) {
               <button
                 type="button"
                 onClick={() => setTurns([])}
-                className="flex h-8 w-8 items-center justify-center rounded-md text-ink-500 hover:bg-honey-100 hover:text-ink-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-marigold-400"
+                className="flex h-8 w-8 items-center justify-center rounded-md text-ink-500 hover:bg-honey-100 hover:text-ink-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600"
                 aria-label="Start a new conversation"
                 title="Start a new conversation"
               >
@@ -220,7 +220,7 @@ function Assistant({ storeKey }: { storeKey: string }) {
             <button
               type="button"
               onClick={close}
-              className="flex h-8 w-8 items-center justify-center rounded-md text-ink-500 hover:bg-honey-100 hover:text-ink-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-marigold-400"
+              className="flex h-8 w-8 items-center justify-center rounded-md text-ink-500 hover:bg-honey-100 hover:text-ink-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600"
               aria-label="Close"
               title="Close (Esc)"
             >
@@ -242,7 +242,7 @@ function Assistant({ storeKey }: { storeKey: string }) {
                         key={s}
                         type="button"
                         onClick={() => void submit(s)}
-                        className="rounded-full border border-line-200 bg-surface-card px-3 py-1.5 text-left text-caption text-ink-700 hover:border-marigold-400 hover:bg-honey-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-marigold-400"
+                        className="rounded-full border border-line-200 bg-surface-card px-3 py-1.5 text-left text-caption text-ink-700 hover:border-marigold-400 hover:bg-honey-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600"
                       >
                         {s}
                       </button>
@@ -274,7 +274,7 @@ function Assistant({ storeKey }: { storeKey: string }) {
             <input
               id={inputId}
               ref={inputRef}
-              className="h-10 min-w-0 flex-1 rounded-md border border-line-200 bg-white px-3 text-body text-ink-900 placeholder:text-ink-400 focus:outline-none focus:ring-2 focus:ring-saffron-600/40"
+              className="h-10 min-w-0 flex-1 rounded-md border border-line-200 bg-white px-3 text-body text-ink-900 placeholder:text-ink-400 focus:outline-none focus:ring-2 focus:ring-brand-600/40"
               placeholder="Ask a question about your books"
               value={question}
               maxLength={500}
@@ -286,7 +286,7 @@ function Assistant({ storeKey }: { storeKey: string }) {
               aria-label="Ask"
               title="Ask"
               disabled={question.trim().length < 3 || busy}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-saffron-600 text-white transition-colors hover:bg-saffron-500 active:bg-saffron-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-marigold-400 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-brand-600 text-white transition-colors hover:bg-brand-700 active:bg-brand-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
             >
               {busy ? <Loader2 size={16} className="animate-spin" /> : <ArrowUp size={16} />}
             </button>
@@ -301,7 +301,7 @@ function Assistant({ storeKey }: { storeKey: string }) {
         aria-label={open ? 'Close Ask your books' : unread ? 'Ask your books (new answer)' : 'Ask your books'}
         aria-expanded={open}
         aria-controls={open ? panelId : undefined}
-        className="group pointer-events-auto relative flex h-14 w-14 items-center justify-center rounded-full bg-saffron-600 text-white shadow-e3 ring-4 ring-marigold-400/30 transition-colors hover:bg-saffron-500 active:bg-saffron-700 focus-visible:outline-none focus-visible:ring-marigold-400"
+        className="group pointer-events-auto relative flex h-14 w-14 items-center justify-center rounded-full bg-brand-600 text-white shadow-e3 ring-4 ring-marigold-400/30 transition-colors hover:bg-brand-700 active:bg-brand-800 focus-visible:outline-none focus-visible:ring-brand-600"
       >
         {open ? <X size={22} /> : <Sparkles size={22} />}
         {!open && (busy || unread) && (

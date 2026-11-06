@@ -45,7 +45,7 @@ function toText(paise: number): string {
   const dec = s.slice(-2);
   return `${paise < 0 ? '-' : ''}${rupees}${dec === '00' ? '' : `.${dec}`}`;
 }
-const cellClass = 'w-24 rounded border border-line-200 bg-white px-1.5 py-1 text-right font-mono text-caption focus:outline-none focus:ring-2 focus:ring-saffron-600/40';
+const cellClass = 'w-24 rounded border border-line-200 bg-white px-1.5 py-1 text-right font-mono text-caption focus:outline-none focus:ring-2 focus:ring-brand-600/40';
 
 /**
  * A budget as a page: its name, year and period, the accounts it plans,

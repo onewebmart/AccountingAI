@@ -158,7 +158,7 @@ function LoginForm() {
       footer={
         <>
           Don&apos;t have an account?{' '}
-          <Link href="/auth/signup" className="font-medium text-saffron-600 hover:underline">
+          <Link href="/auth/signup" className="font-medium text-brand-700 hover:underline">
             Start free
           </Link>
         </>
@@ -205,7 +205,7 @@ function LoginForm() {
         <div className="flex justify-end">
           <Link
             href="/auth/forgot-password"
-            className="text-caption text-ink-500 transition-colors hover:text-saffron-600"
+            className="text-caption text-ink-500 transition-colors hover:text-brand-700"
           >
             Forgot password?
           </Link>

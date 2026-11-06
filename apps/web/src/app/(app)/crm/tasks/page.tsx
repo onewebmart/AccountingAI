@@ -59,7 +59,7 @@ const PRIORITY_STYLES: Record<TaskPriority, string> = {
   [TaskPriority.LOW]: 'bg-surface-sink text-ink-500',
   [TaskPriority.NORMAL]: 'bg-surface-sink text-ink-700',
   [TaskPriority.HIGH]: 'bg-pending-bg text-pending-fg',
-  [TaskPriority.URGENT]: 'bg-[#C92A2A]/10 text-[#C92A2A]',
+  [TaskPriority.URGENT]: 'bg-[#DC2626]/10 text-[#DC2626]',
 };
 
 const PRIORITY_LABELS: Record<TaskPriority, string> = {
@@ -115,7 +115,7 @@ function TaskCard({
           type="button"
           onClick={() => onDelete(task._id)}
           aria-label="Delete task"
-          className="shrink-0 rounded p-0.5 text-ink-400 opacity-0 transition-opacity hover:text-[#C92A2A] group-hover:opacity-100"
+          className="shrink-0 rounded p-0.5 text-ink-400 opacity-0 transition-opacity hover:text-[#DC2626] group-hover:opacity-100"
         >
           <Trash2 size={13} />
         </button>
@@ -146,7 +146,7 @@ function TaskCard({
           <span
             className={cn(
               'ml-auto font-mono text-[10px]',
-              overdue ? 'font-semibold text-[#C92A2A]' : 'text-ink-400',
+              overdue ? 'font-semibold text-[#DC2626]' : 'text-ink-400',
             )}
           >
             {formatDate(task.dueDate)}
@@ -219,7 +219,7 @@ function NewTaskDialog({
         <form onSubmit={submit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="task-title">
-              Task <span className="text-[#C92A2A]">*</span>
+              Task <span className="text-[#DC2626]">*</span>
             </Label>
             <Input
               id="task-title"
@@ -237,7 +237,7 @@ function NewTaskDialog({
               rows={2}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="w-full rounded-lg border border-line-200 bg-surface-card px-3 py-2 text-body text-ink-900 outline-none focus:border-saffron-600"
+              className="w-full rounded-lg border border-line-200 bg-surface-card px-3 py-2 text-body text-ink-900 outline-none focus:border-brand-600"
             />
           </div>
 
@@ -297,7 +297,7 @@ function NewTaskDialog({
           </div>
 
           {error ? (
-            <p className="rounded-lg bg-[#C92A2A]/5 px-3 py-2 text-body text-[#C92A2A]">
+            <p className="rounded-lg bg-[#DC2626]/5 px-3 py-2 text-body text-[#DC2626]">
               {error.message}
             </p>
           ) : null}
@@ -408,7 +408,7 @@ export default function TasksPage() {
       <FadeIn>
         <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h1 className="font-heading text-h1 text-ink-900">Tasks</h1>
+            <h1 className="font-heading text-h1 text-navy-900">Tasks</h1>
             <p className="mt-1 text-body text-ink-500">
               Your team&apos;s own work list. Deadlines and document chases already track
               themselves — this is for everything else.
@@ -429,8 +429,8 @@ export default function TasksPage() {
           {[
             { value: summary.open, label: 'Open', tone: 'text-ink-900' },
             { value: summary.dueToday, label: 'Due today', tone: 'text-pending-fg' },
-            { value: summary.overdue, label: 'Overdue', tone: 'text-[#C92A2A]' },
-            { value: summary.completedThisWeek, label: 'Done this week', tone: 'text-[#1E7B34]' },
+            { value: summary.overdue, label: 'Overdue', tone: 'text-[#DC2626]' },
+            { value: summary.completedThisWeek, label: 'Done this week', tone: 'text-[#15803D]' },
           ].map((s) => (
             <StaggerItem key={s.label}>
               <div className="rounded-xl border border-line-200 bg-surface-card px-4 py-3">
@@ -499,7 +499,7 @@ export default function TasksPage() {
       )}
 
       {move.error ? (
-        <p className="mt-4 rounded-lg bg-[#C92A2A]/5 px-3 py-2 text-body text-[#C92A2A]">
+        <p className="mt-4 rounded-lg bg-[#DC2626]/5 px-3 py-2 text-body text-[#DC2626]">
           Couldn&apos;t move that task — {(move.error as Error).message}
         </p>
       ) : null}

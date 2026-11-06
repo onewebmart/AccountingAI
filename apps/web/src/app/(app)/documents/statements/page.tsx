@@ -197,7 +197,7 @@ export default function BankStatementsPage() {
                             <Link href={`/banking?account=${r.bankAccount.id}`}>{r.stage === 'reconciled' ? 'Open reconciliation' : 'Run reconciliation'}</Link>
                           </Button>
                         ) : r.stage === 'failed' ? (
-                          <button type="button" className="inline-flex items-center gap-1 text-caption font-medium text-saffron-700 hover:underline disabled:opacity-50" disabled={retry.isPending} onClick={() => retry.mutate(r.documentId)}>
+                          <button type="button" className="inline-flex items-center gap-1 text-caption font-medium text-brand-800 hover:underline disabled:opacity-50" disabled={retry.isPending} onClick={() => retry.mutate(r.documentId)}>
                             <RefreshCw size={12} /> Try again
                           </button>
                         ) : null}

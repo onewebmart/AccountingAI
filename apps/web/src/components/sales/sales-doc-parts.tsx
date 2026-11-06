@@ -64,7 +64,7 @@ export function CustomerPicker({ value, onChange, id, newHref, invalid }: {
         aria-label="Customer"
       />
       <div className="mt-1.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
-        <Link href={newHref} className="inline-flex items-center gap-1 text-caption font-medium text-saffron-700 hover:underline">
+        <Link href={newHref} className="inline-flex items-center gap-1 text-caption font-medium text-brand-800 hover:underline">
           <Plus size={12} /> New customer
         </Link>
         {chosen && (
@@ -116,7 +116,7 @@ export function NumberField({ label, value, onChange, own, onOwn, autoText, hint
         )}
         <button
           type="button"
-          className={cn('shrink-0 rounded-md border px-2.5 text-ink-500 hover:text-ink-900', own ? 'border-saffron-600 bg-honey-50' : 'border-line-200 bg-white')}
+          className={cn('shrink-0 rounded-md border px-2.5 text-ink-500 hover:text-ink-900', own ? 'border-brand-600 bg-honey-50' : 'border-line-200 bg-white')}
           onClick={() => {
             if (own) onChange('');
             onOwn(!own);
@@ -287,7 +287,7 @@ export function checkLines(lines: SaleLine[], money: LineMoney = { kind: 'inr' }
   return null;
 }
 
-const cell = 'w-full rounded-md border border-line-200 bg-white px-2 py-1.5 text-caption text-ink-900 focus:outline-none focus:ring-2 focus:ring-saffron-600/40';
+const cell = 'w-full rounded-md border border-line-200 bg-white px-2 py-1.5 text-caption text-ink-900 focus:outline-none focus:ring-2 focus:ring-brand-600/40';
 
 /** "Type or click to select an item": the items sold, searchable by name, code or HSN. */
 export function SaleItemPicker({ value, onPick }: { value: string; onPick: (item: ItemOption | null) => void }) {
@@ -508,7 +508,7 @@ export function BulkItems({ onAdd, onClose, side = 'sale' }: { onAdd: (picked: A
             const on = chosen.has(i._id);
             return (
               <li key={i._id} className="flex items-center gap-3 px-3 py-2">
-                <input type="checkbox" checked={on} onChange={() => toggle(i._id)} id={`bulk-${i._id}`} className="h-4 w-4 accent-saffron-600" />
+                <input type="checkbox" checked={on} onChange={() => toggle(i._id)} id={`bulk-${i._id}`} className="h-4 w-4 accent-brand-600" />
                 <label htmlFor={`bulk-${i._id}`} className="min-w-0 flex-1 cursor-pointer text-body text-ink-900">
                   {i.name}
                   {i.hsnSac && <span className="ml-2 font-mono text-caption text-ink-400">{i.hsnSac}</span>}
@@ -578,7 +578,7 @@ export function TotalsPanel({ pricing, interState, discount, adjustment, foreign
               <dt className="text-body text-ink-600">Discount</dt>
               <div className="flex items-center gap-1.5">
                 <input
-                  className={cn('w-24 rounded-md border bg-white px-2 py-1.5 text-right font-mono text-caption tabular-nums focus:outline-none focus:ring-2 focus:ring-saffron-600/40', pricing.discountProblem ? 'border-error-fg' : 'border-line-200')}
+                  className={cn('w-24 rounded-md border bg-white px-2 py-1.5 text-right font-mono text-caption tabular-nums focus:outline-none focus:ring-2 focus:ring-brand-600/40', pricing.discountProblem ? 'border-error-fg' : 'border-line-200')}
                   inputMode="decimal"
                   value={discount.value}
                   onChange={(e) => discount.onValue(e.target.value)}
@@ -624,7 +624,7 @@ export function TotalsPanel({ pricing, interState, discount, adjustment, foreign
           <div className="py-1.5">
             <div className="flex items-center justify-between gap-3">
               <input
-                className="w-32 rounded-md border border-dashed border-line-200 bg-white px-2 py-1.5 text-body text-ink-700 focus:outline-none focus:ring-2 focus:ring-saffron-600/40"
+                className="w-32 rounded-md border border-dashed border-line-200 bg-white px-2 py-1.5 text-body text-ink-700 focus:outline-none focus:ring-2 focus:ring-brand-600/40"
                 maxLength={40}
                 value={adjustment.label}
                 onChange={(e) => adjustment.onLabel(e.target.value)}
@@ -632,7 +632,7 @@ export function TotalsPanel({ pricing, interState, discount, adjustment, foreign
               />
               <div className="flex items-center gap-1.5">
                 <input
-                  className={cn('w-24 rounded-md border bg-white px-2 py-1.5 text-right font-mono text-caption tabular-nums focus:outline-none focus:ring-2 focus:ring-saffron-600/40', pricing.adjustmentProblem ? 'border-error-fg' : 'border-line-200')}
+                  className={cn('w-24 rounded-md border bg-white px-2 py-1.5 text-right font-mono text-caption tabular-nums focus:outline-none focus:ring-2 focus:ring-brand-600/40', pricing.adjustmentProblem ? 'border-error-fg' : 'border-line-200')}
                   inputMode="decimal"
                   value={adjustment.value}
                   onChange={(e) => adjustment.onValue(e.target.value)}

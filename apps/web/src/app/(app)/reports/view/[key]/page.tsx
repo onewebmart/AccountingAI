@@ -153,7 +153,7 @@ export default function ReportViewPage() {
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <FavouriteStar report={{ key: d.key, title: d.title, favourite: d.favourite }} size={18} />
-              <h1 className="text-h1 font-display text-ink-900">{d.title}</h1>
+              <h1 className="text-h1 font-display text-navy-900">{d.title}</h1>
               {ties && <span className="inline-flex items-center gap-1 rounded-full border border-success-fg/30 bg-success-bg px-2 py-0.5 text-caption font-medium text-success-fg"><CheckCircle2 size={12} /> Ties out ✓</span>}
             </div>
             <p className="mt-1 text-body text-ink-500">{d.description}</p>

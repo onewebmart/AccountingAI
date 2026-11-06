@@ -83,7 +83,7 @@ function DepositForm({ month, onDone }: { month: TdsMonth; onDone: (message?: st
       onDone('Deposit recorded');
     },
   });
-  const input = 'rounded-md border border-line-200 bg-white px-3 py-1.5 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-saffron-600/40';
+  const input = 'rounded-md border border-line-200 bg-white px-3 py-1.5 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-brand-600/40';
   return (
     <form
       className="flex flex-wrap items-end gap-3"
@@ -147,7 +147,7 @@ export default function TdsPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-h1 font-display text-ink-900">TDS</h1>
+          <h1 className="text-h1 font-display text-navy-900">TDS</h1>
           <p className="mt-1 text-body text-ink-500">Tax deducted at source: what you owe the government, what you have paid, and what customers deducted from you.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -155,7 +155,7 @@ export default function TdsPage() {
           <select
             value={financialYear}
             onChange={(e) => setFinancialYear(e.target.value)}
-            className="rounded-md border border-line-200 bg-surface-card px-3 py-1.5 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-saffron-600/40"
+            className="rounded-md border border-line-200 bg-surface-card px-3 py-1.5 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-brand-600/40"
           >
             {recentFinancialYears().map((fy) => (
               <option key={fy} value={fy}>
@@ -167,7 +167,7 @@ export default function TdsPage() {
       </div>
 
       {/* To deposit */}
-      <section className="space-y-3 rounded-lg border border-line-200 bg-surface-card p-5">
+      <section className="space-y-3 overflow-x-auto rounded-xl border border-line-200 bg-surface-card p-5 shadow-e1">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="text-h3 font-display text-ink-900">To deposit</h2>
           <p className="text-caption text-ink-500">One challan per month and section, due the 7th of the next month (30 April for March).</p>
@@ -255,7 +255,7 @@ export default function TdsPage() {
       </section>
 
       {/* Deducted from vendors */}
-      <section className="space-y-3 rounded-lg border border-line-200 bg-surface-card p-5">
+      <section className="space-y-3 overflow-x-auto rounded-xl border border-line-200 bg-surface-card p-5 shadow-e1">
         <h2 className="text-h3 font-display text-ink-900">Deducted from vendors</h2>
         {noPan > 0 && (
           <p className="rounded-md border border-pending-fg/30 bg-pending-bg px-4 py-2 text-caption text-ink-900">
@@ -303,7 +303,7 @@ export default function TdsPage() {
       </section>
 
       {/* Deposits made */}
-      <section className="space-y-3 rounded-lg border border-line-200 bg-surface-card p-5">
+      <section className="space-y-3 overflow-x-auto rounded-xl border border-line-200 bg-surface-card p-5 shadow-e1">
         <h2 className="text-h3 font-display text-ink-900">Deposits made</h2>
         {deposits.isError ? (
           <QueryError error={deposits.error} onRetry={() => void deposits.refetch()} />
@@ -337,7 +337,7 @@ export default function TdsPage() {
       </section>
 
       {/* Deducted by customers */}
-      <section className="space-y-3 rounded-lg border border-line-200 bg-surface-card p-5">
+      <section className="space-y-3 overflow-x-auto rounded-xl border border-line-200 bg-surface-card p-5 shadow-e1">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="text-h3 font-display text-ink-900">Deducted by customers</h2>
           <p className="text-caption text-ink-500">Your credit, once it shows in Form 26AS. Check it there before you claim it.</p>

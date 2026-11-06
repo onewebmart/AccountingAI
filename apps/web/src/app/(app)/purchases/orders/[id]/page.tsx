@@ -18,7 +18,7 @@ import { HistoryLink, errorText, shortDate, todayIso, useAccounts, useLedgerRefr
 import { PoStatusChip, useGrns, usePurchaseOrder, type PoRow } from '@/components/purchases/po-data';
 
 const round3 = (n: number) => Math.round(n * 1000) / 1000;
-const qtyCell = 'w-24 rounded-md border border-line-200 bg-white px-2 py-1 text-right font-mono text-caption focus:outline-none focus:ring-2 focus:ring-saffron-600/40';
+const qtyCell = 'w-24 rounded-md border border-line-200 bg-white px-2 py-1 text-right font-mono text-caption focus:outline-none focus:ring-2 focus:ring-brand-600/40';
 
 async function openPdf(path: string) {
   window.open(URL.createObjectURL(await api.blob(path)), '_blank', 'noopener');

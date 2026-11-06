@@ -53,7 +53,7 @@ export function AskBox() {
     <section className="rounded-xl border border-line-200 bg-surface-card p-4">
       <h3 className="mb-2 flex items-center gap-2 text-h3 font-display text-ink-900"><MessageSquare size={18} /> Ask your books</h3>
       <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); submit(question); }}>
-        <input className="h-10 flex-1 rounded-md border border-line-200 bg-white px-3 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-saffron-600/40" placeholder="Who owes me money?" value={question} maxLength={500} onChange={(e) => setQuestion(e.target.value)} />
+        <input className="h-10 flex-1 rounded-md border border-line-200 bg-white px-3 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-brand-600/40" placeholder="Who owes me money?" value={question} maxLength={500} onChange={(e) => setQuestion(e.target.value)} />
         <Button type="submit" disabled={question.trim().length < 3 || ask.isPending || !!pending}>{ask.isPending || pending ? <Loader2 size={14} className="animate-spin" /> : 'Ask'}</Button>
       </form>
       {!current && (

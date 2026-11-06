@@ -315,7 +315,7 @@ export function CustomerForm({ customer }: { customer?: CustomerRecord | null })
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
                   <label className="flex items-center gap-2 text-body text-ink-900">
-                    <input type="checkbox" className="h-4 w-4 accent-saffron-600" checked={form.portalEnabled} onChange={(e) => setForm((f) => ({ ...f, portalEnabled: e.target.checked }))} />
+                    <input type="checkbox" className="h-4 w-4 accent-brand-600" checked={form.portalEnabled} onChange={(e) => setForm((f) => ({ ...f, portalEnabled: e.target.checked }))} />
                     Allow portal access for this customer
                   </label>
                   <p className="mt-1 text-caption text-ink-500">They see their invoices and pay them from a link you share. Turned off, no link opens.</p>

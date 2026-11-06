@@ -21,7 +21,7 @@ import { formatPaise } from '@/lib/gst';
 type Period = 'all' | 'today' | 'this_week' | 'this_month' | 'range';
 const PERIODS: Array<[Period, string]> = [['all', 'All'], ['today', 'Today'], ['this_week', 'This week'], ['this_month', 'This month'], ['range', 'Date range']];
 const BILLING: Array<[string, string]> = [['', 'Any billing'], ['billable', 'Billable'], ['unbilled', 'Unbilled'], ['billed', 'Invoiced'], ['non_billable', 'Not billable']];
-const small = 'h-10 rounded-md border border-line-200 bg-white px-3 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-saffron-600/40';
+const small = 'h-10 rounded-md border border-line-200 bg-white px-3 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-brand-600/40';
 const monthAgo = () => new Date(Date.now() + 330 * 60_000 - 30 * 86_400_000).toISOString().slice(0, 10);
 
 /** Whether typing is going into a field, so a shortcut key is just a letter. */

@@ -60,7 +60,7 @@ function StatsPanel({ stats }: { stats: Stats }) {
   return (
     <div className="mb-5 flex flex-wrap gap-3">
       <div className="rounded-xl border border-line-200 bg-surface-card px-4 py-3">
-        <p className="font-mono text-h3 font-bold text-[#1E7B34]">{stats.autoResolveRate}%</p>
+        <p className="font-mono text-h3 font-bold text-[#15803D]">{stats.autoResolveRate}%</p>
         <p className="text-caption text-ink-500">Auto-resolve rate</p>
       </div>
       <div className="rounded-xl border border-line-200 bg-surface-card px-4 py-3">
@@ -144,7 +144,7 @@ export default function AgentPage() {
       <FadeIn>
         <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h1 className="font-heading text-h1 text-ink-900">Support agent</h1>
+            <h1 className="font-heading text-h1 text-navy-900">Support agent</h1>
             <p className="mt-1 text-body text-ink-500">
               Client questions answered automatically from their real records. Anything about fees,
               anything sensitive, and anything the agent is unsure of comes to you instead.
@@ -182,7 +182,7 @@ export default function AgentPage() {
                     className={cn(
                       'w-full rounded-xl border px-3 py-2.5 text-left transition-colors',
                       active === c._id
-                        ? 'border-saffron-600 bg-honey-100'
+                        ? 'border-brand-600 bg-honey-100'
                         : 'border-line-200 bg-surface-card hover:bg-surface-sink',
                     )}
                   >
@@ -244,14 +244,14 @@ export default function AgentPage() {
                       className={cn('flex gap-2', fromClient ? 'justify-end' : 'justify-start')}
                     >
                       {!fromClient ? (
-                        <Bot size={14} className="mt-2 shrink-0 text-saffron-600" />
+                        <Bot size={14} className="mt-2 shrink-0 text-brand-700" />
                       ) : null}
                       <div
                         className={cn(
                           'max-w-[75%] rounded-xl px-3 py-2',
                           fromClient
                             ? 'bg-surface-sink text-ink-900'
-                            : 'bg-saffron-600 text-white',
+                            : 'bg-brand-600 text-white',
                         )}
                       >
                         <pre className="whitespace-pre-wrap font-body text-body">{m.body}</pre>
@@ -307,7 +307,7 @@ export default function AgentPage() {
             </Button>
           </form>
           {sendInbound.error ? (
-            <p className="px-3 pb-3 text-body text-[#C92A2A]">
+            <p className="px-3 pb-3 text-body text-[#DC2626]">
               {(sendInbound.error as Error).message}
             </p>
           ) : null}

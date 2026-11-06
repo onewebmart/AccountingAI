@@ -114,7 +114,7 @@ function fyOf(date: string): string | null {
 }
 
 const rupeesText = (paise: number) => (paise ? (paise / 100).toFixed(2) : '');
-const cell = 'w-28 rounded-md border border-line-200 bg-white px-2 py-1 text-right font-mono text-caption tabular-nums focus:outline-none focus:ring-2 focus:ring-saffron-600/40';
+const cell = 'w-28 rounded-md border border-line-200 bg-white px-2 py-1 text-right font-mono text-caption tabular-nums focus:outline-none focus:ring-2 focus:ring-brand-600/40';
 
 /** A rupee amount: right-aligned, tabular, with the ₹ in front. */
 function MoneyInput({ value, onChange, label, invalid }: { value: string; onChange: (v: string) => void; label: string; invalid?: boolean }) {
@@ -490,10 +490,10 @@ export function RecordPaymentForm({ kind, initialPartyId }: { kind: PaymentKind;
             <Field label="TDS deducted?" hint={tdsOn ? 'Enter the TDS on each invoice below. It is claimed against your own income tax.' : undefined}>
               <div className="flex h-10 items-center gap-5" role="radiogroup" aria-label="TDS deducted?">
                 <label className="inline-flex items-center gap-2 text-body text-ink-700">
-                  <input type="radio" name="tds" className="accent-saffron-600" checked={!tdsOn} onChange={() => { setTdsOn(false); setTds({}); }} /> No
+                  <input type="radio" name="tds" className="accent-brand-600" checked={!tdsOn} onChange={() => { setTdsOn(false); setTds({}); }} /> No
                 </label>
                 <label className="inline-flex items-center gap-2 text-body text-ink-700">
-                  <input type="radio" name="tds" className="accent-saffron-600" checked={tdsOn} onChange={() => setTdsOn(true)} /> Yes, TDS (income tax)
+                  <input type="radio" name="tds" className="accent-brand-600" checked={tdsOn} onChange={() => setTdsOn(true)} /> Yes, TDS (income tax)
                 </label>
               </div>
             </Field>
@@ -556,7 +556,7 @@ export function RecordPaymentForm({ kind, initialPartyId }: { kind: PaymentKind;
                     shown.map((r) => (
                       // An amount the AI suggested stays marked, amber, until the person changes it.
                       <tr key={r.id} className={cn('border-b border-line-100 last:border-0', suggested.has(r.id) && 'bg-honey-50')} title={suggested.has(r.id) ? 'Suggested: check it' : undefined}>
-                        <td className={cn(td, 'whitespace-nowrap text-caption', suggested.has(r.id) && 'shadow-[inset_3px_0_0_0_#FAB005]')}>{shortDate(r.date)}</td>
+                        <td className={cn(td, 'whitespace-nowrap text-caption', suggested.has(r.id) && 'shadow-[inset_3px_0_0_0_#F59E0B]')}>{shortDate(r.date)}</td>
                         <td className={`${td} font-mono text-caption`}>
                           <Link href={r.href} className="hover:underline">{r.number ?? 'Not numbered'}</Link>
                           {r.note && <p className="font-sans text-[0.7rem] text-ink-500">{r.note}</p>}

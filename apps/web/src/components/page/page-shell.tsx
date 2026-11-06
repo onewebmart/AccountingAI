@@ -34,7 +34,7 @@ export function PageHeader({ title, subtitle, actions, back, meta, guide }: {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-h1 font-display text-ink-900">{title}</h1>
+            <h1 className="text-h1 font-display text-navy-900">{title}</h1>
             {meta}
           </div>
           {subtitle && <p className="mt-1 text-body text-ink-500">{subtitle}</p>}
@@ -65,7 +65,7 @@ export function ListToolbar({ search, onSearch, placeholder = 'Search', filters,
         <label className="relative">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-400" />
           <input
-            className="h-10 w-64 rounded-md border border-line-200 bg-white pl-8 pr-3 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-saffron-600/40"
+            className="h-10 w-64 rounded-md border border-line-200 bg-white pl-8 pr-3 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-brand-600/40"
             placeholder={placeholder}
             value={search ?? ''}
             onChange={(e) => onSearch(e.target.value)}
@@ -96,14 +96,14 @@ export function ListToolbar({ search, onSearch, placeholder = 'Search', filters,
 
 /** The frame of a list: a bordered, scrollable table. */
 export function TableCard({ children, className }: { children: React.ReactNode; className?: string }) {
-  return <div className={cn('overflow-x-auto rounded-xl border border-line-200 bg-surface-card', className)}>{children}</div>;
+  return <div className={cn('relative overflow-x-auto rounded-xl border border-line-200 bg-surface-card shadow-e1', className)}>{children}</div>;
 }
 
-export const th = 'px-3 py-2.5 text-left text-caption font-medium text-ink-500 whitespace-nowrap';
+export const th = 'px-3 py-2.5 text-left text-caption font-semibold uppercase tracking-[0.04em] text-ink-500 whitespace-nowrap';
 export const td = 'px-3 py-2.5 text-body text-ink-900';
 export const tdMoney = 'px-3 py-2.5 text-right font-mono tabular-nums text-body text-ink-900 whitespace-nowrap';
 /** A clickable row that opens the record. */
-export const rowLink = 'cursor-pointer border-b border-line-100 last:border-0 hover:bg-surface-sink';
+export const rowLink = 'cursor-pointer border-b border-line-100 last:border-0 transition-colors hover:bg-navy-50';
 
 export function EmptyState({ title, body, action, guide }: {
   title: string;
@@ -149,8 +149,8 @@ export function FormPage({ onSubmit, children, actions, error }: {
     >
       <div className="space-y-5">{children}</div>
       {/* data-form-bar lets the Ask your books button and the toasts sit above this bar. */}
-      <div data-form-bar="" className="fixed bottom-0 left-[260px] right-0 z-30 border-t border-line-200 bg-surface-card/95 backdrop-blur">
-        <div className="mx-auto flex max-w-content flex-wrap items-center gap-3 px-6 py-3">
+      <div data-form-bar="" className="fixed bottom-0 left-0 right-0 z-30 lg:left-[260px] border-t border-line-200 bg-surface-card/95 backdrop-blur">
+        <div className="mx-auto flex max-w-content flex-wrap items-center gap-3 px-4 py-3 sm:px-6">
           {actions}
           {error && <p className="text-caption text-error-fg">{error}</p>}
         </div>
@@ -168,11 +168,11 @@ export function Section({ title, description, children, actions, className }: {
   className?: string;
 }) {
   return (
-    <section className={cn('rounded-xl border border-line-200 bg-surface-card p-5', className)}>
+    <section className={cn('rounded-xl border border-line-200 bg-surface-card p-5 shadow-e1', className)}>
       {(title || actions) && (
         <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
           <div>
-            {title && <h2 className="text-h3 font-display text-ink-900">{title}</h2>}
+            {title && <h2 className="text-h3 font-display text-navy-900">{title}</h2>}
             {description && <p className="mt-0.5 text-caption text-ink-500">{description}</p>}
           </div>
           {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
@@ -204,7 +204,7 @@ export function Field({ label, required, hint, children, className }: {
 }
 
 /** The input style shared by every form. */
-export const inputClass = 'w-full rounded-md border border-line-200 bg-white px-3 py-2 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-saffron-600/40 disabled:bg-surface-sink';
+export const inputClass = 'w-full rounded-md border border-line-200 bg-white px-3 py-2 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-brand-600/40 disabled:bg-surface-sink';
 
 /** Label and value pairs on a record page. */
 export function DetailGrid({ items }: { items: Array<[string, React.ReactNode]> }) {

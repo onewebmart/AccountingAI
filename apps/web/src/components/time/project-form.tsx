@@ -22,7 +22,7 @@ interface UserRow { key: string; userId: string; rate: string }
 const rs = (p: number | null | undefined) => (p == null ? '' : String(p / 100));
 let keySeq = 0;
 const key = () => `row-${++keySeq}`;
-const cell = 'w-full rounded-md border border-line-200 bg-white px-2.5 py-1.5 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-saffron-600/40';
+const cell = 'w-full rounded-md border border-line-200 bg-white px-2.5 py-1.5 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-brand-600/40';
 const blankTask = (): TaskRow => ({ key: key(), id: null, name: '', description: '', billable: true, rate: '' });
 
 /**
@@ -214,7 +214,7 @@ export function ProjectForm({ project, cancelHref, onSaved }: { project: Project
           )}
           <div>
             <label className="mb-1 flex items-center gap-2 pt-6 text-body text-ink-900">
-              <input type="checkbox" className="h-4 w-4 accent-saffron-600" checked={f.hoursBudgetOn} onChange={(e) => setF({ ...f, hoursBudgetOn: e.target.checked })} /> Add budget for project hours
+              <input type="checkbox" className="h-4 w-4 accent-brand-600" checked={f.hoursBudgetOn} onChange={(e) => setF({ ...f, hoursBudgetOn: e.target.checked })} /> Add budget for project hours
             </label>
             {f.hoursBudgetOn && (
               <input className={`${inputClass} font-mono`} inputMode="decimal" value={f.budgetHours} onChange={(e) => setF({ ...f, budgetHours: e.target.value })} placeholder="Hours, like 120" aria-label="Budgeted hours" />
@@ -316,7 +316,7 @@ export function ProjectForm({ project, cancelHref, onSaved }: { project: Project
                       </td>
                     )}
                     <td className={`${td} text-center`}>
-                      <input type="checkbox" className="h-4 w-4 accent-saffron-600" checked={t.billable} onChange={(e) => setTask(t.key, { billable: e.target.checked })} aria-label={`Task ${i + 1} is billable`} />
+                      <input type="checkbox" className="h-4 w-4 accent-brand-600" checked={t.billable} onChange={(e) => setTask(t.key, { billable: e.target.checked })} aria-label={`Task ${i + 1} is billable`} />
                     </td>
                     <td className={`${td} text-right`}>
                       <button type="button" className="rounded p-1.5 text-ink-400 hover:bg-surface-sink hover:text-ink-900" onClick={() => setTasks((ts) => ts.filter((x) => x.key !== t.key))} aria-label={`Remove task ${i + 1}`}>
@@ -348,7 +348,7 @@ export function ProjectForm({ project, cancelHref, onSaved }: { project: Project
       </Section>
 
       <label className="flex items-center gap-2 px-1 text-body text-ink-900">
-        <input type="checkbox" className="h-4 w-4 accent-saffron-600" checked={f.watchlist} onChange={(e) => setF({ ...f, watchlist: e.target.checked })} /> Add to the watchlist on my dashboard
+        <input type="checkbox" className="h-4 w-4 accent-brand-600" checked={f.watchlist} onChange={(e) => setF({ ...f, watchlist: e.target.checked })} /> Add to the watchlist on my dashboard
       </label>
     </FormPage>
   );

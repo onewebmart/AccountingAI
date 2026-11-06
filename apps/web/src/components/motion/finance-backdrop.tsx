@@ -125,7 +125,7 @@ interface Drifter {
 const DRIFTERS: Drifter[] = [
   {
     style: { top: '12%', left: '6%' },
-    className: 'w-24 text-saffron-600/[0.10]',
+    className: 'w-24 text-brand-700/[0.10]',
     duration: 22,
     travel: 14,
     node: (c) => <BalanceMotif className={c} />,

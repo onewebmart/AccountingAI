@@ -42,7 +42,7 @@ function ReportRows({ reports }: { reports: CenterReport[] }) {
             <div className="flex items-start gap-2">
               <span className="pt-0.5"><FavouriteStar report={r} /></span>
               <div className="min-w-0">
-                <Link href={`/reports/view/${encodeURIComponent(r.key)}`} className="text-body font-medium text-ink-900 hover:text-saffron-700 hover:underline">
+                <Link href={`/reports/view/${encodeURIComponent(r.key)}`} className="text-body font-medium text-ink-900 hover:text-brand-800 hover:underline">
                   {r.title}
                 </Link>
                 {r.custom && <span className="ml-2 rounded-full border border-line-200 px-1.5 py-0.5 text-[11px] text-ink-500">{r.shared ? 'Shared' : 'Only you'}</span>}
@@ -195,7 +195,7 @@ function ReportsCenter() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-h1 font-display text-ink-900">Reports Center</h1>
+          <h1 className="text-h1 font-display text-navy-900">Reports Center</h1>
           <p className="mt-1 text-body text-ink-500">Every report reads only posted entries. Star the ones you use, and make your own from any of them.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -203,7 +203,7 @@ function ReportsCenter() {
           <label className="relative">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-400" />
             <input
-              className="h-10 w-72 rounded-md border border-line-200 bg-white pl-8 pr-3 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-saffron-600/40"
+              className="h-10 w-72 rounded-md border border-line-200 bg-white pl-8 pr-3 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-brand-600/40"
               placeholder="Search reports"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -231,7 +231,7 @@ function ReportsCenter() {
               <NavItem
                 key={c.key}
                 active={category === c.key}
-                icon={<span className={`h-1.5 w-1.5 rounded-full ${category === c.key ? 'bg-saffron-600' : 'bg-line-200'}`} />}
+                icon={<span className={`h-1.5 w-1.5 rounded-full ${category === c.key ? 'bg-brand-600' : 'bg-line-200'}`} />}
                 label={c.label}
                 count={c.count}
                 onClick={() => go({ category: c.key })}
@@ -260,7 +260,7 @@ function ReportsCenter() {
               categories={data.categories}
               empty={
                 view === 'favorites' ? 'Star a report to keep it here.'
-                : view === 'mine' ? <>You have not made a report yet. <Link href="/reports/new" className="font-medium text-saffron-700 underline">Create New Report</Link>.</>
+                : view === 'mine' ? <>You have not made a report yet. <Link href="/reports/new" className="font-medium text-brand-800 underline">Create New Report</Link>.</>
                 : view === 'shared' ? 'No one has shared a report with the organisation yet.'
                 : 'No report matches. Try another word.'
               }

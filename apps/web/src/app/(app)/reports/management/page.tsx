@@ -18,7 +18,7 @@ interface CatalogEntry { key: string; title: string; params: 'range' | 'today' |
 interface Schedule { id: string; report: string; title: string; period: string; periodLabel: string; frequency: 'monthly' | 'weekly'; day: number; recipients: string[]; nextRunOn: string; lastSentOn: string | null; lastError: string | null; active: boolean }
 
 const message = (err: unknown) => (err instanceof ApiError ? err.message : err instanceof Error ? err.message : 'Something went wrong. Try again.');
-const field = 'rounded-md border border-line-200 bg-white px-3 py-2 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-saffron-600/40';
+const field = 'rounded-md border border-line-200 bg-white px-3 py-2 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-brand-600/40';
 const label = 'mb-1 block text-caption font-medium text-ink-700';
 const nowMonth = () => new Date().toISOString().slice(0, 7);
 const fyOf = (m: string) => {
@@ -209,7 +209,7 @@ function ManagementReports() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <Link href="/reports" className="inline-flex items-center gap-1 text-caption text-ink-500 hover:underline"><ChevronLeft size={13} /> Reports</Link>
-          <h1 className="text-h1 font-display text-ink-900">Management reports</h1>
+          <h1 className="text-h1 font-display text-navy-900">Management reports</h1>
           <p className="text-body text-ink-500">Sales, purchases, expenses and profit by month and by party, compared and budgeted, from posted entries only.</p>
         </div>
         <GuideButton guide="managementReports" />
@@ -219,7 +219,7 @@ function ManagementReports() {
         <NarrativeCard />
       </div>
       <div className="flex flex-wrap gap-1 border-b border-line-200">
-        {TABS.map((t) => <button key={t.id} onClick={() => setTab(t.id)} className={`px-4 py-2 text-body font-medium ${tab === t.id ? 'border-b-2 border-saffron-600 text-ink-900' : 'text-ink-500 hover:text-ink-900'}`}>{t.label}</button>)}
+        {TABS.map((t) => <button key={t.id} onClick={() => setTab(t.id)} className={`px-4 py-2 text-body font-medium ${tab === t.id ? 'border-b-2 border-brand-600 text-ink-900' : 'text-ink-500 hover:text-ink-900'}`}>{t.label}</button>)}
       </div>
       {catalog.isError && <p className="text-caption text-error-fg">{message(catalog.error)}</p>}
       {tab === 'reports' && catalog.data && <ReportsTab catalog={catalog.data} onToast={showToast} />}

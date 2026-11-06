@@ -73,7 +73,7 @@ export default function ItemsPage() {
         filters={{ value: filter, onChange: (v) => setFilter(v as Filter), options: [['all', 'All'], ['sale', 'Sold'], ['purchase', 'Bought'], ['nocode', 'No HSN/SAC']] }}
       >
         <label className="flex items-center gap-2 text-caption text-ink-600">
-          <input type="checkbox" className="h-4 w-4 accent-saffron-600" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} /> Show archived
+          <input type="checkbox" className="h-4 w-4 accent-brand-600" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} /> Show archived
         </label>
       </ListToolbar>
 

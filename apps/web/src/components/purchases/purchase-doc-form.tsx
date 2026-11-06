@@ -560,7 +560,7 @@ export function PurchaseDocumentForm({ kind }: { kind: PurchaseDocKind }) {
               <div className="space-y-1.5">
                 <input type="date" className={inputClass} value={f.neverExpires ? '' : f.endDate} min={f.date} disabled={f.neverExpires} onChange={(e) => set({ endDate: e.target.value })} />
                 <label className="flex items-center gap-2 text-caption text-ink-700">
-                  <input type="checkbox" className="h-4 w-4 accent-saffron-600" checked={f.neverExpires} onChange={(e) => set({ neverExpires: e.target.checked })} />
+                  <input type="checkbox" className="h-4 w-4 accent-brand-600" checked={f.neverExpires} onChange={(e) => set({ neverExpires: e.target.checked })} />
                   Never expires
                 </label>
               </div>
@@ -623,7 +623,7 @@ export function PurchaseDocumentForm({ kind }: { kind: PurchaseDocKind }) {
           {(kind === 'bill' || kind === 'recurring_bill') && (
             <div className="flex flex-col justify-end gap-2 pb-2">
               <label className="flex items-center gap-2 text-body text-ink-900">
-                <input type="checkbox" className="h-4 w-4 accent-saffron-600" checked={f.reverseCharge} onChange={(e) => set({ reverseCharge: e.target.checked })} />
+                <input type="checkbox" className="h-4 w-4 accent-brand-600" checked={f.reverseCharge} onChange={(e) => set({ reverseCharge: e.target.checked })} />
                 {foreign ? 'Imported services: we pay IGST under reverse charge' : 'Reverse charge: we pay the GST'}
               </label>
               {foreign && f.reverseCharge && (
@@ -665,7 +665,7 @@ export function PurchaseDocumentForm({ kind }: { kind: PurchaseDocKind }) {
 
       {byValue ? (
         <Section title="Amount" description="Takes value off the bill; the tax follows in the bill's own proportions.">
-          <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_28rem]">
+          <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_28rem]">
             <Field label="Amount before tax to take off (₹)" required>
               <input className={`${inputClass} max-w-xs text-right font-mono`} inputMode="decimal" value={f.valueTaxable} onChange={(e) => set({ valueTaxable: e.target.value })} placeholder="0.00" />
             </Field>
@@ -703,7 +703,7 @@ export function PurchaseDocumentForm({ kind }: { kind: PurchaseDocKind }) {
             />
           </Section>
 
-          <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_28rem]">
+          <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_28rem]">
             <Section>
               <div className="space-y-4">
                 <Field label={k.notesLabel} hint={k.notesHint}>

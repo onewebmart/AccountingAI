@@ -217,7 +217,7 @@ function PartyEditForm({ kind, id, onDone }: { kind: 'customer' | 'vendor'; id: 
   const stateFromGstin = /^\d{2}/.test(gstin) ? gstin.slice(0, 2) : null;
   const gstinChanged = gstin !== original.gstin.trim().toUpperCase();
   const field =
-    'w-full rounded-md border border-line-200 bg-white px-3 py-2 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-saffron-600/40';
+    'w-full rounded-md border border-line-200 bg-white px-3 py-2 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-brand-600/40';
   const label = 'text-caption font-medium text-ink-700 block mb-1';
 
   const submit = (e: React.FormEvent) => {
@@ -366,7 +366,7 @@ function VendorBankingSection({ id, onSaved }: { id: string; onSaved: (message: 
       msme: msme.registered ? { udyamNumber: msme.udyamNumber.trim(), category: msme.category, activity: msme.activity, writtenAgreement: msme.writtenAgreement } : null,
     });
   };
-  const field = 'w-full rounded-md border border-line-200 bg-white px-3 py-1.5 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-saffron-600/40';
+  const field = 'w-full rounded-md border border-line-200 bg-white px-3 py-1.5 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-brand-600/40';
   const label = 'text-caption font-medium text-ink-700 block mb-1';
   const protectedMsme = data.msme && data.msme.category !== 'medium' && data.msme.activity !== 'trading';
 

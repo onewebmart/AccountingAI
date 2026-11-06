@@ -27,8 +27,8 @@ export function ExpenseTabs({ active, documentId }: { active: ExpenseTab; docume
           aria-selected={active === key}
           href={expenseTabHref(key, documentId)}
           className={cn(
-            '-mb-px border-b-2 px-0.5 pb-2.5 text-body font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-marigold-400',
-            active === key ? 'border-saffron-600 text-ink-900' : 'border-transparent text-ink-500 hover:text-ink-900',
+            '-mb-px border-b-2 px-0.5 pb-2.5 text-body font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600',
+            active === key ? 'border-brand-600 text-ink-900' : 'border-transparent text-ink-500 hover:text-ink-900',
           )}
         >
           {label}

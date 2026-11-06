@@ -13,7 +13,7 @@ import { formatPaise } from '@/lib/gst';
 import { cn } from '@/lib/utils';
 
 const BASES = ['ASSETS', 'LIABILITIES', 'CAPITAL', 'INCOME', 'EXPENSE'];
-const selectClass = 'h-10 rounded-md border border-line-200 bg-white px-3 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-saffron-600/40';
+const selectClass = 'h-10 rounded-md border border-line-200 bg-white px-3 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-brand-600/40';
 
 /** Accounts in chart order: by base type, each group followed by what sits under it, by code. */
 function inTreeOrder(all: Account[]): Array<{ account: Account; depth: number }> {
@@ -118,7 +118,7 @@ function ChartOfAccounts() {
                           {a.name}
                         </Link>
                         {a.isSystem && <Lock size={12} className="shrink-0 text-ink-400" aria-label="System account" />}
-                        {a.watchlist && <Eye size={12} className="shrink-0 text-saffron-600" aria-label="On the dashboard watchlist" />}
+                        {a.watchlist && <Eye size={12} className="shrink-0 text-brand-700" aria-label="On the dashboard watchlist" />}
                         {!a.isActive && <span className="text-caption text-ink-500">Inactive</span>}
                       </span>
                     </td>

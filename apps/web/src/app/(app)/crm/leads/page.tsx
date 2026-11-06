@@ -90,7 +90,7 @@ function ScorePill({ score }: { score: number }) {
       className={cn(
         'rounded-full px-2 py-0.5 font-mono text-[11px] font-semibold',
         score >= 70
-          ? 'bg-[#E6F4EA] text-[#1E7B34]'
+          ? 'bg-[#F0FDF4] text-[#15803D]'
           : score >= 40
             ? 'bg-pending-bg text-pending-fg'
             : 'bg-surface-sink text-ink-500',
@@ -154,7 +154,7 @@ function LeadCard({
           </span>
         ) : null}
         {q.status === LeadQualificationStatus.FAILED ? (
-          <span className="rounded-full bg-[#C92A2A]/10 px-2 py-0.5 text-[11px] font-semibold text-[#C92A2A]">
+          <span className="rounded-full bg-[#DC2626]/10 px-2 py-0.5 text-[11px] font-semibold text-[#DC2626]">
             Qualification failed
           </span>
         ) : null}
@@ -196,7 +196,7 @@ function LeadCard({
             <button
               type="button"
               onClick={() => setOpen((o) => !o)}
-              className="mt-1 text-[11px] font-semibold text-saffron-700 hover:underline"
+              className="mt-1 text-[11px] font-semibold text-brand-800 hover:underline"
             >
               {open ? 'Less' : 'Why?'}
             </button>
@@ -283,7 +283,7 @@ function AddLeadDialog({
         <form onSubmit={submit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="lead-name">
-              Name <span className="text-[#C92A2A]">*</span>
+              Name <span className="text-[#DC2626]">*</span>
             </Label>
             <Input
               id="lead-name"
@@ -362,7 +362,7 @@ function AddLeadDialog({
                   className={cn(
                     'rounded-lg border px-3 py-2 text-body transition-colors',
                     services.includes(s)
-                      ? 'border-saffron-600 bg-saffron-600 text-white'
+                      ? 'border-brand-600 bg-brand-600 text-white'
                       : 'border-line-200 text-ink-700 hover:bg-surface-sink',
                   )}
                 >
@@ -380,12 +380,12 @@ function AddLeadDialog({
               value={enquiryNotes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Paste the WhatsApp message or website enquiry here."
-              className="w-full rounded-lg border border-line-200 bg-surface-card px-3 py-2 text-body text-ink-900 outline-none focus:border-saffron-600"
+              className="w-full rounded-lg border border-line-200 bg-surface-card px-3 py-2 text-body text-ink-900 outline-none focus:border-brand-600"
             />
           </div>
 
           {error ? (
-            <p className="rounded-lg bg-[#C92A2A]/5 px-3 py-2 text-body text-[#C92A2A]">
+            <p className="rounded-lg bg-[#DC2626]/5 px-3 py-2 text-body text-[#DC2626]">
               {error.message}
             </p>
           ) : null}
@@ -471,7 +471,7 @@ export default function LeadsPage() {
       <FadeIn>
         <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h1 className="font-heading text-h1 text-ink-900">Leads</h1>
+            <h1 className="font-heading text-h1 text-navy-900">Leads</h1>
             <p className="mt-1 text-body text-ink-500">
               Enquiries from every channel. The AI scores and summarises them; moving a lead
               is always your call.
@@ -497,7 +497,7 @@ export default function LeadsPage() {
       </FadeIn>
 
       {followUps.isSuccess ? (
-        <p className="mb-4 rounded-lg bg-[#E6F4EA] px-3 py-2 text-body text-[#1E7B34]">
+        <p className="mb-4 rounded-lg bg-[#F0FDF4] px-3 py-2 text-body text-[#15803D]">
           Nudged {followUps.data.nudged} lead(s)
           {followUps.data.skippedNoContact > 0
             ? ` · ${followUps.data.skippedNoContact} without contact details`
@@ -512,13 +512,13 @@ export default function LeadsPage() {
           <p className="text-caption text-ink-500">Active leads</p>
         </div>
         <div className="rounded-xl border border-line-200 bg-surface-card px-4 py-3">
-          <p className="font-mono text-h3 font-bold text-saffron-700">
+          <p className="font-mono text-h3 font-bold text-brand-800">
             {formatPaise(pipelineValue)}
           </p>
           <p className="text-caption text-ink-500">Pipeline value</p>
         </div>
         <div className="rounded-xl border border-line-200 bg-surface-card px-4 py-3">
-          <p className="font-mono text-h3 font-bold text-[#1E7B34]">{won}</p>
+          <p className="font-mono text-h3 font-bold text-[#15803D]">{won}</p>
           <p className="text-caption text-ink-500">Won</p>
         </div>
         <div className="rounded-xl border border-line-200 bg-surface-card px-4 py-3">
@@ -576,7 +576,7 @@ export default function LeadsPage() {
       )}
 
       {move.error ? (
-        <p className="mt-4 rounded-lg bg-[#C92A2A]/5 px-3 py-2 text-body text-[#C92A2A]">
+        <p className="mt-4 rounded-lg bg-[#DC2626]/5 px-3 py-2 text-body text-[#DC2626]">
           {(move.error as Error).message}
         </p>
       ) : null}

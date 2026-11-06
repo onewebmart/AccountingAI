@@ -121,7 +121,7 @@ export default function NewRecurringExpensePage() {
               <div className="space-y-1.5">
                 <input type="date" className={inputClass} value={neverExpires ? '' : endDate} min={startDate} disabled={neverExpires} onChange={(e) => setEndDate(e.target.value)} aria-label="Ends on" />
                 <label className="flex items-center gap-2 text-caption text-ink-700">
-                  <input type="checkbox" className="h-4 w-4 accent-saffron-600" checked={neverExpires} onChange={(e) => setNeverExpires(e.target.checked)} />
+                  <input type="checkbox" className="h-4 w-4 accent-brand-600" checked={neverExpires} onChange={(e) => setNeverExpires(e.target.checked)} />
                   Never expires
                 </label>
               </div>

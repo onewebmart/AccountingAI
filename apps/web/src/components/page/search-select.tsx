@@ -164,8 +164,8 @@ export function SearchSelect({
           }
         }}
         className={cn(
-          'flex w-full items-center justify-between gap-2 rounded-md border bg-white px-3 py-2 text-left text-body focus:outline-none focus:ring-2 focus:ring-saffron-600/40 disabled:cursor-not-allowed disabled:bg-surface-sink disabled:text-ink-500',
-          invalid ? 'border-error-fg' : open ? 'border-saffron-600' : 'border-line-200',
+          'flex w-full items-center justify-between gap-2 rounded-md border bg-white px-3 py-2 text-left text-body focus:outline-none focus:ring-2 focus:ring-brand-600/40 disabled:cursor-not-allowed disabled:bg-surface-sink disabled:text-ink-500',
+          invalid ? 'border-error-fg' : open ? 'border-brand-600' : 'border-line-200',
         )}
       >
         <span className={cn('min-w-0 truncate', selected ? 'text-ink-900' : 'text-ink-400')}>
@@ -185,7 +185,7 @@ export function SearchSelect({
               aria-expanded
               aria-controls={listId}
               aria-activedescendant={shown[active] ? `${listId}-${active}` : undefined}
-              className="w-full rounded-sm border border-line-200 bg-white py-1.5 pl-8 pr-2 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-saffron-600/40"
+              className="w-full rounded-sm border border-line-200 bg-white py-1.5 pl-8 pr-2 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-brand-600/40"
               placeholder={searchPlaceholder}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -225,7 +225,7 @@ export function SearchSelect({
                       {o.label}
                       {o.detail && <span className="ml-2 font-mono text-caption text-ink-400">{o.detail}</span>}
                     </span>
-                    {isSelected && <Check size={15} className="shrink-0 text-saffron-600" aria-hidden />}
+                    {isSelected && <Check size={15} className="shrink-0 text-brand-700" aria-hidden />}
                   </div>
                 </li>
               );

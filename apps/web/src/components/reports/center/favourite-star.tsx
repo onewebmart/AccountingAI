@@ -31,7 +31,7 @@ export function FavouriteStar({ report, size = 15 }: { report: { key: string; ti
       aria-pressed={report.favourite}
       title={report.favourite ? 'Remove from favorites' : 'Add to favorites'}
       onClick={(e) => { e.preventDefault(); toggle.mutate(!report.favourite); }}
-      className={`rounded p-0.5 transition-colors ${report.favourite ? 'text-saffron-600' : 'text-ink-300 hover:text-saffron-600'}`}
+      className={`rounded p-0.5 transition-colors ${report.favourite ? 'text-brand-700' : 'text-ink-300 hover:text-brand-700'}`}
     >
       <Star size={size} fill={report.favourite ? 'currentColor' : 'none'} />
     </button>

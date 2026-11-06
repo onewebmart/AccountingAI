@@ -25,6 +25,7 @@ import {
   ChevronDown,
   ChevronRight,
   Plus,
+  X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -198,9 +199,12 @@ interface SidebarProps {
   firmName?: string;
   /** A platform admin runs the platform and has no books: the admin board alone. */
   role?: string;
+  /** Below lg the sidebar is a drawer: open or not, and how to close it. */
+  open?: boolean;
+  onClose?: () => void;
 }
 
-export function Sidebar({ inboxCount = 0, reviewCount = 0, firmName, role }: SidebarProps) {
+export function Sidebar({ inboxCount = 0, reviewCount = 0, firmName, role, open: drawerOpen = false, onClose }: SidebarProps) {
   const pathname = usePathname();
   const isPlatformAdmin = role === 'PLATFORM_SUPER_ADMIN';
   const entries = useMemo(
@@ -239,21 +243,32 @@ export function Sidebar({ inboxCount = 0, reviewCount = 0, firmName, role }: Sid
   const badgeFor = (href: string) => (href === '/inbox' && inboxCount > 0 ? inboxCount : href === '/review' && reviewCount > 0 ? reviewCount : undefined);
 
   const topClass = (isActive: boolean) =>
-    cn('flex min-h-[40px] w-full items-center gap-3 rounded-sm px-3 py-2 text-body transition-colors', isActive ? 'sidebar-active text-white' : 'text-ink-400 hover:bg-white/5 hover:text-white');
+    cn('flex min-h-[40px] w-full items-center gap-3 rounded-md px-3 py-2 text-body font-medium transition-colors', isActive ? 'sidebar-active text-white' : 'text-navy-200 hover:bg-white/[0.06] hover:text-white');
 
   return (
-    <aside className="fixed left-0 top-0 z-40 flex h-screen w-[260px] flex-col" style={{ backgroundColor: 'var(--roast-900)' }}>
-      <div className="flex h-16 items-center border-b border-white/10 px-6">
-        <span className="text-h3 font-display text-white">
-          ◆ <span className="text-marigold-400">Ai</span>
-          <span className="text-white">Books</span>
-        </span>
+    <>
+    {/* Below lg: a scrim behind the open drawer; a tap on it closes the drawer. */}
+    {drawerOpen && <div className="fixed inset-0 z-[45] bg-navy-950/50 backdrop-blur-[1px] lg:hidden" onClick={onClose} aria-hidden />}
+    <aside
+      className={cn(
+        'fixed left-0 top-0 z-50 flex h-screen w-[260px] flex-col bg-navy-900 transition-transform duration-200 ease-out lg:z-40 lg:translate-x-0',
+        drawerOpen ? 'translate-x-0 shadow-e3' : '-translate-x-full',
+      )}
+    >
+      <div className="flex h-16 items-center gap-2 border-b border-white/10 px-5">
+        <Link href="/dashboard" className="flex items-center gap-2.5 rounded-md">
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-600 font-heading text-[0.8125rem] font-extrabold text-white shadow-e1">Ai</span>
+          <span className="font-heading text-h3 font-bold tracking-tight text-white">AiBooks</span>
+        </Link>
+        <button type="button" onClick={onClose} aria-label="Close menu" className="ml-auto flex h-9 w-9 items-center justify-center rounded-md text-navy-200 hover:bg-white/10 hover:text-white lg:hidden">
+          <X size={18} />
+        </button>
       </div>
 
       <nav className="flex-1 overflow-y-auto px-3 py-3" aria-label="Main">
         {isPlatformAdmin ? (
           <Link href="/platform-admin" className={topClass(pathname.startsWith('/platform-admin'))}>
-            <ShieldCheck size={18} className={pathname.startsWith('/platform-admin') ? 'text-white' : 'text-ink-500'} />
+            <ShieldCheck size={18} className={pathname.startsWith('/platform-admin') ? 'text-white' : 'text-navy-300'} />
             <span className="flex-1">Platform admin</span>
           </Link>
         ) : (
@@ -265,7 +280,7 @@ export function Sidebar({ inboxCount = 0, reviewCount = 0, firmName, role }: Sid
                 return (
                   <li key={entry.label}>
                     <Link href={entry.href} className={topClass(isActive)}>
-                      <span className={isActive ? 'text-white' : 'text-ink-500'}>{entry.icon}</span>
+                      <span className={isActive ? 'text-brand-400' : 'text-navy-300'}>{entry.icon}</span>
                       <span className="flex-1">{entry.label}</span>
                       {badge !== undefined && (
                         <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-marigold-400 px-1.5 text-[0.75rem] font-semibold text-ink-900">{badge}</span>
@@ -279,9 +294,9 @@ export function Sidebar({ inboxCount = 0, reviewCount = 0, firmName, role }: Sid
               return (
                 <li key={entry.label}>
                   <button type="button" onClick={() => toggle(entry.label)} aria-expanded={isOpen} className={cn(topClass(false), inGroup && 'text-white')}>
-                    <span className={inGroup ? 'text-marigold-400' : 'text-ink-500'}>{entry.icon}</span>
+                    <span className={inGroup ? 'text-brand-400' : 'text-navy-300'}>{entry.icon}</span>
                     <span className="flex-1 text-left">{entry.label}</span>
-                    {isOpen ? <ChevronDown size={14} className="text-ink-500" /> : <ChevronRight size={14} className="text-ink-500" />}
+                    {isOpen ? <ChevronDown size={14} className="text-navy-300" /> : <ChevronRight size={14} className="text-navy-300" />}
                   </button>
                   {isOpen && (
                     <ul className="mb-1 mt-0.5 space-y-0.5">
@@ -292,8 +307,8 @@ export function Sidebar({ inboxCount = 0, reviewCount = 0, firmName, role }: Sid
                             <Link
                               href={item.href}
                               className={cn(
-                                'flex min-h-[34px] items-center rounded-sm py-1.5 pl-11 pr-9 text-[0.875rem] transition-colors',
-                                isActive ? 'sidebar-active text-white' : 'text-ink-400 hover:bg-white/5 hover:text-white',
+                                'flex min-h-[34px] items-center rounded-md py-1.5 pl-11 pr-9 text-[0.875rem] transition-colors',
+                                isActive ? 'sidebar-active font-medium text-white' : 'text-navy-200/90 hover:bg-white/[0.06] hover:text-white',
                               )}
                             >
                               {item.label}
@@ -303,7 +318,7 @@ export function Sidebar({ inboxCount = 0, reviewCount = 0, firmName, role }: Sid
                                 href={item.create}
                                 aria-label={`New ${item.label.replace(/s$/, '').toLowerCase()}`}
                                 title={`New ${item.label.replace(/s$/, '').toLowerCase()}`}
-                                className="absolute right-1.5 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-sm bg-white/10 text-white hover:bg-saffron-600"
+                                className="absolute right-1.5 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md bg-white/10 text-white hover:bg-brand-600"
                               >
                                 <Plus size={14} />
                               </Link>
@@ -323,11 +338,12 @@ export function Sidebar({ inboxCount = 0, reviewCount = 0, firmName, role }: Sid
       {!isPlatformAdmin && (
         <div className="border-t border-white/10 p-3">
           <Link href="/settings" className={topClass(pathname.startsWith('/settings'))}>
-            <Settings size={18} className={pathname.startsWith('/settings') ? 'text-white' : 'text-ink-500'} />
+            <Settings size={18} className={pathname.startsWith('/settings') ? 'text-brand-400' : 'text-navy-300'} />
             <span>Settings</span>
           </Link>
         </div>
       )}
     </aside>
+    </>
   );
 }

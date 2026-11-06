@@ -90,7 +90,7 @@ function ItemPill({
       title={item.documentName ?? undefined}
       className={cn(
         'inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-caption',
-        verified && 'border-[#1E7B34]/20 bg-[#E6F4EA] text-[#1E7B34]',
+        verified && 'border-[#15803D]/20 bg-[#F0FDF4] text-[#15803D]',
         received && 'border-pending-fg/20 bg-pending-bg text-pending-fg',
         !received && !verified && 'border-line-200 bg-surface-card text-ink-500',
       )}
@@ -103,7 +103,7 @@ function ItemPill({
           type="button"
           onClick={() => onVerify(item.key)}
           disabled={verifying}
-          className="ml-1 rounded px-1 text-[11px] font-semibold text-saffron-700 hover:underline disabled:opacity-50"
+          className="ml-1 rounded px-1 text-[11px] font-semibold text-brand-800 hover:underline disabled:opacity-50"
         >
           {verifying ? '…' : 'Verify'}
         </button>
@@ -138,7 +138,7 @@ function RequestCard({
           </p>
         </div>
         {complete ? (
-          <span className="rounded-full bg-[#E6F4EA] px-2.5 py-1 text-[11px] font-semibold text-[#1E7B34]">
+          <span className="rounded-full bg-[#F0FDF4] px-2.5 py-1 text-[11px] font-semibold text-[#15803D]">
             All documents received
           </span>
         ) : (
@@ -263,7 +263,7 @@ function NewRequestDialog({
           </div>
 
           {error ? (
-            <p className="rounded-lg bg-[#C92A2A]/5 px-3 py-2 text-body text-[#C92A2A]">
+            <p className="rounded-lg bg-[#DC2626]/5 px-3 py-2 text-body text-[#DC2626]">
               {error.message}
             </p>
           ) : null}
@@ -350,7 +350,7 @@ export default function DocumentsPage() {
       <FadeIn>
         <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h1 className="font-heading text-h1 text-ink-900">Document hub</h1>
+            <h1 className="font-heading text-h1 text-navy-900">Document hub</h1>
             <p className="mt-1 text-body text-ink-500">
               Track what each client still owes you. Uploads are matched to the checklist
               automatically — you confirm each one before it counts as verified.
@@ -379,7 +379,7 @@ export default function DocumentsPage() {
       </FadeIn>
 
       {remind.isSuccess ? (
-        <p className="mb-4 rounded-lg bg-[#E6F4EA] px-3 py-2 text-body text-[#1E7B34]">
+        <p className="mb-4 rounded-lg bg-[#F0FDF4] px-3 py-2 text-body text-[#15803D]">
           Queued {remind.data.remindersQueued} reminder(s)
           {remind.data.skippedComplete > 0 ? ` · ${remind.data.skippedComplete} already complete` : ''}
           {remind.data.skippedNoContact > 0
@@ -399,7 +399,7 @@ export default function DocumentsPage() {
             className={cn(
               'rounded-lg border px-3 py-1.5 text-caption font-medium transition-colors',
               filter === f.key
-                ? 'border-saffron-600 bg-saffron-600 text-white'
+                ? 'border-brand-600 bg-brand-600 text-white'
                 : 'border-line-200 bg-surface-card text-ink-700 hover:bg-surface-sink',
             )}
           >

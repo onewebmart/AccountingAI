@@ -361,7 +361,7 @@ export default function BankingPage() {
       <div className="space-y-6">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h1 className="text-h1 font-display text-ink-900">Bank reconciliation</h1>
+            <h1 className="text-h1 font-display text-navy-900">Bank reconciliation</h1>
             <p className="text-body text-ink-500 mt-1">Match your bank statement to your books.</p>
           </div>
           <GuideButton guide="banking" />
@@ -398,7 +398,7 @@ export default function BankingPage() {
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-h1 font-display text-ink-900">Bank reconciliation</h1>
+          <h1 className="text-h1 font-display text-navy-900">Bank reconciliation</h1>
           <p className="text-body text-ink-500 mt-1">
             {accountLabel}
             {latestStatement && ` · ${latestStatement.periodStart} to ${latestStatement.periodEnd}`}
@@ -446,7 +446,7 @@ export default function BankingPage() {
         <div className="flex items-center gap-3">
           <span className="text-caption text-ink-500">Account</span>
           <select
-            className="rounded-md border border-line-200 bg-white px-3 py-1.5 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-saffron-600/40"
+            className="rounded-md border border-line-200 bg-white px-3 py-1.5 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-brand-600/40"
             value={effectiveAccountId ?? ''}
             onChange={(e) => setSelectedAccountId(e.target.value || null)}
           >

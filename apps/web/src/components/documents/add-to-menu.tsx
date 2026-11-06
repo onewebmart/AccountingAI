@@ -48,7 +48,7 @@ export function AddToMenu({ documentId, fileName }: { documentId: string; fileNa
   return (
     <Menu.Root modal={false}>
       <Menu.Trigger
-        className="inline-flex h-8 items-center gap-1 rounded-md border border-line-200 bg-surface-card px-2.5 text-caption font-medium text-ink-900 hover:bg-honey-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-marigold-400 data-[state=open]:bg-honey-50"
+        className="inline-flex h-8 items-center gap-1 rounded-md border border-line-200 bg-surface-card px-2.5 text-caption font-medium text-ink-900 hover:bg-honey-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 data-[state=open]:bg-honey-50"
         aria-label={fileName ? `Add ${fileName} to a new record` : 'Add to a new record'}
       >
         Add to <ChevronDown size={13} aria-hidden />

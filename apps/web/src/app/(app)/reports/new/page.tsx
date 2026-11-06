@@ -44,9 +44,9 @@ export default function NewReportPage() {
               aria-checked={on}
               onClick={() => setPick(c.id)}
               onDoubleClick={() => router.push(c.href)}
-              className={`flex flex-col gap-3 rounded-xl border p-5 text-left transition-colors ${on ? 'border-saffron-600 bg-honey-50 ring-2 ring-saffron-600/20' : 'border-line-200 bg-surface-card hover:border-saffron-600/60'}`}
+              className={`flex flex-col gap-3 rounded-xl border p-5 text-left transition-colors ${on ? 'border-brand-600 bg-honey-50 ring-2 ring-brand-600/20' : 'border-line-200 bg-surface-card hover:border-brand-600/60'}`}
             >
-              <span className={`inline-flex h-10 w-10 items-center justify-center rounded-lg ${on ? 'bg-saffron-600 text-white' : 'bg-surface-sink text-ink-600'}`}><Icon size={20} /></span>
+              <span className={`inline-flex h-10 w-10 items-center justify-center rounded-lg ${on ? 'bg-brand-600 text-white' : 'bg-surface-sink text-ink-600'}`}><Icon size={20} /></span>
               <span className="text-h3 font-display text-ink-900">{c.title}</span>
               <span className="text-body text-ink-600">{c.body}</span>
             </button>

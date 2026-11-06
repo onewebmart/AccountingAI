@@ -13,7 +13,7 @@ import type { JournalItem } from '@/components/accountant/journal-types';
 import { api } from '@/lib/api';
 import { formatPaise } from '@/lib/gst';
 
-const dateInput = 'h-10 rounded-md border border-line-200 bg-white px-3 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-saffron-600/40';
+const dateInput = 'h-10 rounded-md border border-line-200 bg-white px-3 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-brand-600/40';
 
 /** Journal vouchers typed by a person: adjustments, corrections, opening entries. */
 export default function ManualJournalsPage() {

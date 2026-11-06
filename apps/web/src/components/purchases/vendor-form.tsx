@@ -385,7 +385,7 @@ export function VendorForm({ vendor, onDone }: { vendor?: VendorRecord | null; o
 
             <Group title="MSME">
               <label className="flex items-center gap-2 text-body text-ink-900">
-                <input type="checkbox" className="h-4 w-4 accent-saffron-600" checked={extra.msmeRegistered} onChange={(e) => setX('msmeRegistered', e.target.checked)} />
+                <input type="checkbox" className="h-4 w-4 accent-brand-600" checked={extra.msmeRegistered} onChange={(e) => setX('msmeRegistered', e.target.checked)} />
                 Registered as an MSME (Udyam)
               </label>
               <p className="mt-1 text-caption text-ink-500">Micro and small enterprises must be paid within 15 days, or 45 with a written agreement (43B(h)).</p>
@@ -409,7 +409,7 @@ export function VendorForm({ vendor, onDone }: { vendor?: VendorRecord | null; o
                     </select>
                   </Field>
                   <label className="flex items-center gap-2 text-body text-ink-900 md:col-span-3">
-                    <input type="checkbox" className="h-4 w-4 accent-saffron-600" checked={extra.writtenAgreement} onChange={(e) => setX('writtenAgreement', e.target.checked)} />
+                    <input type="checkbox" className="h-4 w-4 accent-brand-600" checked={extra.writtenAgreement} onChange={(e) => setX('writtenAgreement', e.target.checked)} />
                     We have a written agreement on payment terms
                   </label>
                 </div>

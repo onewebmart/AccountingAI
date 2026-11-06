@@ -45,14 +45,14 @@ function formatDate(iso: string): string {
 function UrgencyPill({ daysLeft }: { daysLeft: number }) {
   if (daysLeft < 0) {
     return (
-      <span className="rounded-full bg-[#C92A2A]/10 px-2 py-0.5 text-[11px] font-semibold text-[#C92A2A]">
+      <span className="rounded-full bg-[#DC2626]/10 px-2 py-0.5 text-[11px] font-semibold text-[#DC2626]">
         {Math.abs(daysLeft)} days overdue
       </span>
     );
   }
   if (daysLeft === 0) {
     return (
-      <span className="rounded-full bg-[#C92A2A]/10 px-2 py-0.5 text-[11px] font-semibold text-[#C92A2A]">
+      <span className="rounded-full bg-[#DC2626]/10 px-2 py-0.5 text-[11px] font-semibold text-[#DC2626]">
         Due today
       </span>
     );
@@ -109,7 +109,7 @@ function DeadlineCard({
               className={cn(
                 'inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-caption',
                 c.status === ComplianceStatus.FILED
-                  ? 'border-[#1E7B34]/20 bg-[#E6F4EA] text-[#1E7B34]'
+                  ? 'border-[#15803D]/20 bg-[#F0FDF4] text-[#15803D]'
                   : 'border-line-200 bg-surface-sink text-ink-700',
               )}
             >
@@ -120,7 +120,7 @@ function DeadlineCard({
                   type="button"
                   onClick={() => onFile(c.itemId)}
                   disabled={filing === c.itemId}
-                  className="ml-1 rounded px-1 text-[11px] font-semibold text-saffron-700 hover:underline disabled:opacity-50"
+                  className="ml-1 rounded px-1 text-[11px] font-semibold text-brand-800 hover:underline disabled:opacity-50"
                 >
                   {filing === c.itemId ? '…' : 'Mark filed'}
                 </button>
@@ -282,7 +282,7 @@ export default function CompliancePage() {
       <FadeIn>
         <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h1 className="font-heading text-h1 text-ink-900">Compliance</h1>
+            <h1 className="font-heading text-h1 text-navy-900">Compliance</h1>
             <p className="mt-1 text-body text-ink-500">
               GST, TDS, ITR and ROC deadlines, generated from each client&apos;s services.
               Clients are reminded 7, 3 and 1 days before.
@@ -312,7 +312,7 @@ export default function CompliancePage() {
       </FadeIn>
 
       {runReminders.isSuccess ? (
-        <p className="mb-4 rounded-lg bg-[#E6F4EA] px-3 py-2 text-body text-[#1E7B34]">
+        <p className="mb-4 rounded-lg bg-[#F0FDF4] px-3 py-2 text-body text-[#15803D]">
           Queued {runReminders.data.remindersQueued} reminder(s)
           {runReminders.data.skippedNoContact > 0
             ? ` · ${runReminders.data.skippedNoContact} client(s) skipped for missing contact details`
@@ -324,7 +324,7 @@ export default function CompliancePage() {
         <p
           className={
             generateNotice.tone === 'ok'
-              ? 'mb-4 rounded-lg bg-[#E6F4EA] px-3 py-2 text-body text-[#1E7B34]'
+              ? 'mb-4 rounded-lg bg-[#F0FDF4] px-3 py-2 text-body text-[#15803D]'
               : 'mb-4 rounded-lg border border-marigold-400/40 bg-honey-100 px-3 py-2 text-body text-ink-700'
           }
         >
@@ -332,7 +332,7 @@ export default function CompliancePage() {
         </p>
       ) : null}
       {generate.error || runReminders.error ? (
-        <p className="mb-4 rounded-lg bg-[#C92A2A]/5 px-3 py-2 text-body text-[#C92A2A]">
+        <p className="mb-4 rounded-lg bg-[#DC2626]/5 px-3 py-2 text-body text-[#DC2626]">
           {((generate.error ?? runReminders.error) as Error).message}
         </p>
       ) : null}

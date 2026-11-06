@@ -88,7 +88,7 @@ export function UploadList({ items, onClear }: { items: UploadItem[]; onClear: (
             </div>
             {(it.state === 'uploading' || it.state === 'queued') && (
               <div className="ml-7 mt-1.5 h-1.5 overflow-hidden rounded-full bg-surface-sink" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(it.progress * 100)} aria-label={`Uploading ${it.name}`}>
-                <div className="h-full rounded-full bg-saffron-600 transition-[width]" style={{ width: `${Math.max(it.progress * 100, it.state === 'uploading' ? 3 : 0)}%` }} />
+                <div className="h-full rounded-full bg-brand-600 transition-[width]" style={{ width: `${Math.max(it.progress * 100, it.state === 'uploading' ? 3 : 0)}%` }} />
               </div>
             )}
             {(it.state === 'error' || it.state === 'duplicate') && it.message && <p className="ml-7 mt-1 text-caption text-error-fg">{it.message}</p>}

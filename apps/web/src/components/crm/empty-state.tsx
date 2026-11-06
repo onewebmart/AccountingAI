@@ -29,7 +29,7 @@ export function EmptyState({
   return (
     <FadeIn className={guide ? 'space-y-5' : undefined}>
       <div className="rounded-xl border border-line-200 bg-surface-card px-6 py-16 text-center">
-        <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-honey-100 text-saffron-700">
+        <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-honey-100 text-brand-800">
           {icon}
         </span>
         <p className="mt-4 font-heading text-h3 text-ink-900">{title}</p>

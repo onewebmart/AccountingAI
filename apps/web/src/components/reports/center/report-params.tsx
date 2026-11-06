@@ -5,7 +5,7 @@ import { api } from '@/lib/api';
 import type { FilterDef, ParamKind } from './types';
 import { recentYears } from './types';
 
-export const fieldClass = 'h-10 rounded-md border border-line-200 bg-white px-3 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-saffron-600/40';
+export const fieldClass = 'h-10 rounded-md border border-line-200 bg-white px-3 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-brand-600/40';
 export const labelClass = 'mb-1 block text-caption font-medium text-ink-700';
 
 /** The period controls a report takes: months, a year, a date, a month or a quarter. */

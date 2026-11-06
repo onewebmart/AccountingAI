@@ -1,36 +1,30 @@
 import type { Metadata } from 'next';
-import { Bricolage_Grotesque, Hanken_Grotesk, JetBrains_Mono } from 'next/font/google';
+import { Inter, Manrope } from 'next/font/google';
 import './globals.css';
 import { Providers } from './providers';
 
-const bricolageGrotesque = Bricolage_Grotesque({
+// Headings: Manrope Bold. Body, buttons and figures: Inter.
+const manrope = Manrope({
   subsets: ['latin'],
   variable: '--font-display',
   display: 'swap',
-  axes: ['opsz'],
+  weight: ['500', '600', '700', '800'],
 });
 
-const hankenGrotesk = Hanken_Grotesk({
+const inter = Inter({
   subsets: ['latin'],
   variable: '--font-body',
   display: 'swap',
   weight: ['400', '500', '600', '700'],
 });
 
-const jetbrainsMono = JetBrains_Mono({
-  subsets: ['latin'],
-  variable: '--font-mono',
-  display: 'swap',
-  weight: ['400', '500'],
-});
-
 export const metadata: Metadata = {
   title: {
-    default: 'AI Accounting — Smart books for Indian businesses',
-    template: '%s | AI Accounting',
+    default: 'AiBooks — Smart Accounting. Smarter Business Decisions.',
+    template: '%s | AiBooks',
   },
   description:
-    'Upload the pile. We\'ll sort the books. AI-powered bookkeeping for Indian SMEs and CA firms.',
+    'Simplify accounting with AI-powered invoicing, GST management, expense tracking and real-time financial insights — all in one platform.',
   keywords: ['accounting', 'GST', 'bookkeeping', 'India', 'SME', 'invoicing', 'Tally'],
 };
 
@@ -42,7 +36,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${bricolageGrotesque.variable} ${hankenGrotesk.variable} ${jetbrainsMono.variable}`}
+      className={`${manrope.variable} ${inter.variable}`}
     >
       <body className="bg-surface-page text-ink-900 antialiased" style={{ fontFamily: 'var(--font-body)' }}>
         <Providers>{children}</Providers>

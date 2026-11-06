@@ -27,9 +27,9 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
           className={cn(
             'flex h-11 w-full rounded-sm border border-line-200 bg-surface-card px-3 py-2',
             'text-body text-ink-900 placeholder:text-ink-400',
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-marigold-400 focus-visible:ring-offset-1',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 focus-visible:ring-offset-1',
             'disabled:cursor-not-allowed disabled:opacity-50',
-            error && 'border-[#C92A2A] focus-visible:ring-[#C92A2A]',
+            error && 'border-[#DC2626] focus-visible:ring-[#DC2626]',
             // Money inputs right-align
             type === 'number' && 'text-right font-mono',
             className,
@@ -37,7 +37,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
           ref={ref}
           {...props}
         />
-        {error && <p className="text-caption text-[#C92A2A]">{error}</p>}
+        {error && <p className="text-caption text-[#DC2626]">{error}</p>}
         {helperText && !error && <p className="text-caption text-ink-500">{helperText}</p>}
       </div>
     );

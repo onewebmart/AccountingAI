@@ -50,10 +50,10 @@ export function AuthShell({
         />
 
         <Link href="/" className="relative flex items-center gap-2.5">
-          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-saffron-600 font-heading text-caption font-bold text-white">
-            CA
+          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-600 font-heading text-caption font-extrabold text-white">
+            Ai
           </span>
-          <span className="font-heading text-body-lg font-semibold">AiBooks</span>
+          <span className="font-heading text-body-lg font-bold">AiBooks</span>
         </Link>
 
         <div className="relative mt-auto max-w-md">
@@ -83,7 +83,7 @@ export function AuthShell({
                 transition={{ duration: 0.45, delay: 0.18 + i * 0.07, ease: [0.22, 1, 0.36, 1] }}
                 className="flex gap-3 text-body text-white/70"
               >
-                <span className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-marigold-400" />
+                <span className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-brand-400" />
                 {line}
               </motion.li>
             ))}
@@ -97,10 +97,10 @@ export function AuthShell({
           {/* The mark repeats here for the mobile layout, where the panel is
               gone and the form would otherwise be unbranded. */}
           <Link href="/" className="mb-10 flex items-center gap-2.5 lg:hidden">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-saffron-600 font-heading text-caption font-bold text-white">
-              CA
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-600 font-heading text-caption font-extrabold text-white">
+              Ai
             </span>
-            <span className="font-heading text-body font-semibold text-ink-900">AiBooks</span>
+            <span className="font-heading text-body font-bold text-navy-900">AiBooks</span>
           </Link>
 
           <motion.div
@@ -108,7 +108,7 @@ export function AuthShell({
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
           >
-            <h1 className="font-heading text-h1 text-ink-900">{title}</h1>
+            <h1 className="font-heading text-h1 text-navy-900">{title}</h1>
             <p className="mt-2 text-body text-ink-500">{subtitle}</p>
 
             <div className="mt-8">{children}</div>

@@ -131,7 +131,7 @@ export default function ProjectPage() {
       <div className="grid gap-5 lg:grid-cols-2">
         <Section title="Project tasks" description={p.billing === 'task_hours' ? 'Each task bills at its own rate.' : undefined}>
           {tasks.length === 0 ? (
-            <p className="text-body text-ink-500">No tasks. Time is logged with a task typed in. <Link className="font-medium text-saffron-600 hover:underline" href={`/time/projects/${id}/edit`}>Add tasks</Link></p>
+            <p className="text-body text-ink-500">No tasks. Time is logged with a task typed in. <Link className="font-medium text-brand-700 hover:underline" href={`/time/projects/${id}/edit`}>Add tasks</Link></p>
           ) : (
             <TableCard>
               <table className="w-full">
@@ -157,7 +157,7 @@ export default function ProjectPage() {
         </Section>
         <Section title="Users" description={p.billing === 'staff_hours' ? 'Each person bills at their own rate.' : undefined}>
           {members.length === 0 ? (
-            <p className="text-body text-ink-500">No one is on this project yet. <Link className="font-medium text-saffron-600 hover:underline" href={`/time/projects/${id}/edit`}>Add users</Link></p>
+            <p className="text-body text-ink-500">No one is on this project yet. <Link className="font-medium text-brand-700 hover:underline" href={`/time/projects/${id}/edit`}>Add users</Link></p>
           ) : (
             <TableCard>
               <table className="w-full">

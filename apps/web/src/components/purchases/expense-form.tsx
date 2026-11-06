@@ -163,7 +163,7 @@ function ItemizedLines({ value, onChange }: { value: ExpenseFormValue; onChange:
         <span className="text-caption font-medium text-ink-700">Expense accounts<span className="text-error-fg"> *</span></span>
         <button
           type="button"
-          className="text-caption font-medium text-saffron-700 hover:underline"
+          className="text-caption font-medium text-brand-800 hover:underline"
           onClick={() => {
             const filled = value.lines.filter((l) => l.expenseAccountId || l.amount.trim());
             if (filled.length > 1 && !window.confirm("Use one account? The lines' amounts are added together on the first line's account, at its GST rate.")) return;
@@ -220,7 +220,7 @@ function ItemizedLines({ value, onChange }: { value: ExpenseFormValue; onChange:
           <tfoot className="border-t border-line-200 bg-surface-sink">
             <tr>
               <td colSpan={2} className="px-2 py-2">
-                <button type="button" className="inline-flex items-center gap-1 text-caption font-medium text-saffron-700 hover:underline" onClick={() => onChange({ lines: [...value.lines, blankLine()] })}>
+                <button type="button" className="inline-flex items-center gap-1 text-caption font-medium text-brand-800 hover:underline" onClick={() => onChange({ lines: [...value.lines, blankLine()] })}>
                   <Plus size={13} /> Add another line
                 </button>
               </td>
@@ -276,7 +276,7 @@ export function ExpenseFields({ value, onChange, withDate = true, title = 'Expen
                   <span className="text-caption font-medium text-ink-700">Expense account<span className="text-error-fg"> *</span></span>
                   <button
                     type="button"
-                    className="text-caption font-medium text-saffron-700 hover:underline"
+                    className="text-caption font-medium text-brand-800 hover:underline"
                     onClick={() => onChange({ itemized: true, lines: [blankLine({ expenseAccountId: value.expenseAccountId, amount: value.amount, gstRatePct: value.gstRatePct }), blankLine()] })}
                   >
                     Itemize
@@ -320,11 +320,11 @@ export function ExpenseFields({ value, onChange, withDate = true, title = 'Expen
         {gst && (
           <div className="mt-4 grid gap-4 rounded-md border border-line-200 bg-surface-sink p-4 md:grid-cols-3">
             <label className="flex items-center gap-2 text-body text-ink-900">
-              <input type="checkbox" className="h-4 w-4 accent-saffron-600" checked={interState} onChange={(e) => onChange({ interState: e.target.checked })} />
+              <input type="checkbox" className="h-4 w-4 accent-brand-600" checked={interState} onChange={(e) => onChange({ interState: e.target.checked })} />
               Inter-state (IGST)
             </label>
             <label className="flex items-center gap-2 text-body text-ink-900">
-              <input type="checkbox" className="h-4 w-4 accent-saffron-600" checked={value.claimable} onChange={(e) => onChange({ claimable: e.target.checked })} />
+              <input type="checkbox" className="h-4 w-4 accent-brand-600" checked={value.claimable} onChange={(e) => onChange({ claimable: e.target.checked })} />
               Claim the GST as input credit
             </label>
             {value.claimable && (

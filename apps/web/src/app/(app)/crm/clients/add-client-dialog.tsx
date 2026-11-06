@@ -89,7 +89,7 @@ export function AddClientDialog({ open, onOpenChange, onSubmit, submitting, erro
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="name">
-              Client / firm name <span className="text-[#C92A2A]">*</span>
+              Client / firm name <span className="text-[#DC2626]">*</span>
             </Label>
             <Input
               id="name"
@@ -201,7 +201,7 @@ export function AddClientDialog({ open, onOpenChange, onSubmit, submitting, erro
           </div>
 
           {error ? (
-            <p className="rounded-lg bg-[#C92A2A]/5 px-3 py-2 text-body text-[#C92A2A]">
+            <p className="rounded-lg bg-[#DC2626]/5 px-3 py-2 text-body text-[#DC2626]">
               {error.message}
             </p>
           ) : null}

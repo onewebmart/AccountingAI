@@ -193,7 +193,7 @@ export function AuroraBackdrop({ className }: { className?: string }) {
         aria-hidden
         className={cn('pointer-events-none absolute inset-0 overflow-hidden', className)}
       >
-        <div className="absolute -left-32 top-0 h-96 w-96 rounded-full bg-saffron-600/20 blur-3xl" />
+        <div className="absolute -left-32 top-0 h-96 w-96 rounded-full bg-brand-600/20 blur-3xl" />
         <div className="absolute -right-24 top-32 h-80 w-80 rounded-full bg-marigold-400/15 blur-3xl" />
       </div>
     );
@@ -205,7 +205,7 @@ export function AuroraBackdrop({ className }: { className?: string }) {
       className={cn('pointer-events-none absolute inset-0 overflow-hidden', className)}
     >
       <motion.div
-        className="absolute -left-32 top-0 h-96 w-96 rounded-full bg-saffron-600/20 blur-3xl"
+        className="absolute -left-32 top-0 h-96 w-96 rounded-full bg-brand-600/20 blur-3xl"
         animate={{ x: [0, 40, 0], y: [0, 24, 0] }}
         transition={{ duration: 18, repeat: Infinity, ease: 'easeInOut' }}
       />

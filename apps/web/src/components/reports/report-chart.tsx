@@ -51,7 +51,7 @@ export function ReportBarChart({
   const max = Math.max(...meaningful.map((r) => Math.abs(r.valuePaise)));
 
   const barColor = {
-    saffron: 'bg-saffron-600',
+    saffron: 'bg-brand-600',
     green: 'bg-success-fg',
     red: 'bg-error-fg',
   }[tone];

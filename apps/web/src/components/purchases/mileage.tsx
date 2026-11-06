@@ -131,7 +131,7 @@ export function MileageFields({ value, onChange, settings, canManage }: {
   const customer = (customers.data ?? []).find((c) => c._id === value.customerId);
   const unit = p.unit;
   const prefsLink = (
-    <Link href={MILEAGE_SETTINGS_HREF} className="inline-flex items-center gap-1 font-medium text-saffron-700 hover:underline">
+    <Link href={MILEAGE_SETTINGS_HREF} className="inline-flex items-center gap-1 font-medium text-brand-800 hover:underline">
       <Settings2 size={13} /> Mileage preferences
     </Link>
   );

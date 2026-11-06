@@ -75,7 +75,7 @@ export function VendorPicker({ value, onChange, id, newHref, invalid }: {
       />
       <div className="mt-1.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
         {newHref ? (
-          <Link href={newHref} className="inline-flex items-center gap-1 text-caption font-medium text-saffron-700 hover:underline">
+          <Link href={newHref} className="inline-flex items-center gap-1 text-caption font-medium text-brand-800 hover:underline">
             <Plus size={12} /> New vendor
           </Link>
         ) : (
@@ -140,7 +140,7 @@ export function DeliverToField({ value, onChange, org }: {
             <input
               type="radio"
               name="deliver-to"
-              className="h-4 w-4 accent-saffron-600"
+              className="h-4 w-4 accent-brand-600"
               checked={value.kind === k}
               onChange={() => {
                 onChange({ kind: k, customerId: k === 'customer' ? value.customerId : '' });
@@ -180,7 +180,7 @@ export function DeliverToField({ value, onChange, org }: {
         </div>
       )}
       {value.kind === 'customer' && value.customerId && !changing && (
-        <button type="button" className="text-caption font-medium text-saffron-700 hover:underline" onClick={() => setChanging(true)}>
+        <button type="button" className="text-caption font-medium text-brand-800 hover:underline" onClick={() => setChanging(true)}>
           Change destination to deliver
         </button>
       )}
@@ -287,7 +287,7 @@ export function purchaseLineToApi(l: PurchaseLine, opts: { account?: boolean; li
   };
 }
 
-const cell = 'w-full rounded-md border border-line-200 bg-white px-2 py-1.5 text-caption text-ink-900 focus:outline-none focus:ring-2 focus:ring-saffron-600/40';
+const cell = 'w-full rounded-md border border-line-200 bg-white px-2 py-1.5 text-caption text-ink-900 focus:outline-none focus:ring-2 focus:ring-brand-600/40';
 
 /** "Type or click to select an item": the items bought, searchable by name, code or HSN. */
 function PurchaseItemPicker({ value, onPick }: { value: string; onPick: (item: ItemOption | null) => void }) {
@@ -482,7 +482,7 @@ export function PurchaseLinesTable({ lines, onChange, foreign, showAccount = tru
                     <td className="space-y-1.5 px-1.5 py-2">
                       <CustomerCell value={l.customerId} onChange={(customerId) => set(l.key, { customerId, billable: !!customerId })} />
                       <label className={cn('flex items-center gap-1.5 text-caption', l.customerId ? 'text-ink-700' : 'text-ink-400')}>
-                        <input type="checkbox" className="h-3.5 w-3.5 accent-saffron-600" disabled={!l.customerId} checked={l.billable} onChange={(e) => set(l.key, { billable: e.target.checked })} />
+                        <input type="checkbox" className="h-3.5 w-3.5 accent-brand-600" disabled={!l.customerId} checked={l.billable} onChange={(e) => set(l.key, { billable: e.target.checked })} />
                         Billable
                       </label>
                       {withProject && <ProjectSelect className={cell} value={l.projectId} onChange={(projectId) => set(l.key, { projectId })} />}

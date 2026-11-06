@@ -147,7 +147,7 @@ export default function MigrationPage() {
     <div className="max-w-[1100px] space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-h1 font-display text-ink-900">Opening balances</h1>
+          <h1 className="text-h1 font-display text-navy-900">Opening balances</h1>
           <p className="text-body text-ink-500 mt-1">
             Bring the chart of accounts, customers, vendors and opening balances over from Tally, Zoho Books or QuickBooks, or type the balances in.
           </p>
@@ -170,7 +170,7 @@ export default function MigrationPage() {
               setView(null);
               setError(null);
             }}
-            className={`rounded px-3 py-1.5 text-body font-medium ${mode === value ? 'bg-honey-50 text-saffron-700' : 'text-ink-600 hover:text-ink-900'}`}
+            className={`rounded px-3 py-1.5 text-body font-medium ${mode === value ? 'bg-honey-50 text-brand-800' : 'text-ink-600 hover:text-ink-900'}`}
           >
             {label}
           </button>
@@ -343,9 +343,9 @@ export default function MigrationPage() {
                   balances to collect or pay.
                 </p>
                 <p className="text-caption text-ink-500">
-                  See them on <Link href="/accountant/chart-of-accounts" className="text-brand-600 hover:underline">Chart of accounts</Link>,{' '}
-                  <Link href="/sales/invoices" className="text-brand-600 hover:underline">Invoices</Link> and{' '}
-                  <Link href="/purchases/bills" className="text-brand-600 hover:underline">Bills</Link>. Reversing the opening voucher undoes the balances.
+                  See them on <Link href="/accountant/chart-of-accounts" className="text-brand-700 hover:underline">Chart of accounts</Link>,{' '}
+                  <Link href="/sales/invoices" className="text-brand-700 hover:underline">Invoices</Link> and{' '}
+                  <Link href="/purchases/bills" className="text-brand-700 hover:underline">Bills</Link>. Reversing the opening voucher undoes the balances.
                 </p>
               </div>
             ) : (

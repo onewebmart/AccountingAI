@@ -20,7 +20,7 @@ import { DocumentEntry, EntryActions, scanSummary, useDocumentEntry, usePrefill 
 interface Line { key: number; accountId: string; description: string; contact: string; projectId: string; debit: string; credit: string }
 let nextKey = 1;
 const blank = (): Line => ({ key: nextKey++, accountId: '', description: '', contact: '', projectId: '', debit: '', credit: '' });
-const cell = 'w-full rounded-md border border-line-200 bg-white px-2 py-2 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-saffron-600/40 disabled:bg-surface-sink';
+const cell = 'w-full rounded-md border border-line-200 bg-white px-2 py-2 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-brand-600/40 disabled:bg-surface-sink';
 const NOTES_MAX = 500;
 const MAX_FILE = 15 * 1024 * 1024;
 
@@ -344,7 +344,7 @@ function NewManualJournal() {
           </div>
 
           <div className="mt-3 flex flex-wrap items-start justify-between gap-6">
-            <button type="button" className="inline-flex items-center gap-1 rounded-md border border-dashed border-line-200 px-3 py-2 text-caption font-medium text-ink-700 hover:border-saffron-600 hover:text-saffron-700" onClick={addRow}>
+            <button type="button" className="inline-flex items-center gap-1 rounded-md border border-dashed border-line-200 px-3 py-2 text-caption font-medium text-ink-700 hover:border-brand-600 hover:text-brand-800" onClick={addRow}>
               <Plus size={13} /> Add New Row
             </button>
 

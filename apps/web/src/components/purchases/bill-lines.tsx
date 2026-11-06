@@ -106,7 +106,7 @@ export function previewAmounts(lines: BillEditLine[], interState: boolean): Amou
   return a;
 }
 
-const cell = 'w-full rounded-md border border-line-200 bg-white px-2 py-1.5 text-caption text-ink-900 focus:outline-none focus:ring-2 focus:ring-saffron-600/40';
+const cell = 'w-full rounded-md border border-line-200 bg-white px-2 py-1.5 text-caption text-ink-900 focus:outline-none focus:ring-2 focus:ring-brand-600/40';
 const head = 'px-1.5 pb-1 text-left text-caption font-medium text-ink-500';
 
 /**

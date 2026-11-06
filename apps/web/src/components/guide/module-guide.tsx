@@ -132,7 +132,7 @@ const vDash = `repeating-linear-gradient(to bottom, ${LINE} 0 4px, transparent 4
 const hDash = `repeating-linear-gradient(to right, ${LINE} 0 4px, transparent 4px 7px)`;
 
 const TONE: Record<Tone, { icon: string; accent?: string }> = {
-  action: { icon: 'bg-brand-50 text-saffron-600' },
+  action: { icon: 'bg-brand-50 text-brand-700' },
   ai: { icon: 'bg-honey-100 text-pending-fg', accent: 'marigold' },
   wait: { icon: 'bg-honey-100 text-pending-fg', accent: 'marigold' },
   done: { icon: 'bg-success-bg text-success-fg', accent: 'success' },
@@ -296,7 +296,7 @@ function tonesIn(flow: Flow, into = new Set<Tone>()): Set<Tone> {
 }
 
 const LEGEND: Array<{ tones: Tone[]; dot: string; label: Bi }> = [
-  { tones: ['action'], dot: 'bg-saffron-600', label: t('Your step', 'आपका काम') },
+  { tones: ['action'], dot: 'bg-brand-600', label: t('Your step', 'आपका काम') },
   { tones: ['ai', 'wait'], dot: 'bg-marigold-400', label: t('AI or waiting', 'AI या इंतज़ार') },
   { tones: ['done'], dot: 'bg-success-fg', label: t('Posted or done', 'पोस्ट या पूरा') },
   { tones: ['neutral'], dot: 'bg-ink-400', label: t('Returned, cancelled or closed', 'लौटाया, रद्द या बंद') },
@@ -350,7 +350,7 @@ export function GuideBody({ guide, lang, layout = 'stack' }: { guide: Guide; lan
           <ul className="space-y-2">
             {guide.can.map((point, i) => (
               <li key={i} className="flex gap-2.5 text-body text-ink-700">
-                <span className="mt-[3px] grid h-[18px] w-[18px] shrink-0 place-items-center rounded-full bg-brand-50 text-saffron-600">
+                <span className="mt-[3px] grid h-[18px] w-[18px] shrink-0 place-items-center rounded-full bg-brand-50 text-brand-700">
                   <Check size={12} strokeWidth={2.5} aria-hidden />
                 </span>
                 <span>
@@ -397,7 +397,7 @@ export function LangSwitch() {
           aria-pressed={lang === l}
           onClick={() => setLang(l)}
           className={cn(
-            'min-h-[34px] rounded-full px-3.5 text-caption font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-marigold-400',
+            'min-h-[34px] rounded-full px-3.5 text-caption font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600',
             lang === l ? 'bg-ink-900 text-white' : 'text-ink-600 hover:bg-surface-sink',
           )}
         >
@@ -413,7 +413,7 @@ function GuideState({ failed, retry, lang }: { failed: boolean; retry: () => voi
     return (
       <p className="text-body text-ink-500">
         {UI.failed[lang]}{' '}
-        <button type="button" onClick={retry} className="font-medium text-saffron-600 hover:underline">
+        <button type="button" onClick={retry} className="font-medium text-brand-700 hover:underline">
           {UI.retry[lang]}
         </button>
       </p>
@@ -437,7 +437,7 @@ export function ModuleGuide({ guide: key, className }: { guide: GuideKey; classN
     <section className={cn('rounded-xl border border-line-200 bg-surface-card p-5', className)} aria-label={UI.howItWorks[lang]}>
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <h2 className="flex items-center gap-2 font-display text-h3 text-ink-900" lang={lang} style={lang === 'hi' ? { fontFamily: HINDI_FONT } : undefined}>
-          <BookOpen size={18} className="text-saffron-600" aria-hidden />
+          <BookOpen size={18} className="text-brand-700" aria-hidden />
           {UI.howItWorks[lang]}
           {guide && <span className="text-ink-500">· {guide.section[lang]}</span>}
         </h2>
@@ -455,7 +455,7 @@ function SheetContent({ guideKey }: { guideKey: GuideKey }) {
     <>
       <div className="border-b border-line-200 bg-surface-card px-5 pb-3 pt-4">
         <div className="flex items-start gap-3">
-          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-brand-50 text-saffron-600">
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-brand-50 text-brand-700">
             <BookOpen size={18} aria-hidden />
           </span>
           <div className="min-w-0 flex-1" lang={lang} style={lang === 'hi' ? { fontFamily: HINDI_FONT } : undefined}>
@@ -464,7 +464,7 @@ function SheetContent({ guideKey }: { guideKey: GuideKey }) {
           </div>
           <DialogPrimitive.Close
             aria-label={UI.close[lang]}
-            className="grid h-10 w-10 shrink-0 place-items-center rounded-md text-ink-500 transition-colors hover:bg-surface-sink hover:text-ink-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-marigold-400"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-md text-ink-500 transition-colors hover:bg-surface-sink hover:text-ink-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600"
           >
             <X size={18} aria-hidden />
           </DialogPrimitive.Close>

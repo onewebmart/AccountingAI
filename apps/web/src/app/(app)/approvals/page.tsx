@@ -150,7 +150,7 @@ export default function ApprovalsPage() {
     <div className="space-y-8">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-h1 font-display text-ink-900">Approvals</h1>
+          <h1 className="text-h1 font-display text-navy-900">Approvals</h1>
           <p className="text-body text-ink-500">Bills, payments and vouchers waiting for someone other than their maker. The last approval posts it, in that person&apos;s name.</p>
         </div>
         <GuideButton guide="approvals" />

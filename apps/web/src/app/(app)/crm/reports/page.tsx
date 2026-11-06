@@ -67,7 +67,7 @@ function BarRow({
       <span className="w-20 shrink-0 text-caption text-ink-500">{label}</span>
       <div className="h-5 flex-1 overflow-hidden rounded bg-surface-sink">
         <div
-          className={cn('h-full rounded', tone === 'green' ? 'bg-[#1E7B34]' : 'bg-saffron-600')}
+          className={cn('h-full rounded', tone === 'green' ? 'bg-[#15803D]' : 'bg-brand-600')}
           style={{ width: `${width}%` }}
         />
       </div>
@@ -99,8 +99,8 @@ export default function CrmReportsPage() {
         <div className="flex justify-end">
           <GuideButton guide="practiceReports" />
         </div>
-        <div className="rounded-xl border border-[#C92A2A]/30 bg-[#C92A2A]/5 p-6">
-          <p className="font-medium text-[#C92A2A]">Couldn&apos;t load reports</p>
+        <div className="rounded-xl border border-[#DC2626]/30 bg-[#DC2626]/5 p-6">
+          <p className="font-medium text-[#DC2626]">Couldn&apos;t load reports</p>
           <p className="mt-1 text-body text-ink-500">{(error as Error)?.message}</p>
         </div>
       </div>
@@ -115,7 +115,7 @@ export default function CrmReportsPage() {
       <FadeIn>
         <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h1 className="font-heading text-h1 text-ink-900">Reports</h1>
+            <h1 className="font-heading text-h1 text-navy-900">Reports</h1>
             <p className="mt-1 text-body text-ink-500">
               How the practice is performing over the last six months.
             </p>
@@ -152,10 +152,10 @@ export default function CrmReportsPage() {
           </div>
           <p className="mt-3 flex gap-4 text-[11px] text-ink-500">
             <span className="flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-sm bg-saffron-600" /> Billed
+              <span className="h-2 w-2 rounded-sm bg-brand-600" /> Billed
             </span>
             <span className="flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-sm bg-[#1E7B34]" /> Collected
+              <span className="h-2 w-2 rounded-sm bg-[#15803D]" /> Collected
             </span>
           </p>
         </section>
@@ -180,12 +180,12 @@ export default function CrmReportsPage() {
         {/* Compliance */}
         <section className="rounded-xl border border-line-200 bg-surface-card p-4">
           <div className="mb-3 flex items-center gap-2">
-            <BarChart3 size={15} className="text-saffron-600" />
+            <BarChart3 size={15} className="text-brand-700" />
             <h2 className="font-heading text-body font-semibold text-ink-900">Compliance</h2>
           </div>
           <div className="mb-4 flex items-end gap-6">
             <div>
-              <p className="font-mono text-h2 font-bold text-[#1E7B34]">
+              <p className="font-mono text-h2 font-bold text-[#15803D]">
                 {data.compliance.completionRate}%
               </p>
               <p className="text-caption text-ink-500">Filed on the books</p>
@@ -196,7 +196,7 @@ export default function CrmReportsPage() {
             </div>
             {data.compliance.overdue > 0 ? (
               <div>
-                <p className="font-mono text-h2 font-bold text-[#C92A2A]">
+                <p className="font-mono text-h2 font-bold text-[#DC2626]">
                   {data.compliance.overdue}
                 </p>
                 <p className="text-caption text-ink-500">Overdue</p>
@@ -222,18 +222,18 @@ export default function CrmReportsPage() {
         {/* Leads */}
         <section className="rounded-xl border border-line-200 bg-surface-card p-4">
           <div className="mb-3 flex items-center gap-2">
-            <TrendingUp size={15} className="text-saffron-600" />
+            <TrendingUp size={15} className="text-brand-700" />
             <h2 className="font-heading text-body font-semibold text-ink-900">Leads</h2>
           </div>
           <div className="mb-4 flex items-end gap-6">
             <div>
-              <p className="font-mono text-h2 font-bold text-[#1E7B34]">
+              <p className="font-mono text-h2 font-bold text-[#15803D]">
                 {data.leads.conversionRate}%
               </p>
               <p className="text-caption text-ink-500">Conversion</p>
             </div>
             <div>
-              <p className="font-mono text-h2 font-bold text-saffron-700">
+              <p className="font-mono text-h2 font-bold text-brand-800">
                 {formatPaise(data.leads.openPipelineValuePaise)}
               </p>
               <p className="text-caption text-ink-500">Open pipeline</p>
@@ -262,7 +262,7 @@ export default function CrmReportsPage() {
       {/* Automation */}
       <section className="mt-4 rounded-xl border border-line-200 bg-surface-card p-4">
         <div className="mb-3 flex items-center gap-2">
-          <Clock size={15} className="text-saffron-600" />
+          <Clock size={15} className="text-brand-700" />
           <h2 className="font-heading text-body font-semibold text-ink-900">Automation</h2>
         </div>
         <div className="flex flex-wrap gap-6">
@@ -285,7 +285,7 @@ export default function CrmReportsPage() {
             <p className="text-caption text-ink-500">Leads qualified</p>
           </div>
           <div>
-            <p className="font-mono text-h2 font-bold text-saffron-700">
+            <p className="font-mono text-h2 font-bold text-brand-800">
               {data.automation.estimatedHoursSaved}h
             </p>
             <p className="text-caption text-ink-500">Estimated time saved</p>

@@ -512,7 +512,7 @@ export function GstReturnsPanel({ period, onDownloaded }: { period: string; onDo
               aria-selected={kind === k}
               onClick={() => setKind(k)}
               className={`rounded px-3 py-1.5 text-body font-medium transition-colors ${
-                kind === k ? 'bg-saffron-600 text-white' : 'text-ink-700 hover:bg-surface-sink'
+                kind === k ? 'bg-brand-600 text-white' : 'text-ink-700 hover:bg-surface-sink'
               }`}
             >
               {k === 'gstr1' ? 'GSTR-1' : 'GSTR-3B'}

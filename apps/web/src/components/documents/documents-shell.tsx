@@ -18,7 +18,7 @@ import { cx, usePipeline, useFolders, type Folder } from './library';
  */
 export function DocumentsShell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex items-start gap-5">
+    <div className="flex flex-col gap-5 lg:flex-row lg:items-start">
       <DocumentsPanel />
       <div className="min-w-0 flex-1">{children}</div>
     </div>
@@ -27,11 +27,11 @@ export function DocumentsShell({ children }: { children: React.ReactNode }) {
 
 const itemClass = (active: boolean) =>
   cx(
-    'flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-body transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-marigold-400',
+    'flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-body transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600',
     active ? 'bg-brand-50 font-medium text-brand-700' : 'text-ink-600 hover:bg-surface-sink hover:text-ink-900',
   );
 const groupLabel = 'px-3 pb-1 pt-4 text-[0.7rem] font-semibold uppercase tracking-[0.06em] text-ink-400';
-const smallInput = 'h-8 w-full rounded-md border border-line-200 bg-white px-2 text-caption text-ink-900 focus:outline-none focus:ring-2 focus:ring-saffron-600/40';
+const smallInput = 'h-8 w-full rounded-md border border-line-200 bg-white px-2 text-caption text-ink-900 focus:outline-none focus:ring-2 focus:ring-brand-600/40';
 
 function Count({ n, tone }: { n: number; tone?: 'pending' | 'error' }) {
   if (!n) return null;
@@ -102,7 +102,7 @@ function DocumentsPanel() {
   const filesWaiting = p ? p.reading + p.couldNotRead.count + p.duplicates : 0;
 
   return (
-    <nav aria-label="Documents" className="sticky top-24 w-52 shrink-0 self-start rounded-xl border border-line-200 bg-surface-card p-2">
+    <nav aria-label="Documents" className="w-full shrink-0 rounded-xl border border-line-200 bg-surface-card p-2 shadow-e1 lg:sticky lg:top-24 lg:w-52 lg:self-start">
       <p className="px-3 pb-2 pt-2 font-display text-h3 text-ink-900">Documents</p>
 
       <Link href="/documents" className={itemClass(pathname === '/documents')}>
@@ -124,7 +124,7 @@ function DocumentsPanel() {
           type="button"
           aria-label="Create a folder"
           title="Create a folder"
-          className="mt-3 inline-flex h-6 w-6 items-center justify-center rounded-md text-ink-500 hover:bg-honey-50 hover:text-ink-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-marigold-400"
+          className="mt-3 inline-flex h-6 w-6 items-center justify-center rounded-md text-ink-500 hover:bg-honey-50 hover:text-ink-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600"
           onClick={() => {
             setCreating((v) => !v);
             setProblem(null);
@@ -161,7 +161,7 @@ function DocumentsPanel() {
       ) : list.length === 0 && !creating ? (
         <div className="px-3 pb-2 text-caption text-ink-500">
           There are no folders.{' '}
-          <button type="button" className="font-medium text-brand-600 hover:underline" onClick={() => setCreating(true)}>
+          <button type="button" className="font-medium text-brand-700 hover:underline" onClick={() => setCreating(true)}>
             Create new folder
           </button>
         </div>

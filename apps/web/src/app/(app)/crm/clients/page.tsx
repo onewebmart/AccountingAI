@@ -77,7 +77,7 @@ export default function ClientsPage() {
       <FadeIn>
         <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h1 className="font-heading text-h1 text-ink-900">Clients</h1>
+            <h1 className="font-heading text-h1 text-navy-900">Clients</h1>
             <p className="mt-1 text-body text-ink-500">
               Every client your firm manages, their services and contact details.
             </p>
@@ -120,7 +120,7 @@ export default function ClientsPage() {
                 className={cn(
                   'rounded-lg border px-3 py-1.5 text-caption font-medium transition-colors',
                   active
-                    ? 'border-saffron-600 bg-saffron-600 text-white'
+                    ? 'border-brand-600 bg-brand-600 text-white'
                     : 'border-line-200 bg-surface-card text-ink-700 hover:bg-surface-sink',
                 )}
               >
@@ -139,8 +139,8 @@ export default function ClientsPage() {
           ))}
         </div>
       ) : error ? (
-        <div className="rounded-xl border border-[#C92A2A]/30 bg-[#C92A2A]/5 p-6">
-          <p className="font-medium text-[#C92A2A]">Couldn&apos;t load clients</p>
+        <div className="rounded-xl border border-[#DC2626]/30 bg-[#DC2626]/5 p-6">
+          <p className="font-medium text-[#DC2626]">Couldn&apos;t load clients</p>
           <p className="mt-1 text-body text-ink-500">
             {error instanceof ApiError && error.status === 403
               ? 'This account is not a firm admin, so it has no client book.'
@@ -212,7 +212,7 @@ export default function ClientsPage() {
                       className={cn(
                         'rounded-full px-2 py-0.5 text-[11px] font-semibold',
                         c.isActive
-                          ? 'bg-[#E6F4EA] text-[#1E7B34]'
+                          ? 'bg-[#F0FDF4] text-[#15803D]'
                           : 'bg-surface-sink text-ink-500',
                       )}
                     >

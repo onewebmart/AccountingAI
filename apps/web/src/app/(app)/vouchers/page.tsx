@@ -242,7 +242,7 @@ export default function VouchersPage() {
             <select
               value={fy}
               onChange={(e) => setFy(e.target.value)}
-              className="rounded-md border border-line-200 bg-surface-card px-3 py-2 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-marigold-400"
+              className="rounded-md border border-line-200 bg-surface-card px-3 py-2 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-brand-600"
             >
               {FY_OPTIONS.map((f) => (
                 <option key={f} value={f}>FY {f}</option>

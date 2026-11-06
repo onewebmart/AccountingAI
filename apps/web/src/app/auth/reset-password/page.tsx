@@ -56,7 +56,7 @@ function ResetPasswordForm() {
         title="This link is incomplete"
         subtitle="Open the link from your email exactly as it was sent, or request a new one."
         footer={
-          <Link href="/auth/login" className="font-medium text-saffron-600 hover:underline">
+          <Link href="/auth/login" className="font-medium text-brand-700 hover:underline">
             ← Back to sign in
           </Link>
         }
@@ -73,7 +73,7 @@ function ResetPasswordForm() {
       title="Set a new password"
       subtitle="Signing in on your other devices will need this new password."
       footer={
-        <Link href="/auth/login" className="font-medium text-saffron-600 hover:underline">
+        <Link href="/auth/login" className="font-medium text-brand-700 hover:underline">
           ← Back to sign in
         </Link>
       }

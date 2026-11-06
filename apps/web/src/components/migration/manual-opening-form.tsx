@@ -34,7 +34,7 @@ const SECTIONS: Array<{ type: Account['type']; label: string }> = [
 /** Receivables and payables open at what the customers and vendors owe; they are not typed. */
 const CONTROL = new Set(['ACCOUNTS_RECEIVABLE', 'ACCOUNTS_PAYABLE']);
 
-const cell = 'w-28 rounded border border-line-200 bg-white px-2 py-1 text-right font-mono text-body focus:outline-none focus:ring-2 focus:ring-saffron-600/40';
+const cell = 'w-28 rounded border border-line-200 bg-white px-2 py-1 text-right font-mono text-body focus:outline-none focus:ring-2 focus:ring-brand-600/40';
 
 /**
  * Opening balances typed in over the org's own chart, customers and vendors.

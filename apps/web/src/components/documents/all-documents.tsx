@@ -30,7 +30,7 @@ const STATUS_FILTERS: Array<[string, string]> = [
   ['attached', 'Attached to a record'],
   ['rejected', 'Rejected'],
 ];
-const select = 'h-10 rounded-md border border-line-200 bg-white px-3 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-saffron-600/40';
+const select = 'h-10 rounded-md border border-line-200 bg-white px-3 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-brand-600/40';
 const menuItem =
   'flex cursor-pointer select-none items-center justify-between gap-4 rounded-md px-2.5 py-1.5 text-body text-ink-900 outline-none data-[highlighted]:bg-honey-50';
 
@@ -88,7 +88,7 @@ function FolderMenu({ row, folders, onMove, disabled }: { row: LibraryRow; folde
     <Menu.Root modal={false}>
       <Menu.Trigger
         disabled={disabled}
-        className="inline-flex h-7 max-w-full items-center gap-1 rounded-md px-2 text-caption text-ink-600 hover:bg-honey-50 hover:text-ink-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-marigold-400 disabled:opacity-50 data-[state=open]:bg-honey-50"
+        className="inline-flex h-7 max-w-full items-center gap-1 rounded-md px-2 text-caption text-ink-600 hover:bg-honey-50 hover:text-ink-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 disabled:opacity-50 data-[state=open]:bg-honey-50"
         aria-label={`Folder for ${row.fileName}: ${row.folder?.name ?? 'none'}. Move it`}
       >
         <span className="truncate">{row.folder?.name ?? <span className="text-ink-300">No folder</span>}</span>
@@ -310,7 +310,7 @@ export function AllDocuments({ folderId, title, subtitle, meta }: { folderId?: s
                 <th className={cx(th, 'pr-0')}>
                   <input
                     type="checkbox"
-                    className="h-4 w-4 accent-saffron-600"
+                    className="h-4 w-4 accent-brand-600"
                     checked={allPicked}
                     onChange={() => setSelected(allPicked ? new Set() : new Set(shown.map((r) => r.key)))}
                     aria-label={allPicked ? 'Clear the selection' : 'Select every file shown'}
@@ -335,7 +335,7 @@ export function AllDocuments({ folderId, title, subtitle, meta }: { folderId?: s
                 return (
                   <tr key={r.key} className={cx('border-b border-line-100 align-top last:border-0 hover:bg-surface-sink', selected.has(r.key) && 'bg-honey-50')}>
                     <td className={cx(cell, 'pr-0')}>
-                      <input type="checkbox" className="mt-1 h-4 w-4 accent-saffron-600" checked={selected.has(r.key)} onChange={() => toggle(r.key)} aria-label={`Select ${r.fileName}`} />
+                      <input type="checkbox" className="mt-1 h-4 w-4 accent-brand-600" checked={selected.has(r.key)} onChange={() => toggle(r.key)} aria-label={`Select ${r.fileName}`} />
                     </td>
                     <td className={cell}>
                       <div className="flex items-start gap-2">
@@ -353,7 +353,7 @@ export function AllDocuments({ folderId, title, subtitle, meta }: { folderId?: s
                           {detail && <p className="mt-0.5 truncate text-caption text-ink-500" title={detail}>{detail}</p>}
                           {r.failureReason && <p className="mt-1 text-caption leading-snug text-error-fg">{r.failureReason}</p>}
                           {r.stage === 'failed' && r.kind === 'upload' && (
-                            <button type="button" className="mt-1 inline-flex items-center gap-1 text-caption font-medium text-saffron-700 hover:underline disabled:opacity-50" disabled={retry.isPending} onClick={() => retry.mutate(r.id)}>
+                            <button type="button" className="mt-1 inline-flex items-center gap-1 text-caption font-medium text-brand-800 hover:underline disabled:opacity-50" disabled={retry.isPending} onClick={() => retry.mutate(r.id)}>
                               <RefreshCw size={12} /> Try again
                             </button>
                           )}

@@ -70,7 +70,7 @@ function ColumnPicker({ choices, value, onChange, keepFirst }: { choices: Choice
         {rest.length ? (
           <div className="flex flex-wrap gap-1.5">
             {rest.map((c) => (
-              <button key={c.key} type="button" onClick={() => onChange([...chosen, c.key])} className="inline-flex items-center gap-1 rounded-full border border-line-200 bg-white px-2.5 py-1 text-caption text-ink-700 hover:border-saffron-600 hover:text-saffron-700">
+              <button key={c.key} type="button" onClick={() => onChange([...chosen, c.key])} className="inline-flex items-center gap-1 rounded-full border border-line-200 bg-white px-2.5 py-1 text-caption text-ink-700 hover:border-brand-600 hover:text-brand-800">
                 <Plus size={12} /> {c.label}
               </button>
             ))}
@@ -240,7 +240,7 @@ export function ReportBuilder({ mode, initial, baseKey }: { mode: 'derived' | 'm
                 key={m.key}
                 type="button"
                 onClick={() => { set({ module: m.key, columns: [], conditions: [], groupBy: null, sortBy: null }); setPreview(null); }}
-                className={`rounded-lg border px-3 py-2.5 text-left transition-colors ${spec.module === m.key ? 'border-saffron-600 bg-honey-50' : 'border-line-200 bg-white hover:border-saffron-600/60'}`}
+                className={`rounded-lg border px-3 py-2.5 text-left transition-colors ${spec.module === m.key ? 'border-brand-600 bg-honey-50' : 'border-line-200 bg-white hover:border-brand-600/60'}`}
               >
                 <p className="text-body font-medium text-ink-900">{m.label}</p>
                 <p className="text-caption text-ink-500">{m.fields.length} fields{m.hasPeriod ? ' · by period' : ''}</p>
@@ -301,7 +301,7 @@ export function ReportBuilder({ mode, initial, baseKey }: { mode: 'derived' | 'm
                   </div>
                   {spec.groupBy && (
                     <label className="flex h-10 items-center gap-2 text-body text-ink-700">
-                      <input type="checkbox" className="accent-saffron-600" checked={spec.groupTotalsOnly} onChange={(e) => set({ groupTotalsOnly: e.target.checked })} /> Show only the group totals
+                      <input type="checkbox" className="accent-brand-600" checked={spec.groupTotalsOnly} onChange={(e) => set({ groupTotalsOnly: e.target.checked })} /> Show only the group totals
                     </label>
                   )}
                   <div>
@@ -328,7 +328,7 @@ export function ReportBuilder({ mode, initial, baseKey }: { mode: 'derived' | 'm
               <Field label="Description"><input className={`${fieldClass} w-full`} maxLength={500} placeholder="What it is for" value={spec.description ?? ''} onChange={(e) => set({ description: e.target.value })} /></Field>
             </div>
             <label className="mt-3 flex items-center gap-2 text-body text-ink-700">
-              <input type="checkbox" className="accent-saffron-600" checked={spec.shared} onChange={(e) => set({ shared: e.target.checked })} />
+              <input type="checkbox" className="accent-brand-600" checked={spec.shared} onChange={(e) => set({ shared: e.target.checked })} />
               Share with everyone in the organisation (Shared Reports). Otherwise only you see it, under My Reports.
             </label>
           </Section>
@@ -342,7 +342,7 @@ export function ReportBuilder({ mode, initial, baseKey }: { mode: 'derived' | 'm
         </>
       )}
 
-      <div data-form-bar="" className="fixed bottom-0 left-[260px] right-0 z-30 border-t border-line-200 bg-surface-card/95 backdrop-blur">
+      <div data-form-bar="" className="fixed bottom-0 left-0 right-0 z-30 lg:left-[260px] border-t border-line-200 bg-surface-card/95 backdrop-blur">
         <div className="mx-auto flex max-w-content flex-wrap items-center gap-3 px-6 py-3">
           <Button type="button" disabled={!ready || spec.name.trim().length < 2 || save.isPending} onClick={() => save.mutate()}>
             <Save size={14} /> {save.isPending ? 'Saving…' : 'Save report'}

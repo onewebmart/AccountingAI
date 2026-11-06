@@ -167,7 +167,7 @@ function PreferencesForm({ settings, first }: { settings: MileageSettings; first
           </table>
         </div>
         <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-          <button type="button" className="inline-flex items-center gap-1 text-body font-medium text-saffron-700 hover:underline" onClick={() => setRates([...rates, rateRow()])}>
+          <button type="button" className="inline-flex items-center gap-1 text-body font-medium text-brand-800 hover:underline" onClick={() => setRates([...rates, rateRow()])}>
             <Plus size={15} /> Add a rate
           </button>
           <p className="text-caption text-ink-500">

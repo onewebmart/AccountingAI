@@ -294,8 +294,8 @@ export default function InboxPage() {
         <Info size={15} className="mt-0.5 shrink-0 text-ink-400" aria-hidden />
         <p>
           <span className="font-medium text-ink-900">How reading works.</span> Each file is read in the background: text straight from the file where it has some, OCR for scans and
-          photos, then AI picks out the party, number, dates, amounts and lines. A bill or invoice then waits in <Link href="/review" className="font-medium text-brand-600 hover:underline">Review</Link>;
-          a bank statement&apos;s lines go to <Link href="/documents/statements" className="font-medium text-brand-600 hover:underline">Bank Statements</Link> for reconciliation. Nothing posts until a person approves it.
+          photos, then AI picks out the party, number, dates, amounts and lines. A bill or invoice then waits in <Link href="/review" className="font-medium text-brand-700 hover:underline">Review</Link>;
+          a bank statement&apos;s lines go to <Link href="/documents/statements" className="font-medium text-brand-700 hover:underline">Bank Statements</Link> for reconciliation. Nothing posts until a person approves it.
         </p>
       </div>
 
@@ -386,7 +386,7 @@ export default function InboxPage() {
                             type="button"
                             onClick={() => retryMutation.mutate(doc.id)}
                             disabled={retryMutation.isPending}
-                            className="inline-flex items-center gap-1 text-caption font-medium text-saffron-700 transition-colors hover:underline disabled:opacity-50"
+                            className="inline-flex items-center gap-1 text-caption font-medium text-brand-800 transition-colors hover:underline disabled:opacity-50"
                           >
                             <RefreshCw size={13} />
                             {retryMutation.isPending && retryMutation.variables === doc.id ? 'Retrying…' : 'Try again'}
@@ -394,7 +394,7 @@ export default function InboxPage() {
                         )}
                         {doc.addTo && <AddToMenu documentId={doc.id} fileName={doc.fileName} />}
                         {doc.status === 'imported' && (
-                          <Link href="/documents/statements" className="text-caption font-medium text-brand-600 hover:underline">Bank Statements</Link>
+                          <Link href="/documents/statements" className="text-caption font-medium text-brand-700 hover:underline">Bank Statements</Link>
                         )}
                         {doc.status === 'ready' && (
                           <Button variant="secondary" size="sm" asChild>
@@ -434,7 +434,7 @@ export default function InboxPage() {
           </table>
           <div className="border-t border-line-200 bg-surface-sink px-3 py-2.5 text-caption text-ink-500">
             <span className="font-mono tabular-nums">{filtered.length}</span> document{filtered.length !== 1 ? 's' : ''}. Every file, with what it became, is in{' '}
-            <Link href="/documents" className="font-medium text-brand-600 hover:underline">All Documents</Link>.
+            <Link href="/documents" className="font-medium text-brand-700 hover:underline">All Documents</Link>.
           </div>
         </div>
       )}

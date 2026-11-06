@@ -53,8 +53,8 @@ interface Message {
 const STATUS_STYLES: Record<MessageStatus, string> = {
   // Amber = pending, green = done, cool red = error (design system).
   [MessageStatus.QUEUED]: 'bg-pending-bg text-pending-fg',
-  [MessageStatus.SENT]: 'bg-[#E6F4EA] text-[#1E7B34]',
-  [MessageStatus.FAILED]: 'bg-[#C92A2A]/10 text-[#C92A2A]',
+  [MessageStatus.SENT]: 'bg-[#F0FDF4] text-[#15803D]',
+  [MessageStatus.FAILED]: 'bg-[#DC2626]/10 text-[#DC2626]',
 };
 
 function ChannelIcon({ channel }: { channel: MessageChannel }) {
@@ -95,7 +95,7 @@ function Outbox() {
               className={cn(
                 'rounded-lg border px-3 py-1.5 text-caption font-medium transition-colors',
                 statusFilter === s
-                  ? 'border-saffron-600 bg-saffron-600 text-white'
+                  ? 'border-brand-600 bg-brand-600 text-white'
                   : 'border-line-200 bg-surface-card text-ink-700 hover:bg-surface-sink',
               )}
             >
@@ -171,7 +171,7 @@ function Outbox() {
               <pre className="whitespace-pre-wrap font-body text-body text-ink-700">{m.body}</pre>
 
               {m.error ? (
-                <p className="mt-2 flex items-start gap-2 rounded-lg bg-[#C92A2A]/5 px-3 py-2 text-body text-[#C92A2A]">
+                <p className="mt-2 flex items-start gap-2 rounded-lg bg-[#DC2626]/5 px-3 py-2 text-body text-[#DC2626]">
                   <AlertTriangle size={14} className="mt-0.5 shrink-0" />
                   {m.error}
                 </p>
@@ -347,17 +347,17 @@ function Delivery() {
             rows={3}
             value={text}
             onChange={(e) => setText(e.target.value)}
-            className="w-full rounded-lg border border-line-200 bg-surface-card px-3 py-2 text-body text-ink-900 outline-none focus:border-saffron-600"
+            className="w-full rounded-lg border border-line-200 bg-surface-card px-3 py-2 text-body text-ink-900 outline-none focus:border-brand-600"
           />
         </div>
 
         {send.error ? (
-          <p className="mt-3 rounded-lg bg-[#C92A2A]/5 px-3 py-2 text-body text-[#C92A2A]">
+          <p className="mt-3 rounded-lg bg-[#DC2626]/5 px-3 py-2 text-body text-[#DC2626]">
             {(send.error as Error).message}
           </p>
         ) : null}
         {send.isSuccess ? (
-          <p className="mt-3 rounded-lg bg-[#E6F4EA] px-3 py-2 text-body text-[#1E7B34]">
+          <p className="mt-3 rounded-lg bg-[#F0FDF4] px-3 py-2 text-body text-[#15803D]">
             Queued — check the Outbox tab.
           </p>
         ) : null}
@@ -383,7 +383,7 @@ export default function CrmSettingsPage() {
           <div>
             {/* Named for what it does, not where it sits: the app already has a
                 global Settings, and this page is only about client messaging. */}
-            <h1 className="font-heading text-h1 text-ink-900">Messaging</h1>
+            <h1 className="font-heading text-h1 text-navy-900">Messaging</h1>
             <p className="mt-1 text-body text-ink-500">
               Every message your firm sends clients — the outbox, the templates behind them, and the
               delivery adapter carrying them.

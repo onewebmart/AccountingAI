@@ -145,14 +145,14 @@ export default function AuditPage() {
 
   const rows = query.data?.pages.flatMap((p) => p.entries) ?? [];
   const set = (k: keyof Filters) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setFilters((f) => ({ ...f, [k]: e.target.value }));
-  const select = 'rounded-md border border-line-200 bg-white px-3 py-1.5 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-saffron-600/40';
+  const select = 'rounded-md border border-line-200 bg-white px-3 py-1.5 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-brand-600/40';
   const filtered = Object.values(filters).some(Boolean);
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="flex items-center gap-2 text-h1 font-display text-ink-900">
+          <h1 className="flex items-center gap-2 text-h1 font-display text-navy-900">
             <ShieldCheck size={24} className="text-ink-500" /> Audit trail
           </h1>
           <p className="text-body text-ink-500 mt-1">Every change to your books: who made it, when, and what it was before. Nothing here can be edited.</p>

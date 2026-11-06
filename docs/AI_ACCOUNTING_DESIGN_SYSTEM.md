@@ -1,7 +1,9 @@
 # AI Accounting Platform — Design System & Page Spec
 
+> **Rebrand, November 2026 — read this first.** The colours and fonts below are superseded. The brand is now navy and emerald: navy `#142D4E` and dark navy `#0B1F36` frame the app (sidebar, landing hero, footer), emerald `#16A36A` is the action colour (hover `#128456`), the page background is `#F5F7FA` with white cards and `#E2E8F0` borders, text is `#1E293B` / `#64748B`. States: success `#15803D`, warning/pending amber `#B45309`, danger `#DC2626`, info `#2563EB`; dashboard expenses are orange. Headings are Manrope Bold, body and buttons Inter, amounts Inter SemiBold with tabular figures. Card radius 12–16px, 8px spacing. The token values live in `apps/web/tailwind.config.ts` and `apps/web/src/app/globals.css`. Everything else here (amber = pending, green = posted, red never orange, page specs, copy rules) still applies.
+>
 > **Direction:** warm, confident, fast. A bookkeeping tool that feels like a smart assistant, not a tax form.
-> **Palette:** saffron + marigold (orange/yellow) brand, warm neutrals, cool semantic states.
+> **Palette (before the rebrand):** saffron + marigold (orange/yellow) brand, warm neutrals, cool semantic states.
 > **Companion to:** `AI_ACCOUNTING_PLATFORM_BUILD_SPEC.md`. This file defines how every page looks, behaves, and reads.
 
 ---

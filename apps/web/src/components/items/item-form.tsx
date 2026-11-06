@@ -302,7 +302,7 @@ export function ItemForm({ item, onDone }: { item?: ItemOption | null; onDone: (
   // What an item without an account of its own posted to until now.
   const incomeMoved = editing && !item?.incomeAccountId && salesRevenue && incomeId && incomeId !== salesRevenue._id;
 
-  const checkbox = 'h-4 w-4 cursor-pointer rounded-sm border-line-200 accent-saffron-600 disabled:cursor-not-allowed';
+  const checkbox = 'h-4 w-4 cursor-pointer rounded-sm border-line-200 accent-brand-600 disabled:cursor-not-allowed';
   const textarea = `${inputClass} min-h-[76px] resize-y`;
 
   return (
@@ -342,7 +342,7 @@ export function ItemForm({ item, onDone }: { item?: ItemOption | null; onDone: (
             <div className="flex h-[42px] items-center gap-6" role="radiogroup" aria-label="Type">
               {(['goods', 'service'] as const).map((k) => (
                 <label key={k} className="flex cursor-pointer items-center gap-2 text-body text-ink-900">
-                  <input type="radio" name="item-kind" className="h-4 w-4 cursor-pointer accent-saffron-600" checked={form.kind === k} onChange={() => switchKind(k)} />
+                  <input type="radio" name="item-kind" className="h-4 w-4 cursor-pointer accent-brand-600" checked={form.kind === k} onChange={() => switchKind(k)} />
                   {k === 'goods' ? 'Goods' : 'Service'}
                 </label>
               ))}

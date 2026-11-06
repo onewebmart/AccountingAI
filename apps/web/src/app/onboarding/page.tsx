@@ -81,7 +81,7 @@ function Step1({
       <div className="space-y-4">
         <div>
           <label className="block text-caption font-medium text-ink-700 mb-1">
-            Business name <span className="text-[#C92A2A]">*</span>
+            Business name <span className="text-[#DC2626]">*</span>
           </label>
           <input
             type="text"
@@ -89,7 +89,7 @@ function Step1({
             onChange={(e) => onChange({ orgName: e.target.value })}
             placeholder="Acme Traders Pvt. Ltd."
             autoFocus
-            className="w-full rounded-md border border-line-200 bg-white px-3 py-2.5 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-marigold-400/40 focus:border-marigold-400"
+            className="w-full rounded-md border border-line-200 bg-white px-3 py-2.5 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-brand-600/40 focus:border-marigold-400"
           />
         </div>
 
@@ -102,7 +102,7 @@ function Step1({
               onChange={(e) => onChange({ gstin: e.target.value.toUpperCase() })}
               placeholder="27AAPFU0939F1ZV"
               maxLength={15}
-              className="w-full rounded-md border border-line-200 bg-white px-3 py-2.5 font-mono text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-marigold-400/40 focus:border-marigold-400"
+              className="w-full rounded-md border border-line-200 bg-white px-3 py-2.5 font-mono text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-brand-600/40 focus:border-marigold-400"
             />
           </div>
           <div>
@@ -113,7 +113,7 @@ function Step1({
               onChange={(e) => onChange({ pan: e.target.value.toUpperCase() })}
               placeholder="AAPFU0939F"
               maxLength={10}
-              className="w-full rounded-md border border-line-200 bg-white px-3 py-2.5 font-mono text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-marigold-400/40 focus:border-marigold-400"
+              className="w-full rounded-md border border-line-200 bg-white px-3 py-2.5 font-mono text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-brand-600/40 focus:border-marigold-400"
             />
           </div>
         </div>
@@ -123,7 +123,7 @@ function Step1({
           <select
             value={data.state}
             onChange={(e) => onChange({ state: e.target.value })}
-            className="w-full rounded-md border border-line-200 bg-white px-3 py-2.5 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-marigold-400/40 focus:border-marigold-400"
+            className="w-full rounded-md border border-line-200 bg-white px-3 py-2.5 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-brand-600/40 focus:border-marigold-400"
           >
             <option value="">Select a state…</option>
             {GST_STATES.map((st) => (
@@ -164,7 +164,7 @@ function Step2({
           <select
             value={data.financialYearStart}
             onChange={(e) => onChange({ financialYearStart: Number(e.target.value) })}
-            className="w-full rounded-md border border-line-200 bg-white px-3 py-2.5 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-marigold-400/40 focus:border-marigold-400"
+            className="w-full rounded-md border border-line-200 bg-white px-3 py-2.5 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-brand-600/40 focus:border-marigold-400"
           >
             <option value={4}>April (Indian FY — recommended)</option>
             <option value={1}>January (Calendar year)</option>
@@ -189,7 +189,7 @@ function Step2({
           <select
             value={data.timezone}
             onChange={(e) => onChange({ timezone: e.target.value })}
-            className="w-full rounded-md border border-line-200 bg-white px-3 py-2.5 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-marigold-400/40 focus:border-marigold-400"
+            className="w-full rounded-md border border-line-200 bg-white px-3 py-2.5 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-brand-600/40 focus:border-marigold-400"
           >
             <option value="Asia/Kolkata">Asia/Kolkata — IST (UTC+5:30)</option>
             <option value="Asia/Dubai">Asia/Dubai — GST (UTC+4)</option>
@@ -236,7 +236,7 @@ function Step3({
             value={data.inviteEmail}
             onChange={(e) => onChange({ inviteEmail: e.target.value })}
             placeholder="colleague@yourcompany.com"
-            className="w-full rounded-md border border-line-200 bg-white px-3 py-2.5 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-marigold-400/40 focus:border-marigold-400"
+            className="w-full rounded-md border border-line-200 bg-white px-3 py-2.5 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-brand-600/40 focus:border-marigold-400"
           />
         </div>
 
@@ -245,7 +245,7 @@ function Step3({
           <select
             value={data.inviteRole}
             onChange={(e) => onChange({ inviteRole: e.target.value })}
-            className="w-full rounded-md border border-line-200 bg-white px-3 py-2.5 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-marigold-400/40 focus:border-marigold-400"
+            className="w-full rounded-md border border-line-200 bg-white px-3 py-2.5 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-brand-600/40 focus:border-marigold-400"
           >
             {Object.entries(ROLE_LABELS).map(([k, v]) => (
               <option key={k} value={k}>{v}</option>
@@ -349,7 +349,7 @@ export default function OnboardingPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#FFFCF6] flex flex-col items-center justify-center p-6">
+    <div className="min-h-screen bg-[#F5F7FA] flex flex-col items-center justify-center p-6">
       {/* Brand */}
       <div className="mb-10 text-center">
         <span className="text-h2 font-display text-ink-900">
