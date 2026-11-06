@@ -1,102 +1,37 @@
 'use client';
 
-import { Suspense, useState } from 'react';
+import { Suspense, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { BookOpen, Pencil, Plus } from 'lucide-react';
+import { Eye, Lock, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { QueryError } from '@/components/ui/query-error';
-import { ListToolbar, PageHeader } from '@/components/page/page-shell';
-import { notify } from '@/components/page/notifier';
-import { ConfirmDialog, errorText, isPartyAccount, useAccounts, type Account } from '@/components/accountant/common';
-import { ACCOUNT_TYPES, AccountNode, typeLabel } from '@/components/accountant/account-tree';
-import { api } from '@/lib/api';
+import { EmptyState, ListToolbar, PageHeader, TableCard, rowLink, td, tdMoney, th } from '@/components/page/page-shell';
+import { useAccounts, type Account } from '@/components/accountant/common';
+import { ACCOUNT_TYPE_LIST, BASE_LABEL, accountTypeLabel } from '@/components/accountant/account-types';
 import { formatPaise } from '@/lib/gst';
+import { cn } from '@/lib/utils';
 
-function Detail({ account, all }: { account: Account; all: Account[] }) {
-  const qc = useQueryClient();
-  const [confirming, setConfirming] = useState(false);
-  const parent = all.find((a) => a._id === account.parentId);
-  const toggle = useMutation({
-    mutationFn: (isActive: boolean) => api.patch<Account>(`/gl/accounts/${account._id}`, { isActive }),
-    onSuccess: (_r, isActive) => {
-      setConfirming(false);
-      void qc.invalidateQueries({ queryKey: ['gl', 'accounts'] });
-      notify(isActive ? 'Account reactivated' : 'Account deactivated');
-    },
-    onError: (err) => {
-      setConfirming(false);
-      notify(errorText(err, "Couldn't change the account."), 'error');
-    },
-  });
+const BASES = ['ASSETS', 'LIABILITIES', 'CAPITAL', 'INCOME', 'EXPENSE'];
+const selectClass = 'h-10 rounded-md border border-line-200 bg-white px-3 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-saffron-600/40';
 
-  return (
-    <div className="space-y-5">
-      {confirming && (
-        <ConfirmDialog
-          title="Deactivate account"
-          confirmLabel="Deactivate account"
-          destructive
-          busy={toggle.isPending}
-          onCancel={() => setConfirming(false)}
-          onConfirm={() => toggle.mutate(false)}
-          body={<p>Deactivate <strong>{account.name}</strong>? Its history stays in the reports; nothing new can be posted to it.</p>}
-        />
-      )}
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="mb-1 text-caption font-medium uppercase tracking-wide text-ink-500">
-            {account.isGroup ? 'Group' : 'Account'} · <span className="font-mono">{account.code}</span>
-          </p>
-          <h2 className="text-h2 font-display text-ink-900">{account.name}</h2>
-          {!account.isActive && <p className="mt-1 text-caption text-ink-500">Deactivated. Its history stays in the reports; nothing new can be posted to it.</p>}
-        </div>
-        <Button variant="secondary" size="sm" asChild>
-          <Link href={`/accountant/chart-of-accounts/${account._id}/edit`}><Pencil size={12} /> Edit account</Link>
-        </Button>
-      </div>
-
-      <dl className="space-y-3 rounded-lg border border-line-200 bg-surface-sink p-4">
-        <div className="flex items-center justify-between"><dt className="text-caption text-ink-500">Type</dt><dd className="text-caption font-medium text-ink-700">{typeLabel(account.type)}</dd></div>
-        <div className="flex items-center justify-between"><dt className="text-caption text-ink-500">Under</dt><dd className="text-caption font-medium text-ink-700">{parent ? `${parent.code} · ${parent.name}` : 'Top level'}</dd></div>
-        <div className="flex items-center justify-between">
-          <dt className="text-caption text-ink-500">Kind</dt>
-          <dd className="text-caption font-medium text-ink-700">{account.isGroup ? 'Group / header' : 'Ledger'}{account.isSystem && ' · used by the books'}</dd>
-        </div>
-      </dl>
-
-      <div className="rounded-lg border border-line-200 bg-surface-card p-4">
-        <p className="mb-1 text-caption text-ink-500">{account.isGroup ? 'Total of the accounts under it' : 'Closing balance'}</p>
-        <p className="text-h2 font-mono text-ink-900">{formatPaise(account.balancePaise)}</p>
-      </div>
-
-      <div className="flex flex-wrap gap-2">
-        {account.isGroup && account.isActive && (
-          <Button size="sm" variant="secondary" asChild>
-            <Link href={`/accountant/chart-of-accounts/new?parentId=${account._id}&type=${account.type}`}><Plus size={13} /> Add sub-account</Link>
-          </Button>
-        )}
-        {!account.isGroup && account.isActive && !isPartyAccount(account) && (
-          <Button size="sm" variant="secondary" asChild>
-            <Link href="/accountant/bulk-update">Move posted lines</Link>
-          </Button>
-        )}
-      </div>
-
-      {!account.isSystem && (
-        <div className="border-t border-line-100 pt-4">
-          {account.isActive ? (
-            <button type="button" disabled={toggle.isPending} className="text-caption font-medium text-ink-500 hover:text-error-fg disabled:opacity-50" onClick={() => setConfirming(true)}>
-              Deactivate account
-            </button>
-          ) : (
-            <Button size="sm" variant="secondary" disabled={toggle.isPending} onClick={() => toggle.mutate(true)}>Reactivate account</Button>
-          )}
-        </div>
-      )}
-    </div>
-  );
+/** Accounts in chart order: by base type, each group followed by what sits under it, by code. */
+function inTreeOrder(all: Account[]): Array<{ account: Account; depth: number }> {
+  const children = new Map<string, Account[]>();
+  for (const a of all) {
+    const key = a.parentId && all.some((p) => p._id === a.parentId) ? a.parentId : '';
+    children.set(key, [...(children.get(key) ?? []), a]);
+  }
+  const out: Array<{ account: Account; depth: number }> = [];
+  const walk = (parent: string, depth: number) => {
+    const kids = (children.get(parent) ?? []).sort((a, b) => BASES.indexOf(a.type) - BASES.indexOf(b.type) || a.code.localeCompare(b.code));
+    for (const a of kids) {
+      out.push({ account: a, depth });
+      if (depth < 20) walk(a._id, depth + 1);
+    }
+  };
+  walk('', 0);
+  return out;
 }
 
 function ChartOfAccounts() {
@@ -105,78 +40,103 @@ function ChartOfAccounts() {
   const selectedId = params.get('selected');
   const [search, setSearch] = useState('');
   const [show, setShow] = useState('active');
+  const [type, setType] = useState('');
   const q = useAccounts();
-  const all = q.data ?? [];
-  const inactive = all.filter((a) => !a.isActive).length;
-  const visible = show === 'all' ? all : all.filter((a) => a.isActive);
+  const all = useMemo(() => q.data ?? [], [q.data]);
+  const byId = useMemo(() => new Map(all.map((a) => [a._id, a])), [all]);
+  const ordered = useMemo(() => inTreeOrder(all), [all]);
+
   const needle = search.trim().toLowerCase();
-  const matches = needle ? visible.filter((a) => a.name.toLowerCase().includes(needle) || a.code.toLowerCase().includes(needle)) : [];
-  const selected = all.find((a) => a._id === selectedId) ?? null;
-  const select = (a: Account) => router.replace(`/accountant/chart-of-accounts?selected=${a._id}`, { scroll: false });
+  const filtering = !!needle || !!type || show !== 'active';
+  const rows = ordered.filter(({ account: a }) => {
+    if (show === 'active' && !a.isActive) return false;
+    if (show === 'inactive' && a.isActive) return false;
+    if (type && (type.startsWith('base:') ? a.type !== type.slice(5) : a.accountType !== type)) return false;
+    if (needle && !(a.name.toLowerCase().includes(needle) || a.code.toLowerCase().includes(needle) || accountTypeLabel(a.accountType).toLowerCase().includes(needle))) return false;
+    return true;
+  });
+  const inactive = all.filter((a) => !a.isActive).length;
 
   return (
     <div>
       <PageHeader
         guide="chartOfAccounts"
         title="Chart of accounts"
-        subtitle="The groups and ledger accounts your books are kept in."
+        subtitle="The groups and ledger accounts your books are kept in. A lock marks an account the books rely on."
         actions={<Button asChild><Link href="/accountant/chart-of-accounts/new"><Plus size={14} /> New account</Link></Button>}
       />
       <ListToolbar
         search={search}
         onSearch={setSearch}
-        placeholder="Search name or code"
-        filters={inactive ? { value: show, onChange: setShow, options: [['active', 'Active'], ['all', `All, with ${inactive} deactivated`]] } : undefined}
-      />
+        placeholder="Search name, code or type"
+        filters={{ value: show, onChange: setShow, options: [['active', 'Active'], ['inactive', `Inactive${inactive ? ` (${inactive})` : ''}`], ['all', 'All']] }}
+      >
+        <select className={selectClass} value={type} onChange={(e) => setType(e.target.value)} aria-label="Account type">
+          <option value="">All account types</option>
+          {BASES.map((b) => (
+            <optgroup key={b} label={BASE_LABEL[b]}>
+              <option value={`base:${b}`}>Every {BASE_LABEL[b].toLowerCase()} account</option>
+              {ACCOUNT_TYPE_LIST.filter((t) => t.base === b).map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
+            </optgroup>
+          ))}
+        </select>
+      </ListToolbar>
+
       {q.isError && <QueryError error={q.error} onRetry={() => void q.refetch()} />}
-
-      <div className="flex min-h-[600px] gap-6">
-        <div className="w-[400px] shrink-0 overflow-auto rounded-xl border border-line-200 bg-surface-card">
-          {needle ? (
-            <div className="py-1">
-              {matches.length === 0 && <p className="px-4 py-3 text-caption text-ink-400">No account matches.</p>}
-              {matches.map((a) => (
-                <AccountNode key={a._id} account={a} all={[]} depth={0} selectedId={selectedId} onSelect={select} />
-              ))}
-            </div>
-          ) : (
-            ACCOUNT_TYPES.map(({ type, label }) => {
-              const roots = visible.filter((a) => a.type === type && !a.parentId);
-              return (
-                <div key={type} className="border-b border-line-200 last:border-b-0">
-                  <div className="flex items-center justify-between bg-surface-sink px-4 py-2.5">
-                    <span className="text-caption font-semibold uppercase tracking-wide text-ink-700">{label}</span>
-                    <Link href={`/accountant/chart-of-accounts/new?type=${type}`} className="text-ink-400 transition-colors hover:text-saffron-600" title={`New ${label.toLowerCase()} account`}>
-                      <Plus size={14} />
-                    </Link>
-                  </div>
-                  {roots.length === 0 ? (
-                    <p className="px-4 py-3 text-caption italic text-ink-400">No accounts under {label} yet.</p>
-                  ) : (
-                    <div className="py-1">
-                      {roots.map((a) => <AccountNode key={a._id} account={a} all={visible} depth={0} selectedId={selectedId} onSelect={select} />)}
-                    </div>
-                  )}
-                </div>
-              );
-            })
-          )}
-        </div>
-
-        <div className="flex-1 rounded-xl border border-line-200 bg-surface-card p-6">
-          {selected ? (
-            <Detail key={selected._id} account={selected} all={all} />
-          ) : (
-            <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
-              <BookOpen size={36} className="text-ink-400" />
-              <div>
-                <p className="text-body font-medium text-ink-700">Select an account</p>
-                <p className="mt-0.5 text-caption text-ink-400">Choose any account in the tree to see its details and balance.</p>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
+      {q.isLoading ? (
+        <p className="py-10 text-caption text-ink-400">Loading the chart of accounts…</p>
+      ) : rows.length === 0 && !q.isError ? (
+        <EmptyState title="No account matches" body="Change the search, the type or Active / Inactive." />
+      ) : (
+        <TableCard>
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-line-200 bg-surface-sink">
+                <th className={th}>Account name</th>
+                <th className={th}>Account code</th>
+                <th className={th}>Account type</th>
+                <th className={th}>Parent account</th>
+                <th className={`${th} text-right`}>Balance</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(({ account: a, depth }) => {
+                const parent = a.parentId ? byId.get(a.parentId) : undefined;
+                return (
+                  <tr
+                    key={a._id}
+                    className={cn(rowLink, a._id === selectedId && 'bg-honey-50', !a.isActive && 'text-ink-500')}
+                    onClick={() => router.push(`/accountant/chart-of-accounts/${a._id}/edit`)}
+                  >
+                    <td className={td}>
+                      <span className="flex items-center gap-1.5" style={{ paddingLeft: filtering ? 0 : depth * 20 }}>
+                        <Link
+                          href={`/accountant/chart-of-accounts/${a._id}/edit`}
+                          onClick={(e) => e.stopPropagation()}
+                          className={cn('hover:underline', a.isGroup && 'font-semibold', !a.isActive && 'text-ink-500')}
+                        >
+                          {a.name}
+                        </Link>
+                        {a.isSystem && <Lock size={12} className="shrink-0 text-ink-400" aria-label="System account" />}
+                        {a.watchlist && <Eye size={12} className="shrink-0 text-saffron-600" aria-label="On the dashboard watchlist" />}
+                        {!a.isActive && <span className="text-caption text-ink-500">Inactive</span>}
+                      </span>
+                    </td>
+                    <td className={`${td} font-mono text-caption text-ink-600`}>{a.code}</td>
+                    <td className={`${td} text-ink-600`}>{a.isGroup ? <span>Group <span className="text-caption text-ink-400">· {accountTypeLabel(a.accountType)}</span></span> : accountTypeLabel(a.accountType)}</td>
+                    <td className={`${td} text-ink-600`}>{parent ? parent.name : <span className="text-ink-400">—</span>}</td>
+                    <td className={cn(tdMoney, a.isGroup ? 'text-ink-500' : '')}>{a.balancePaise !== 0 ? formatPaise(a.balancePaise) : ''}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          <div className="flex items-center justify-between border-t border-line-200 bg-surface-sink px-3 py-2.5 text-caption text-ink-500">
+            <span>{rows.length} account{rows.length === 1 ? '' : 's'}</span>
+            <span className="flex items-center gap-3"><span className="flex items-center gap-1"><Lock size={11} /> used by the books</span><span className="flex items-center gap-1"><Eye size={11} /> on the dashboard watchlist</span></span>
+          </div>
+        </TableCard>
+      )}
     </div>
   );
 }

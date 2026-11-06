@@ -37,6 +37,8 @@ export default function ManualJournalsPage() {
       (status === 'all' || j.status === status) &&
       (!needle ||
         j.voucherNumber.toLowerCase().includes(needle) ||
+        (j.journalNumber ?? '').toLowerCase().includes(needle) ||
+        (j.reference ?? '').toLowerCase().includes(needle) ||
         j.description.toLowerCase().includes(needle) ||
         j.lines.some((l) => l.accountName.toLowerCase().includes(needle) || l.description.toLowerCase().includes(needle))),
   );
@@ -56,7 +58,7 @@ export default function ManualJournalsPage() {
       <ListToolbar
         search={search}
         onSearch={setSearch}
-        placeholder="Search voucher, narration or account"
+        placeholder="Search number, reference, notes or account"
         filters={{ value: status, onChange: setStatus, options: [['all', 'All'], ['posted', 'Posted'], ['reversed', 'Reversed']] }}
       >
         <label className="flex items-center gap-1.5 text-caption text-ink-500">
@@ -84,7 +86,8 @@ export default function ManualJournalsPage() {
               <tr className="border-b border-line-200 bg-surface-sink">
                 <th className={th}>Voucher</th>
                 <th className={th}>Date</th>
-                <th className={th}>Narration</th>
+                <th className={th}>Reference#</th>
+                <th className={th}>Notes</th>
                 <th className={th}>Accounts</th>
                 <th className={`${th} text-right`}>Amount</th>
                 <th className={th}>Status</th>
@@ -96,9 +99,11 @@ export default function ManualJournalsPage() {
                 return (
                   <tr key={j._id} className={rowLink} onClick={() => router.push(`/accountant/manual-journals/${j._id}`)}>
                     <td className={`${td} font-mono text-caption`}>
-                      <Link href={`/accountant/manual-journals/${j._id}`} onClick={(e) => e.stopPropagation()} className="hover:underline">{j.voucherNumber}</Link>
+                      <Link href={`/accountant/manual-journals/${j._id}`} onClick={(e) => e.stopPropagation()} className="hover:underline">{j.journalNumber ?? j.voucherNumber}</Link>
+                      {j.journalNumber && <span className="block text-ink-400">{j.voucherNumber}</span>}
                     </td>
                     <td className={`${td} whitespace-nowrap text-ink-600`}>{shortDate(j.date)}</td>
+                    <td className={`${td} whitespace-nowrap text-caption text-ink-600`}>{j.reference || ''}</td>
                     <td className={`${td} max-w-[260px] truncate`}>{j.description}</td>
                     <td className={`${td} max-w-[260px] truncate text-caption text-ink-600`}>{names.slice(0, 3).join(', ')}{names.length > 3 ? ` +${names.length - 3}` : ''}</td>
                     <td className={tdMoney}>{formatPaise(j.totalDebitPaise)}</td>
@@ -106,6 +111,7 @@ export default function ManualJournalsPage() {
                       {j.status === 'reversed'
                         ? <StatusChip tone="neutral">Reversed{j.reversedBy ? ` by ${j.reversedBy}` : ''}</StatusChip>
                         : <StatusChip tone="success">Posted</StatusChip>}
+                      {j.autoReverse && j.status !== 'reversed' && <span className="ml-1"><StatusChip tone="pending">Reverses {shortDate(j.autoReverse.on)}</StatusChip></span>}
                     </td>
                   </tr>
                 );

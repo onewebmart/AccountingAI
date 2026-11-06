@@ -9,7 +9,9 @@ export const MONEY_NAME = /\b(bank|cash|petty|wallet|imprest|current a\/?c|savin
  * asset ledger named as money. What expenses may be paid through, and what
  * the cash flow counts.
  */
-export function isMoneyAccount(a: { systemKey?: string | null; type?: string | null; isGroup?: boolean | null; name: string }): boolean {
+export function isMoneyAccount(a: { systemKey?: string | null; type?: string | null; isGroup?: boolean | null; name: string; accountType?: string | null }): boolean {
   if (a.systemKey === SystemAccountKey.BANK || a.systemKey === SystemAccountKey.CASH) return true;
-  return !a.systemKey && a.type === AccountType.ASSETS && !a.isGroup && MONEY_NAME.test(a.name);
+  if (a.systemKey || a.type !== AccountType.ASSETS || a.isGroup) return false;
+  // Typed as Bank or Cash in the chart of accounts, or named as money.
+  return a.accountType === 'bank' || a.accountType === 'cash' || MONEY_NAME.test(a.name);
 }

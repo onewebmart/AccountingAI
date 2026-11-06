@@ -37,6 +37,11 @@ export interface Account {
   isSystem: boolean;
   systemKey?: string;
   isActive: boolean;
+  /** The detailed type (bank, input_tax…): see account-types.ts. */
+  accountType?: string;
+  description?: string;
+  /** Shown with its balance on the dashboard. */
+  watchlist?: boolean;
 }
 
 /** Kept party by party from documents and payments: a bulk move on or off these is refused. */

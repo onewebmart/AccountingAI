@@ -5,6 +5,7 @@ import { RequirePermission } from '../auth/decorators';
 import { PermissionGuard } from '../auth/guards/permission.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ClosingService } from './closing.service';
+import { isLockModule } from '../gl/module-locks';
 
 interface AuthRequest {
   user: { orgId: string; sub: string };
@@ -46,6 +47,14 @@ export class ClosingController {
   @RequirePermission(Permission.MANAGE_ORG)
   lock(@Request() req: AuthRequest, @Body() body: SetLockDto) {
     return this.closing.setLock(req.user.orgId, req.user.sub, body.lockedThrough, body.reason);
+  }
+
+  /** Lock or unlock one module: sales, purchases, banking or accountant. A reason is required both ways. */
+  @Post('modules/:module/lock')
+  @RequirePermission(Permission.MANAGE_ORG)
+  lockModule(@Request() req: AuthRequest, @Param('module') module: string, @Body() body: SetLockDto) {
+    if (!isLockModule(module)) throw new BadRequestException('Lock one of sales, purchases, banking or accountant.');
+    return this.closing.setModuleLock(req.user.orgId, req.user.sub, module, body.lockedThrough, body.reason);
   }
 
   @Post('years/:fy/close')

@@ -4,7 +4,7 @@ import { ClientSession, Model, Types } from 'mongoose';
 import { BillStatus, InvoiceStatus, MatchStatus } from '@ai-accounting/shared';
 import { PostingService } from '../gl/posting.service';
 import { AuditService } from '../gl/audit.service';
-import { JournalDocument } from '../gl/schemas/journal.schema';
+import { Journal, JournalDocument } from '../gl/schemas/journal.schema';
 import { SalesInvoice, SalesInvoiceDocument } from '../sales/schemas/sales-invoice.schema';
 import { PurchaseBill, PurchaseBillDocument } from '../purchase/schemas/purchase-bill.schema';
 import { BankStatementLine, BankStatementLineDocument } from '../banking/schemas/bank-statement-line.schema';
@@ -54,15 +54,42 @@ export class JournalReversalService {
     // Optional so specs that build this by hand need not register it.
     @Optional() @InjectModel(PartyPayment.name) private paymentModel?: Model<PartyPaymentDocument>,
     @Optional() @InjectModel(EInvoice.name) private einvoiceModel?: Model<EInvoiceDocument>,
+    @Optional() @InjectModel(Journal.name) private journalModel?: Model<JournalDocument>,
   ) {}
 
-  async reverse(journalId: string, orgId: string, actorId: string): Promise<JournalDocument> {
+  /**
+   * Refuse to reverse a voucher dated inside a locked module (Sales,
+   * Purchases, Banking, Accountant): a module lock forbids changing or
+   * deleting what is in the locked period, and reversing a sale or a bill
+   * also sends its document back to draft. Callers that must not act first
+   * and fail after (cancelling an IRN) ask this before they start.
+   */
+  async assertReversible(journalId: string, orgId: string, session?: ClientSession): Promise<void> {
+    if (!this.journalModel || !Types.ObjectId.isValid(journalId)) return;
+    const original = await this.journalModel.findOne({ _id: journalId, orgId }).session(session ?? null).lean().exec();
+    if (!original) return; // PostingService.reverse says it is not found.
+    await this.posting.assertModulesOpen(orgId, original.voucherType, original.lines, original.date, session, 'reverse');
+  }
+
+  /**
+   * `opts.date` and `opts.narration` go to the reversal entry. `opts.scheduled`
+   * is a reversal fixed when the voucher was posted (a journal's reversal
+   * date): it is checked on its own date like any entry, but not refused
+   * because the voucher's own period has since been locked.
+   */
+  async reverse(
+    journalId: string,
+    orgId: string,
+    actorId: string,
+    opts: { date?: string; narration?: string; scheduled?: boolean } = {},
+  ): Promise<JournalDocument> {
     try {
       return await this.posting.inTransaction(async (session) => {
         const id = new Types.ObjectId(journalId);
+        if (!opts.scheduled) await this.assertReversible(journalId, orgId, session);
         await this.refuseWhilePaid(id, orgId, session);
 
-        const reversal = await this.posting.reverse(journalId, actorId, session);
+        const reversal = await this.posting.reverse(journalId, actorId, session, { date: opts.date, narration: opts.narration });
 
         // A receipt or payment across several documents, or an advance applied.
         await this.undoPartyPayment(id, orgId, actorId, session);

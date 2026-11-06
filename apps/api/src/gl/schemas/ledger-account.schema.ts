@@ -2,6 +2,7 @@ import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument, Schema as MongooseSchema } from 'mongoose';
 import { AccountType } from '@ai-accounting/shared';
 import { tenantIsolationPlugin } from '../../database/tenant.plugin';
+import { ACCOUNT_SUBTYPE_KEYS, type AccountSubtype } from '../account-subtypes';
 
 export type LedgerAccountDocument = HydratedDocument<LedgerAccount>;
 
@@ -90,6 +91,21 @@ export class LedgerAccount {
 
   @Prop({ default: true })
   isActive: boolean;
+
+  /**
+   * The detailed type (Bank, Input Tax, Cost of Goods Sold…), always one of
+   * `type`'s: reports keep using `type`. Null on accounts saved before it
+   * existed; AccountsService derives it for them (deriveAccountSubtype).
+   */
+  @Prop({ type: String, enum: [...ACCOUNT_SUBTYPE_KEYS, null], default: null })
+  accountType?: AccountSubtype | null;
+
+  @Prop({ type: String, default: '', maxlength: 500 })
+  description?: string;
+
+  /** Shown with its balance on the dashboard's watchlist card. */
+  @Prop({ type: Boolean, default: false })
+  watchlist?: boolean;
 }
 
 export const LedgerAccountSchema = SchemaFactory.createForClass(LedgerAccount);

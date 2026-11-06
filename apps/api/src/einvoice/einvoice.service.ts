@@ -139,6 +139,8 @@ export class EinvoiceService {
       throw new BadRequestException('Cancel the e-way bill first: the IRP will not cancel an IRN with an active e-way bill.');
     }
     if (!invoice.journalId) throw new BadRequestException('The invoice has no posting to reverse.');
+    // A locked Sales period refuses the reversal: find out before the IRP cancels.
+    await this.reversals.assertReversible(String(invoice.journalId), orgId);
 
     const { cancelledAt } = await this.gsp.cancelIrn(record.irn, input.reasonCode, input.remark.trim());
     record.set({ status: 'cancelled', cancelledAt: new Date(cancelledAt), cancelReason: `${IRN_CANCEL_REASONS[input.reasonCode]}: ${input.remark.trim()}`, cancelledBy: actorId });

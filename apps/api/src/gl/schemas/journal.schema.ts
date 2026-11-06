@@ -47,6 +47,26 @@ export class Journal {
   @Prop({ type: String })
   date: string;
 
+  /** Reference# typed on a manual journal: a document or file number of the person's. */
+  @Prop({ type: String, default: null })
+  reference?: string | null;
+
+  /**
+   * Journal# typed by the person in place of the automatic one. The voucher
+   * number (JNL series) is still allocated, gapless, as for every journal;
+   * this is a second number of their own, unique in the org.
+   */
+  @Prop({ type: String, default: null })
+  journalNumber?: string | null;
+
+  /**
+   * Set when posted, never after: this journal reverses itself on `on`.
+   * publishOnDate true → the daily job posts the reversal that day;
+   * false → it was posted with this journal, dated `on`.
+   */
+  @Prop({ type: { on: { type: String, required: true }, publishOnDate: { type: Boolean, default: true } }, default: null, _id: false })
+  autoReverse?: { on: string; publishOnDate: boolean } | null;
+
   @Prop({ type: MongooseSchema.Types.ObjectId, required: true })
   postedBy: MongooseSchema.Types.ObjectId;
 
@@ -70,6 +90,13 @@ JournalSchema.index(
   { orgId: 1, reversalOf: 1 },
   { unique: true, partialFilterExpression: { reversalOf: { $type: 'objectId' } } },
 );
+// A Journal# of the person's own is used once in an org.
+JournalSchema.index(
+  { orgId: 1, journalNumber: 1 },
+  { unique: true, partialFilterExpression: { journalNumber: { $type: 'string' } } },
+);
+// The daily job's search for reversals falling due.
+JournalSchema.index({ 'autoReverse.on': 1 }, { partialFilterExpression: { 'autoReverse.publishOnDate': true } });
 
 // ── Invariant 2: enforce Σdebit = Σcredit (balanced journal) ─────────────
 JournalSchema.pre('validate', function (this: Journal) {

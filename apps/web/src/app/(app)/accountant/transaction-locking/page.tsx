@@ -1,9 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CheckCircle, Circle, Loader2, Lock, LockOpen } from 'lucide-react';
+import { BookOpen, CheckCircle, Circle, Landmark, Loader2, Lock, LockOpen, Receipt, ShoppingCart, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { QueryError } from '@/components/ui/query-error';
 import { Field, PageHeader, Section, StatusChip, inputClass } from '@/components/page/page-shell';
@@ -12,10 +12,14 @@ import { ConfirmDialog, errorText, shortDate } from '@/components/accountant/com
 import { api } from '@/lib/api';
 import { currentFinancialYear, recentFinancialYears } from '@/lib/financial-year';
 import { formatPaise } from '@/lib/gst';
+import { cn } from '@/lib/utils';
 
+type ModuleKey = 'sales' | 'purchases' | 'banking' | 'accountant';
+interface ModuleLock { module: ModuleKey; label: string; lockedThrough: string | null; reason: string | null; changedAt: string | null }
 interface ClosingStatus {
   lockedThrough: string | null;
-  history: Array<{ lockedThrough: string | null; changedBy: string; changedAt: string; reason: string | null }>;
+  modules: ModuleLock[];
+  history: Array<{ module: ModuleKey | null; lockedThrough: string | null; changedBy: string; changedAt: string; reason: string | null }>;
   years: Array<{ financialYear: string; status: 'closed' | 'reopened'; netIncomePaise: number; closedAt: string }>;
 }
 interface Checklist {
@@ -24,21 +28,90 @@ interface Checklist {
   items: Array<{ key: string; label: string; count: number; href: string }>;
 }
 type Pending = { kind: 'unlock' } | { kind: 'close'; fy: string } | { kind: 'reopen'; fy: string };
+type Panel = { module: ModuleLock; action: 'lock' | 'unlock' };
 
+/** What each module's lock covers: the entries PostingService puts in it (apps/api/src/gl/module-locks.ts). */
+const MODULES: Record<ModuleKey, { icon: typeof Receipt; covers: string }> = {
+  sales: { icon: Receipt, covers: 'Invoices, credit notes, and customer payments, advances and refunds.' },
+  purchases: { icon: ShoppingCart, covers: 'Bills, debit notes, vendor payments and advances, expenses and expense claims.' },
+  banking: { icon: Landmark, covers: 'Transfers between bank and cash, confirmed bank matches, and other money in and out of the bank.' },
+  accountant: { icon: BookOpen, covers: 'Manual journals, month-end adjustments, depreciation, revaluation and GST set-off.' },
+};
+
+const todayIso = () => new Date().toISOString().slice(0, 10);
 /** Last day of the month before `at`, e.g. 2026-09-30 in October. */
 function lastMonthEnd(at = new Date()): string {
   return new Date(Date.UTC(at.getFullYear(), at.getMonth(), 0)).toISOString().slice(0, 10);
 }
+const when = (d: string) => new Date(d).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+/** Lock or unlock one module, in a panel at the right: the date, and why. */
+function LockPanel({ panel, busy, onClose, onSubmit }: {
+  panel: Panel;
+  busy: boolean;
+  onClose: () => void;
+  onSubmit: (lockedThrough: string | null, reason: string) => void;
+}) {
+  const { module, action } = panel;
+  const [date, setDate] = useState(module.lockedThrough ?? lastMonthEnd());
+  const [reason, setReason] = useState('');
+  useEffect(() => {
+    const esc = (e: KeyboardEvent) => e.key === 'Escape' && !busy && onClose();
+    window.addEventListener('keydown', esc);
+    return () => window.removeEventListener('keydown', esc);
+  }, [busy, onClose]);
+  const locking = action === 'lock';
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end bg-ink-900/30" role="dialog" aria-modal="true" aria-label={`${locking ? 'Lock' : 'Unlock'} ${module.label}`} onMouseDown={(e) => e.target === e.currentTarget && !busy && onClose()}>
+      <form
+        className="flex h-full w-full max-w-[440px] flex-col border-l border-line-200 bg-surface-card shadow-e2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          onSubmit(locking ? date : null, reason.trim());
+        }}
+      >
+        <div className="flex items-start justify-between border-b border-line-200 px-6 py-5">
+          <div>
+            <h2 className="text-h3 font-display text-ink-900">{locking ? (module.lockedThrough ? `Change the ${module.label} lock` : `Lock ${module.label}`) : `Unlock ${module.label}`}</h2>
+            <p className="mt-1 text-caption text-ink-500">{MODULES[module.module].covers}</p>
+          </div>
+          <button type="button" onClick={onClose} disabled={busy} className="-mr-2 p-1 text-ink-400 hover:text-ink-700" aria-label="Close"><X size={18} /></button>
+        </div>
+        <div className="flex-1 space-y-4 overflow-y-auto px-6 py-5">
+          {locking ? (
+            <Field label="Lock date" required hint="Nothing in this module dated on or before it can be posted or reversed. Not later than today.">
+              <input type="date" className={`${inputClass} max-w-[220px]`} value={date} max={todayIso()} onChange={(e) => setDate(e.target.value)} required autoFocus />
+            </Field>
+          ) : (
+            <p className="text-body text-ink-700">
+              {module.label} is locked through <strong>{shortDate(module.lockedThrough)}</strong>. Once unlocked, its entries can be posted and reversed on any date the whole-books lock allows.
+            </p>
+          )}
+          <Field label="Reason" required hint="Kept in the lock history and the audit trail.">
+            <textarea className={`${inputClass} min-h-[96px]`} value={reason} maxLength={200} onChange={(e) => setReason(e.target.value)} placeholder={locking ? 'GSTR-1 for September filed' : 'A missed credit note for September'} required autoFocus={!locking} />
+          </Field>
+        </div>
+        <div className="flex gap-3 border-t border-line-200 px-6 py-4">
+          <Button type="submit" variant={locking ? 'primary' : 'destructive'} disabled={busy || !reason.trim() || (locking && !date)}>
+            {busy ? 'Working…' : locking ? <><Lock size={14} /> Lock {module.label}</> : <><LockOpen size={14} /> Unlock {module.label}</>}
+          </Button>
+          <Button type="button" variant="secondary" onClick={onClose} disabled={busy}>Cancel</Button>
+        </div>
+      </form>
+    </div>
+  );
+}
 
 /**
- * Lock a period so nothing more posts into it, and close a financial year
- * into retained earnings. The checklist says what is still open before you
- * do; it does not stop you.
+ * Lock Sales, Purchases, Banking and Accountant separately, lock the whole
+ * books, and close each year into retained earnings. The checklist says what
+ * is still open before you lock; it does not stop you.
  */
 export default function TransactionLockingPage() {
   const qc = useQueryClient();
   const [through, setThrough] = useState(lastMonthEnd());
   const [pending, setPending] = useState<Pending | null>(null);
+  const [panel, setPanel] = useState<Panel | null>(null);
   const refresh = () => {
     void qc.invalidateQueries({ queryKey: ['closing'] });
     void qc.invalidateQueries({ queryKey: ['reports'] });
@@ -52,6 +125,17 @@ export default function TransactionLockingPage() {
     enabled: /^\d{4}-\d{2}-\d{2}$/.test(through),
   });
 
+  const moduleLock = useMutation({
+    mutationFn: (v: { module: ModuleKey; lockedThrough: string | null; reason: string }) =>
+      api.post(`/closing/modules/${v.module}/lock`, { lockedThrough: v.lockedThrough, reason: v.reason }),
+    onSuccess: (_d, v) => {
+      const label = status.data?.modules?.find((m) => m.module === v.module)?.label ?? v.module;
+      setPanel(null);
+      notify(v.lockedThrough ? `${label} locked through ${shortDate(v.lockedThrough)}` : `${label} unlocked`);
+      refresh();
+    },
+    onError: (err) => notify(errorText(err, "Couldn't change the lock."), 'error'),
+  });
   const lock = useMutation({
     mutationFn: (lockedThrough: string | null) => api.post('/closing/lock', { lockedThrough }),
     onSuccess: (_d, lockedThrough) => {
@@ -96,9 +180,19 @@ export default function TransactionLockingPage() {
   const years = recentFinancialYears(4).filter((fy) => fy !== currentFinancialYear());
   const runFor = (fy: string) => s?.years.find((y) => y.financialYear === fy);
   const open = (checklist.data?.items ?? []).filter((i) => i.count > 0).length;
+  const moduleLabel = (m: ModuleKey | null) => (m ? s?.modules?.find((x) => x.module === m)?.label ?? m : 'Whole books');
 
   return (
-    <div className="max-w-[920px] space-y-5">
+    <div className="max-w-[1000px] space-y-5">
+      {panel && (
+        <LockPanel
+          key={`${panel.module.module}-${panel.action}`}
+          panel={panel}
+          busy={moduleLock.isPending}
+          onClose={() => setPanel(null)}
+          onSubmit={(lockedThrough, reason) => moduleLock.mutate({ module: panel.module.module, lockedThrough, reason })}
+        />
+      )}
       {pending?.kind === 'unlock' && (
         <ConfirmDialog
           title="Unlock the books"
@@ -106,7 +200,7 @@ export default function TransactionLockingPage() {
           busy={busy}
           onCancel={() => setPending(null)}
           onConfirm={() => lock.mutate(null)}
-          body={<p>Entries could then be posted on any date, including periods whose returns are filed. The change is kept in the lock history.</p>}
+          body={<p>Entries could then be posted on any date the module locks allow, including periods whose returns are filed. The change is kept in the lock history.</p>}
         />
       )}
       {pending?.kind === 'close' && (
@@ -134,21 +228,64 @@ export default function TransactionLockingPage() {
       <PageHeader
         guide="transactionLocking"
         title="Transaction locking"
-        subtitle="Lock a period once its returns are filed, and close each year into retained earnings."
-        meta={s ? (s.lockedThrough ? <StatusChip tone="success">Locked through {shortDate(s.lockedThrough)}</StatusChip> : <StatusChip tone="neutral">Nothing locked</StatusChip>) : undefined}
+        subtitle="Lock each module once its period is done: nothing in it dated on or before the lock date can be created, changed or reversed."
       />
 
+      {status.isLoading || !s ? (
+        <p className="flex items-center gap-2 py-6 text-caption text-ink-400"><Loader2 size={14} className="animate-spin" /> Loading the locks…</p>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2">
+          {(s.modules ?? []).map((m) => {
+            const { icon: Icon, covers } = MODULES[m.module];
+            const locked = !!m.lockedThrough;
+            return (
+              <section key={m.module} className={cn('flex flex-col rounded-xl border bg-surface-card p-5', locked ? 'border-success-fg/30' : 'border-line-200')}>
+                <div className="mb-3 flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <span className={cn('flex h-10 w-10 items-center justify-center rounded-lg', locked ? 'bg-success-bg text-success-fg' : 'bg-surface-sink text-ink-500')}><Icon size={18} /></span>
+                    <div>
+                      <h2 className="text-h3 font-display text-ink-900">{m.label}</h2>
+                      <p className="text-caption text-ink-500">{covers}</p>
+                    </div>
+                  </div>
+                  {locked ? <Lock size={16} className="mt-1 shrink-0 text-success-fg" /> : <LockOpen size={16} className="mt-1 shrink-0 text-ink-400" />}
+                </div>
+                <div className="flex-1">
+                  {locked ? (
+                    <>
+                      <p className="text-body font-medium text-ink-900">Transactions are locked through {shortDate(m.lockedThrough)}.</p>
+                      {m.reason && <p className="mt-0.5 text-caption text-ink-500">{m.reason}{m.changedAt ? ` · ${when(m.changedAt)}` : ''}</p>}
+                    </>
+                  ) : (
+                    <p className="text-body text-ink-600">You have not locked the transactions in this module.</p>
+                  )}
+                </div>
+                <div className="mt-4 flex gap-2">
+                  {locked ? (
+                    <>
+                      <Button size="sm" variant="secondary" onClick={() => setPanel({ module: m, action: 'unlock' })}><LockOpen size={13} /> Unlock</Button>
+                      <Button size="sm" variant="ghost" onClick={() => setPanel({ module: m, action: 'lock' })}>Change date</Button>
+                    </>
+                  ) : (
+                    <Button size="sm" onClick={() => setPanel({ module: m, action: 'lock' })}><Lock size={13} /> Lock</Button>
+                  )}
+                </div>
+              </section>
+            );
+          })}
+        </div>
+      )}
+
       <Section
-        title="Lock"
+        title="Lock the whole books"
+        description="One date for every module at once, on top of the module locks: an entry is refused when either covers it. Closing a year sets it too."
         actions={s?.lockedThrough ? <Button variant="secondary" disabled={busy} onClick={() => setPending({ kind: 'unlock' })}><LockOpen size={14} /> Unlock books</Button> : undefined}
       >
         <div className="mb-4 flex items-center gap-3">
           {s?.lockedThrough ? <Lock size={20} className="text-ink-700" /> : <LockOpen size={20} className="text-ink-400" />}
-          <div>
-            <p className="text-body font-semibold text-ink-900">{s?.lockedThrough ? `Locked through ${shortDate(s.lockedThrough)}` : 'Nothing is locked'}</p>
-            <p className="text-caption text-ink-500">
-              {s?.lockedThrough ? 'No entry dated on or before this can be posted: payments, notes and reversals included.' : 'Entries can be posted on any date.'}
-            </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-body font-semibold text-ink-900">{s?.lockedThrough ? `Locked through ${shortDate(s.lockedThrough)}` : 'The whole books are not locked'}</p>
+            {s?.lockedThrough && <StatusChip tone="success">All modules</StatusChip>}
           </div>
         </div>
         <form
@@ -159,7 +296,7 @@ export default function TransactionLockingPage() {
           }}
         >
           <Field label="Lock through">
-            <input type="date" className={`${inputClass} w-48`} value={through} max={new Date().toISOString().slice(0, 10)} onChange={(e) => setThrough(e.target.value)} />
+            <input type="date" className={`${inputClass} w-48`} value={through} max={todayIso()} onChange={(e) => setThrough(e.target.value)} />
           </Field>
           <Button type="submit" disabled={busy || !through}><Lock size={14} /> Lock books</Button>
         </form>
@@ -219,12 +356,14 @@ export default function TransactionLockingPage() {
       </Section>
 
       {!!s?.history.length && (
-        <Section title="Lock history">
-          <ul className="space-y-1 text-caption text-ink-600">
-            {[...s.history].reverse().slice(0, 10).map((h, i) => (
-              <li key={i}>
-                {new Date(h.changedAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}: {h.lockedThrough ? `locked through ${shortDate(h.lockedThrough)}` : 'unlocked'}
-                {h.reason ? ` · ${h.reason}` : ''}
+        <Section title="Lock history" description="Every lock and unlock, newest first.">
+          <ul className="divide-y divide-line-100 text-caption text-ink-600">
+            {s.history.map((h, i) => (
+              <li key={i} className="flex flex-wrap items-baseline gap-x-3 py-2">
+                <span className="w-36 shrink-0 text-ink-500">{when(h.changedAt)}</span>
+                <span className="w-24 shrink-0 font-medium text-ink-900">{moduleLabel(h.module)}</span>
+                <span>{h.lockedThrough ? `Locked through ${shortDate(h.lockedThrough)}` : 'Unlocked'}</span>
+                {h.reason && <span className="text-ink-500">· {h.reason}</span>}
               </li>
             ))}
           </ul>

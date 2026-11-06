@@ -14,18 +14,20 @@ import { RequirePermission, CurrentUser, JwtPayload } from '../auth/decorators';
 import { JournalsService } from './journals.service';
 import { PostingService } from '../gl/posting.service';
 import { JournalReversalService } from './journal-reversal.service';
+import { ManualVouchersService, ManualVoucherLine } from './manual-vouchers.service';
 
 interface ManualJournalBody {
   voucherType?: VoucherType;
   financialYear?: string;
   date?: string;
+  /** Notes: why the entry is made. */
   narration?: string;
-  lines: Array<{
-    accountId: string;
-    description?: string;
-    debitPaise: number;
-    creditPaise: number;
-  }>;
+  reference?: string | null;
+  /** The person's own Journal#; the JNL voucher number is allocated as usual. */
+  journalNumber?: string | null;
+  reverseOn?: string | null;
+  publishReversalOnDate?: boolean;
+  lines: ManualVoucherLine[];
 }
 
 /** Indian financial year (Apr–Mar) for a yyyy-mm-dd string. */
@@ -37,7 +39,6 @@ function financialYearFor(dateStr: string): string {
     : `${y - 1}-${y.toString().slice(-2)}`;
 }
 
-import { ManualVouchersService } from './manual-vouchers.service';
 @Controller('journals')
 export class JournalsController {
   constructor(
@@ -72,6 +73,14 @@ export class JournalsController {
     @Query('financialYear') financialYear?: string,
   ) {
     return this.journals.summary(user.orgId, financialYear);
+  }
+
+  /** The Journal# the next journal dated `date` will get. A preview; it is allocated on posting. */
+  @Get('next-number')
+  @RequirePermission(Permission.VIEW_JOURNAL)
+  nextNumber(@CurrentUser() user: JwtPayload, @Query('date') date?: string) {
+    const on = date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : new Date().toISOString().slice(0, 10);
+    return this.journals.nextNumber(user.orgId, on);
   }
 
   @Get(':id')

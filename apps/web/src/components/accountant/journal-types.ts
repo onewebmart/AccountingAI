@@ -11,9 +11,25 @@ export interface JournalItem {
   /** "posted", or "reversed" once a contra entry cancels it. */
   status: string;
   financialYear: string;
-  /** The voucher number of the reversal that cancels this one. */
+  /** The voucher number of the reversal that cancels this one, and its id. */
   reversedBy?: string;
-  lines: Array<{ accountId: string; accountName: string; description: string; debitPaise: number; creditPaise: number; projectId?: string | null }>;
+  reversedById?: string;
+  /** On a reversal: the voucher it cancels. */
+  reverses?: { id: string; voucherNumber: string } | null;
+  /** Reference# and the person's own Journal#. */
+  reference?: string | null;
+  journalNumber?: string | null;
+  /** The reverse journal date; publishOnDate: the daily job posts it on that date. */
+  autoReverse?: { on: string; publishOnDate: boolean } | null;
+  lines: Array<{
+    accountId: string;
+    accountName: string;
+    description: string;
+    debitPaise: number;
+    creditPaise: number;
+    projectId?: string | null;
+    contact?: { kind: 'customer' | 'vendor'; id: string; name: string } | null;
+  }>;
 }
 
 export const VOUCHER_TYPE_LABELS: Record<string, string> = {

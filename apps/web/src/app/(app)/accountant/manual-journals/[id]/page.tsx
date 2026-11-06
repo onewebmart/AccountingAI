@@ -52,7 +52,18 @@ export default function ManualJournalPage() {
   const j = q.data;
   const reversed = j.status === 'reversed';
   const withProject = j.lines.some((l) => l.projectId);
+  const withContact = j.lines.some((l) => l.contact);
   const projectName = (pid: string) => projects.data?.find((p) => p.id === pid)?.name ?? 'A project';
+  const today = new Date().toISOString().slice(0, 10);
+  // A reversal set for a date: posted already, waiting for its date, or due and waiting for the next daily run.
+  const scheduled = j.autoReverse && !reversed && !reversal;
+  const reverseNote = j.autoReverse
+    ? reversed || reversal
+      ? <>Reversed on {shortDate(j.autoReverse.on)}{j.reversedById ? <> by <Link href={`/accountant/manual-journals/${j.reversedById}`} className="font-mono underline">{j.reversedBy}</Link></> : null}</>
+      : j.autoReverse.on > today
+        ? <>Reverses on {shortDate(j.autoReverse.on)}, in that day&apos;s 6:30 am run</>
+        : <>Reversal due on {shortDate(j.autoReverse.on)}: it posts in the next daily run, once the period is open</>
+    : null;
   return (
     <div className="space-y-5">
       {confirming && (
@@ -66,6 +77,7 @@ export default function ManualJournalPage() {
           body={
             <>
               <p>This posts a reversing entry, dated today, that cancels <span className="font-mono text-ink-900">{j.voucherNumber}</span>. The original stays in the books as it was posted.</p>
+              {j.autoReverse && <p className="mt-2">Its reversal set for {shortDate(j.autoReverse.on)} will then not post.</p>}
               <p className="mt-2 text-caption text-ink-500">To correct an amount or an account, reverse it, then post the journal again.</p>
             </>
           }
@@ -73,9 +85,14 @@ export default function ManualJournalPage() {
       )}
 
       <PageHeader
-        title={<span className="font-mono">{j.voucherNumber}</span>}
+        title={<span className="font-mono">{j.journalNumber ?? j.voucherNumber}</span>}
         back={{ href: '/accountant/manual-journals', label: 'Manual journals' }}
-        meta={reversed ? <StatusChip tone="neutral">Reversed{j.reversedBy ? ` by ${j.reversedBy}` : ''}</StatusChip> : <StatusChip tone="success">Posted</StatusChip>}
+        meta={
+          <>
+            {reversed ? <StatusChip tone="neutral">Reversed{j.reversedBy ? ` by ${j.reversedBy}` : ''}</StatusChip> : <StatusChip tone="success">Posted</StatusChip>}
+            {scheduled && <StatusChip tone="pending">Reverses {shortDate(j.autoReverse!.on)}</StatusChip>}
+          </>
+        }
         subtitle={j.description !== '—' ? j.description : undefined}
         actions={
           !reversed && !reversal ? (
@@ -93,13 +110,23 @@ export default function ManualJournalPage() {
       )}
       {held && <Notice tone="pending">{held} <Link href="/approvals" className="underline">Open approvals</Link></Notice>}
 
+      {j.reverses && (
+        <Notice tone="success">
+          This entry reverses <Link href={`/accountant/manual-journals/${j.reverses.id}`} className="font-mono underline">{j.reverses.voucherNumber || 'a voucher'}</Link>.
+        </Notice>
+      )}
+
       <Section>
         <DetailGrid
           items={[
             ['Date', shortDate(j.date)],
+            ['Voucher number', <span key="v" className="font-mono">{j.voucherNumber}</span>],
+            ...(j.journalNumber ? [['Journal#', <span key="n" className="font-mono">{j.journalNumber}</span>] as [string, React.ReactNode]] : []),
+            ['Reference#', j.reference || '—'],
             ['Type', VOUCHER_TYPE_LABELS[j.voucherType] ?? j.voucherType],
             ['Financial year', j.financialYear],
             ['Amount', <span key="a" className="font-mono">{formatPaise(j.totalDebitPaise)}</span>],
+            ...(reverseNote ? [['Reverse journal date', reverseNote] as [string, React.ReactNode]] : []),
           ]}
         />
       </Section>
@@ -111,6 +138,7 @@ export default function ManualJournalPage() {
               <tr className="border-b border-line-200 bg-surface-sink">
                 <th className={th}>Account</th>
                 <th className={th}>Description</th>
+                {withContact && <th className={th}>Contact</th>}
                 {withProject && <th className={th}>Project</th>}
                 <th className={`${th} text-right`}>Debit</th>
                 <th className={`${th} text-right`}>Credit</th>
@@ -121,7 +149,16 @@ export default function ManualJournalPage() {
                 <tr key={i} className="border-b border-line-100 last:border-0">
                   <td className={td}>{l.accountName}</td>
                   <td className={`${td} text-ink-600`}>{l.description && l.description !== l.accountName ? l.description : ''}</td>
-                  {withProject && <td className={`${td} text-ink-600`}>{l.projectId ? projectName(l.projectId) : ''}</td>}
+                  {withContact && (
+                    <td className={`${td} text-ink-600`}>
+                      {l.contact ? (
+                        <Link href={l.contact.kind === 'customer' ? `/sales/customers/${l.contact.id}` : `/purchases/vendors/${l.contact.id}`} className="hover:underline">
+                          {l.contact.name} <span className="text-caption text-ink-400">{l.contact.kind === 'customer' ? 'Customer' : 'Vendor'}</span>
+                        </Link>
+                      ) : ''}
+                    </td>
+                  )}
+                  {withProject &&<td className={`${td} text-ink-600`}>{l.projectId ? projectName(l.projectId) : ''}</td>}
                   <td className={tdMoney}>{l.debitPaise ? formatPaise(l.debitPaise) : ''}</td>
                   <td className={tdMoney}>{l.creditPaise ? formatPaise(l.creditPaise) : ''}</td>
                 </tr>
@@ -129,7 +166,7 @@ export default function ManualJournalPage() {
             </tbody>
             <tfoot>
               <tr className="border-t border-line-200 bg-surface-sink">
-                <td className={`${td} font-medium`} colSpan={withProject ? 3 : 2}>Total</td>
+                <td className={`${td} font-medium`} colSpan={2 + (withProject ? 1 : 0) + (withContact ? 1 : 0)}>Total</td>
                 <td className={`${tdMoney} font-medium`}>{formatPaise(j.totalDebitPaise)}</td>
                 <td className={`${tdMoney} font-medium`}>{formatPaise(j.totalCreditPaise)}</td>
               </tr>

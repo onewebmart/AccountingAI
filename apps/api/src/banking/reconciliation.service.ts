@@ -504,6 +504,8 @@ export class ReconciliationService {
     for (const line of lines) {
       try {
         await this.postingService.inTransaction(async (session) => {
+          // Confirming a match is Banking's: refused on a line dated in a locked Banking period.
+          await this.postingService.assertModuleOpen(orgId, 'banking', line.date, 'This bank line', session);
           let journalId = line.matchedJournalId;
           if (line.matchedInvoiceId) {
             const { receipt } = await this.salesInvoices.settleWithin(

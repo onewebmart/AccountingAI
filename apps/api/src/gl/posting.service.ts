@@ -8,6 +8,7 @@ import { Counter, CounterDocument } from './schemas/counter.schema';
 import { AuditLog, AuditLogDocument } from './schemas/audit-log.schema';
 import { PeriodLock, PeriodLockDocument } from './schemas/period-lock.schema';
 import { withOrg } from '../database/tenant.plugin';
+import { LOCK_MODULES, LockModule, MODULE_LABEL, ModuleLockState, locksCovering, modulesOfEntry } from './module-locks';
 
 export interface PostJournalInput {
   orgId: string;
@@ -27,7 +28,13 @@ export interface PostJournalInput {
     creditPaise: number;
     /** A project dimension, fixed at posting like the rest of the line. */
     projectId?: string | null;
+    /** A customer or vendor the line is about (manual journals). */
+    contact?: { kind: 'customer' | 'vendor'; id: string; name: string } | null;
   }>;
+  /** Manual journals: Reference#, the person's own Journal#, and a reversal date. Fixed at posting. */
+  reference?: string | null;
+  journalNumber?: string | null;
+  autoReverse?: { on: string; publishOnDate: boolean } | null;
 }
 
 /** Indian financial year (April–March) of a YYYY-MM-DD date, e.g. "2026-27". */
@@ -133,6 +140,8 @@ export class PostingService {
           'Date it after the lock, or unlock the period first.',
       );
     }
+    // Sales, Purchases, Banking and Accountant lock separately (module-locks.ts).
+    if (!input.isClosingEntry) await this.assertModulesOpen(input.orgId, input.voucherType, input.lines, input.date, session, 'post', lock);
 
     // Nothing new goes to a deactivated account or straight to a group header.
     // A reversal and the year-end closing entry are exempt: a correction must
@@ -182,12 +191,16 @@ export class PostingService {
         isClosingEntry: input.isClosingEntry ?? false,
         postedBy: new Types.ObjectId(input.postedBy),
         postedAt: new Date(),
+        reference: input.reference ?? null,
+        journalNumber: input.journalNumber ?? null,
+        autoReverse: input.autoReverse ?? null,
         lines: input.lines.map((l) => ({
           accountId: new Types.ObjectId(l.accountId),
           description: l.description ?? '',
           debitPaise: l.debitPaise,
           creditPaise: l.creditPaise,
           projectId: l.projectId && Types.ObjectId.isValid(l.projectId) ? new Types.ObjectId(l.projectId) : null,
+          contact: l.contact && Types.ObjectId.isValid(l.contact.id) ? { kind: l.contact.kind, id: new Types.ObjectId(l.contact.id), name: l.contact.name } : null,
         })),
       });
       await doc.validate();
@@ -267,6 +280,8 @@ export class PostingService {
             creditPaise: l.debitPaise,
             // A reversal comes off the same project it went to.
             projectId: l.projectId ? l.projectId.toString() : null,
+            // …and is about the same customer or vendor.
+            contact: l.contact ? { kind: l.contact.kind, id: String(l.contact.id), name: l.contact.name } : null,
           })),
         },
         session,
@@ -303,6 +318,58 @@ export class PostingService {
       const msg = err instanceof Error ? err.message : String(err);
       throw new BadRequestException(msg);
     }
+  }
+
+  /**
+   * Refuse an entry when a module it belongs to (Sales, Purchases, Banking,
+   * Accountant: see module-locks.ts for which is which) is locked through its
+   * date. 'post' is a new entry on that date; 'reverse' is a posted entry of
+   * that date about to be reversed, which a module lock forbids just as it
+   * forbids changing or deleting a locked transaction. Read inside the
+   * caller's transaction, so a lock taken meanwhile is honoured.
+   *
+   * `lockDoc` is the org's lock when the caller has read it already.
+   */
+  async assertModulesOpen(
+    orgId: string,
+    voucherType: VoucherType,
+    lines: Array<{ accountId: unknown; debitPaise: number; creditPaise: number }>,
+    date: string,
+    session?: ClientSession | null,
+    purpose: 'post' | 'reverse' = 'post',
+    lockDoc?: { modules?: Partial<Record<LockModule, ModuleLockState | null>> | null } | null,
+  ): Promise<void> {
+    const lock = lockDoc !== undefined ? lockDoc : await this.lockModel?.findOne({ orgId }).session(session ?? null).lean().exec();
+    if (!lock?.modules) return;
+    // Nothing locked on or after this date: no need to work out the module.
+    if (!locksCovering([...LOCK_MODULES], date, lock.modules).length) return;
+
+    const ids = [...new Set(lines.map((l) => String(l.accountId)))].filter((a) => Types.ObjectId.isValid(a));
+    const accounts = this.accountModel
+      ? await this.accountModel.find({ orgId, _id: { $in: ids } }, { systemKey: 1, type: 1 }).session(session ?? null).lean().exec()
+      : [];
+    const facts = new Map(accounts.map((a) => [String(a._id), { systemKey: a.systemKey ?? null, type: a.type }]));
+    const hit = locksCovering(modulesOfEntry(voucherType, lines, facts), date, lock.modules)[0];
+    if (!hit) return;
+    const label = MODULE_LABEL[hit.module];
+    throw new BadRequestException(
+      purpose === 'post'
+        ? `${label} is locked through ${hit.lockedThrough}, and this entry is dated ${date}. Date it after the lock, or unlock ${label} in Transaction locking.`
+        : `This entry is dated ${date}, and ${label} is locked through ${hit.lockedThrough}, so it cannot be reversed. Unlock ${label} in Transaction locking first, or correct it with a new entry dated after the lock.`,
+    );
+  }
+
+  /**
+   * Refuse an action in one module on a date its lock covers, for what is not
+   * itself a posting: confirming a bank match is Banking's, for example.
+   * `what` names the thing, as in "This bank line".
+   */
+  async assertModuleOpen(orgId: string, module: LockModule, date: string, what: string, session?: ClientSession | null): Promise<void> {
+    const lock = await this.lockModel?.findOne({ orgId }).session(session ?? null).lean().exec();
+    const hit = locksCovering([module], date, lock?.modules)[0];
+    if (!hit) return;
+    const label = MODULE_LABEL[module];
+    throw new BadRequestException(`${label} is locked through ${hit.lockedThrough}, and ${what.charAt(0).toLowerCase()}${what.slice(1)} is dated ${date}. Unlock ${label} in Transaction locking first.`);
   }
 
   async findById(journalId: string, orgId: string): Promise<JournalDocument | null> {

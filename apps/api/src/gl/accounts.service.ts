@@ -10,6 +10,7 @@ import {
 } from './schemas/ledger-account.schema';
 import { Journal, JournalDocument } from './schemas/journal.schema';
 import { withOrg } from '../database/tenant.plugin';
+import { AccountSubtype, SYSTEM_SUBTYPE, baseTypeOf, deriveAccountSubtype } from './account-subtypes';
 
 export interface AccountListItem {
   _id: string;
@@ -23,6 +24,11 @@ export interface AccountListItem {
   /** False once deactivated: kept for history, closed to new postings. */
   isActive: boolean;
   balancePaise: number;
+  /** The detailed type, stored or derived; always one of `type`'s. */
+  accountType: AccountSubtype;
+  description: string;
+  /** Shown with its balance on the dashboard's watchlist card. */
+  watchlist: boolean;
 }
 
 /** Only the fields given change. */
@@ -32,6 +38,10 @@ export interface UpdateAccountInput {
   /** A group of the same type, or null for top level. */
   parentId?: string | null;
   isActive?: boolean;
+  /** Another detailed type of the same base type. Not for system accounts. */
+  accountType?: AccountSubtype;
+  description?: string;
+  watchlist?: boolean;
 }
 
 export interface CreateAccountInput {
@@ -39,10 +49,15 @@ export interface CreateAccountInput {
   /** Who created it, for the audit trail. */
   actorId?: string;
   name: string;
-  type: AccountType;
+  /** The base type. Optional when accountType is given: it follows from it. */
+  type?: AccountType;
+  /** The detailed type. Derived from the name and group when not given. */
+  accountType?: AccountSubtype;
   code?: string;
   parentId?: string | null;
   isGroup?: boolean;
+  description?: string;
+  watchlist?: boolean;
 }
 
 /**
@@ -273,6 +288,7 @@ export class AccountsService {
         name: group.name,
         code: group.code,
         type: group.type,
+        accountType: deriveAccountSubtype(group),
         parentId: null,
         isGroup: group.isGroup ?? true,
         isSystem: true,
@@ -286,6 +302,7 @@ export class AccountsService {
           name: child.name,
           code: child.code,
           type: child.type,
+          accountType: deriveAccountSubtype(child, group),
           parentId: parent._id,
           isGroup: false,
           isSystem: true,
@@ -338,6 +355,7 @@ export class AccountsService {
           name: node.name,
           code,
           type: node.type,
+          accountType: deriveAccountSubtype(node, node === group ? null : group),
           parentId: parent?._id ?? null,
           isGroup: node === group ? (group.isGroup ?? true) : false,
           isSystem: true,
@@ -483,6 +501,7 @@ export class AccountsService {
       rolled.set(parentId, (rolled.get(parentId) ?? 0) + (own.get(a._id.toString()) ?? 0));
     }
 
+    const byId = new Map(accounts.map((a) => [a._id.toString(), a]));
     return accounts.map((a) => ({
       _id: a._id.toString(),
       name: a.name,
@@ -494,7 +513,22 @@ export class AccountsService {
       systemKey: a.systemKey,
       isActive: a.isActive !== false,
       balancePaise: rolled.get(a._id.toString()) ?? 0,
+      accountType: this.subtypeOf(a, a.parentId ? byId.get(a.parentId.toString()) : null),
+      description: a.description ?? '',
+      watchlist: a.watchlist === true,
     }));
+  }
+
+  /**
+   * The stored detailed type when it belongs to the account's base type (a
+   * system account's is fixed by its key); otherwise the one derived from its
+   * key, name and group.
+   */
+  private subtypeOf(a: LedgerAccount, parent?: LedgerAccount | null): AccountSubtype {
+    const fixed = a.systemKey ? SYSTEM_SUBTYPE[a.systemKey] : undefined;
+    if (fixed && baseTypeOf(fixed) === a.type) return fixed;
+    if (a.accountType && baseTypeOf(a.accountType) === a.type) return a.accountType;
+    return deriveAccountSubtype(a, parent ?? null);
   }
 
   /** Net (debit − credit) paise per account across all posted journals. */
@@ -516,25 +550,50 @@ export class AccountsService {
   }
 
   async create(input: CreateAccountInput): Promise<LedgerAccountDocument> {
-    const { orgId, name, type, parentId } = input;
+    const { orgId, parentId } = input;
+    const name = input.name.trim();
+    if (!name) throw new BadRequestException('Account name is required.');
+    if (name.length > 120) throw new BadRequestException('The name can be at most 120 characters.');
 
-    if (parentId && !Types.ObjectId.isValid(parentId)) {
-      throw new BadRequestException('Invalid parent account.');
+    // The detailed type decides the base type; given both, they must agree.
+    const type = input.accountType ? baseTypeOf(input.accountType) : input.type;
+    if (!type) throw new BadRequestException('Choose the account type.');
+    if (input.type && input.type !== type) {
+      throw new BadRequestException(`${input.accountType} is not a type of ${input.type.toLowerCase()} account.`);
     }
+
+    let parent: LedgerAccountDocument | null = null;
+    if (parentId) {
+      if (!Types.ObjectId.isValid(parentId)) throw new BadRequestException('Invalid parent account.');
+      parent = await withOrg(orgId, () => this.accountModel.findById(parentId).exec());
+      if (!parent || !parent.isGroup) throw new BadRequestException('An account can only sit under a group.');
+      if (parent.type !== type) throw new BadRequestException(`${parent.name} holds ${parent.type.toLowerCase()} accounts; choose a group of the same type.`);
+    }
+
+    const description = (input.description ?? '').trim();
+    if (description.length > 500) throw new BadRequestException('The description can be at most 500 characters.');
 
     const code = input.code?.trim() || (await this.nextCodeForType(orgId, type));
 
     const clash = await withOrg(orgId, () => this.accountModel.findOne({ code }).exec());
     if (clash) throw new BadRequestException(`Account code "${code}" is already in use.`);
 
+    const isGroup = input.isGroup ?? false;
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const twin = await withOrg(orgId, () => this.accountModel.findOne({ isGroup, name: new RegExp(`^${escaped}$`, 'i') }).exec());
+    if (twin) throw new BadRequestException(`Another ${isGroup ? 'group' : 'account'} is already called "${twin.name}" (${twin.code}).`);
+
     const account = await this.accountModel.create({
       orgId,
-      name: name.trim(),
+      name,
       code,
       type,
-      parentId: parentId ? new Types.ObjectId(parentId) : null,
-      isGroup: input.isGroup ?? false,
+      accountType: input.accountType ?? deriveAccountSubtype({ name, type }, parent),
+      parentId: parent ? parent._id : null,
+      isGroup,
       isSystem: false,
+      description,
+      watchlist: input.watchlist === true,
     });
     await this.auditService.record({
       orgId,
@@ -542,7 +601,7 @@ export class AccountsService {
       entityId: account._id.toString(),
       action: 'CREATE',
       performedBy: input.actorId ?? 'unknown',
-      after: { name: account.name, code: account.code, type: account.type },
+      after: { name: account.name, code: account.code, type: account.type, accountType: account.accountType, watchlist: account.watchlist, description },
     });
     return account;
   }
@@ -604,6 +663,28 @@ export class AccountsService {
       }
     }
 
+    if (input.accountType !== undefined) {
+      const current = this.subtypeOf(account);
+      if (input.accountType !== current) {
+        if (account.systemKey && SYSTEM_SUBTYPE[account.systemKey]) {
+          throw new BadRequestException(`${account.name} is one the books depend on, so its type stays ${current.replace(/_/g, ' ')}.`);
+        }
+        if (baseTypeOf(input.accountType) !== account.type) {
+          const kind = { ASSETS: 'an asset', LIABILITIES: 'a liability', INCOME: 'an income', EXPENSE: 'an expense', CAPITAL: 'a capital' }[account.type];
+          throw new BadRequestException(`This is ${kind} account, so it can only become another ${kind.replace(/^an? /, '')} type: past entries depend on it.`);
+        }
+      }
+      set.accountType = input.accountType;
+    }
+
+    if (input.description !== undefined) {
+      const description = input.description.trim();
+      if (description.length > 500) throw new BadRequestException('The description can be at most 500 characters.');
+      set.description = description;
+    }
+
+    if (input.watchlist !== undefined) set.watchlist = input.watchlist;
+
     if (input.isActive !== undefined && input.isActive !== account.isActive) {
       if (!input.isActive) {
         if (account.isSystem || account.systemKey) {
@@ -628,7 +709,14 @@ export class AccountsService {
         orgId,
         entityType: 'LedgerAccount',
         entityId: id,
-        action: set.isActive === false && changed.includes('isActive') ? 'DEACTIVATE' : set.isActive === true && changed.includes('isActive') ? 'REACTIVATE' : 'UPDATE',
+        action:
+          set.isActive === false && changed.includes('isActive')
+            ? 'DEACTIVATE'
+            : set.isActive === true && changed.includes('isActive')
+              ? 'REACTIVATE'
+              : changed.length === 1 && changed[0] === 'watchlist'
+                ? set.watchlist ? 'WATCH' : 'UNWATCH'
+                : 'UPDATE',
         performedBy: actorId,
         before: Object.fromEntries(changed.map((k) => [k, (account as unknown as Record<string, unknown>)[k] ?? null])),
         after: Object.fromEntries(changed.map((k) => [k, set[k]])),

@@ -24,6 +24,7 @@ import { AuditService } from '../gl/audit.service';
 import { classifyAccount, financialYearRange } from '../reports/reports.service';
 import { rupees } from '../gl/note-amounts';
 import { withOrg } from '../database/tenant.plugin';
+import { LOCK_MODULES, LockModule, MODULE_LABEL, isLockModule } from '../gl/module-locks';
 
 export interface ChecklistItem {
   key: string;
@@ -70,9 +71,77 @@ export class ClosingService {
     ]);
     return {
       lockedThrough: lock?.lockedThrough ?? null,
-      history: (lock?.history ?? []).slice(-10).reverse(),
+      // Sales, Purchases, Banking and Accountant, each locked on its own.
+      modules: LOCK_MODULES.map((module) => {
+        const m = lock?.modules?.[module];
+        return {
+          module,
+          label: MODULE_LABEL[module],
+          lockedThrough: m?.lockedThrough ?? null,
+          reason: m?.reason ?? null,
+          changedBy: m?.changedBy ?? null,
+          changedAt: m?.changedAt ?? null,
+        };
+      }),
+      // Newest first; `module` is null for the lock on the whole books.
+      history: (lock?.history ?? []).slice(-30).reverse().map((h) => ({ ...h, module: h.module ?? null })),
       years,
     };
+  }
+
+  /**
+   * Lock one module (Sales, Purchases, Banking or Accountant) through a date,
+   * or unlock it with null. Nothing in that module dated on or before the
+   * date can then be posted or reversed; PostingService enforces it. A reason
+   * is asked for both ways, and kept in the history and the audit trail.
+   * The whole-books lock and year-end close are separate and still apply.
+   */
+  async setModuleLock(
+    orgId: string,
+    actorId: string,
+    module: LockModule,
+    lockedThrough: string | null,
+    reason: string | null | undefined,
+  ): Promise<{ module: LockModule; lockedThrough: string | null }> {
+    if (!isLockModule(module)) throw new BadRequestException('Lock one of sales, purchases, banking or accountant.');
+    const label = MODULE_LABEL[module];
+    if (lockedThrough !== null) {
+      if (!ISO_DATE.test(lockedThrough)) throw new BadRequestException('lockedThrough must be a date like 2026-09-30');
+      if (lockedThrough > today()) throw new BadRequestException(`${label} cannot be locked past today`);
+    }
+    const why = (reason ?? '').trim();
+    if (!why) throw new BadRequestException(lockedThrough ? `Say why you are locking ${label}.` : `Say why you are unlocking ${label}.`);
+    if (why.length > 200) throw new BadRequestException('Keep the reason to 200 characters.');
+
+    await this.postingService.inTransaction(async (session) => {
+      const before = await this.lockModel.findOne({ orgId }).session(session).lean().exec();
+      const previous = before?.modules?.[module]?.lockedThrough ?? null;
+      if (lockedThrough === null && !previous) throw new BadRequestException(`${label} is not locked.`);
+      const changedAt = new Date();
+      await this.lockModel
+        .updateOne(
+          { orgId },
+          {
+            $set: { [`modules.${module}`]: { lockedThrough, reason: why, changedBy: actorId, changedAt } },
+            $push: { history: { module, lockedThrough, changedBy: actorId, changedAt, reason: why } },
+          },
+          { upsert: true, session },
+        )
+        .exec();
+      await this.auditService.record(
+        {
+          orgId,
+          entityType: 'ModuleLock',
+          entityId: module,
+          action: lockedThrough ? 'LOCK' : 'UNLOCK',
+          performedBy: actorId,
+          before: { lockedThrough: previous },
+          after: { lockedThrough, reason: why },
+        },
+        session,
+      );
+    });
+    return { module, lockedThrough };
   }
 
   /**

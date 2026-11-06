@@ -4,6 +4,8 @@ import { Model, Types } from 'mongoose';
 import { JournalStatus, VoucherType } from '@ai-accounting/shared';
 import { Journal, JournalDocument } from '../gl/schemas/journal.schema';
 import { LedgerAccount, LedgerAccountDocument } from '../gl/schemas/ledger-account.schema';
+import { Counter, CounterDocument } from '../gl/schemas/counter.schema';
+import { financialYearOf } from '../gl/posting.service';
 import { withOrg } from '../database/tenant.plugin';
 
 export interface JournalListItem {
@@ -17,6 +19,15 @@ export interface JournalListItem {
   status: string;
   financialYear: string;
   reversedBy?: string;
+  /** The reversal entry's id, beside its number. */
+  reversedById?: string;
+  /** On a reversal: the voucher it cancels. */
+  reverses?: { id: string; voucherNumber: string } | null;
+  /** Reference# and the person's own Journal#, on manual journals. */
+  reference: string | null;
+  journalNumber: string | null;
+  /** The reversal date set when it was posted, and whether it waited for that date. */
+  autoReverse: { on: string; publishOnDate: boolean } | null;
   lines: Array<{
     accountId: string;
     accountName: string;
@@ -24,6 +35,7 @@ export interface JournalListItem {
     debitPaise: number;
     creditPaise: number;
     projectId: string | null;
+    contact: { kind: 'customer' | 'vendor'; id: string; name: string } | null;
   }>;
 }
 
@@ -61,6 +73,7 @@ export class JournalsService {
     @InjectModel(Journal.name) private journalModel: Model<JournalDocument>,
     @InjectModel(LedgerAccount.name)
     private accountModel: Model<LedgerAccountDocument>,
+    @InjectModel(Counter.name) private counterModel: Model<CounterDocument>,
   ) {}
 
   async list(orgId: string, filter: ListJournalsFilter = {}): Promise<JournalListItem[]> {
@@ -84,16 +97,19 @@ export class JournalsService {
 
     const accountNames = await this.accountNameMap(orgId);
     const reversedByMap = await this.reversedByMap(orgId, journals);
+    const reversesMap = await this.reversesMap(orgId, journals);
 
-    return journals.map((j) => this.toListItem(j, accountNames, reversedByMap));
+    return journals.map((j) => this.toListItem(j, accountNames, reversedByMap, reversesMap));
   }
 
   async findOne(orgId: string, id: string): Promise<JournalListItem> {
+    if (!Types.ObjectId.isValid(id)) throw new NotFoundException('Voucher not found.');
     const journal = await withOrg(orgId, () => this.journalModel.findById(id).exec());
     if (!journal) throw new NotFoundException('Voucher not found.');
     const accountNames = await this.accountNameMap(orgId);
     const reversedByMap = await this.reversedByMap(orgId, [journal]);
-    return this.toListItem(journal, accountNames, reversedByMap);
+    const reversesMap = await this.reversesMap(orgId, [journal]);
+    return this.toListItem(journal, accountNames, reversedByMap, reversesMap);
   }
 
   /**
@@ -105,7 +121,7 @@ export class JournalsService {
   private async reversedByMap(
     orgId: string,
     journals: JournalDocument[],
-  ): Promise<Map<string, string>> {
+  ): Promise<Map<string, { id: string; voucherNumber: string }>> {
     if (!journals.length) return new Map();
     const reversals = await withOrg(orgId, () =>
       this.journalModel.find({ reversalOf: { $in: journals.map((j) => j._id) } }).exec(),
@@ -113,19 +129,41 @@ export class JournalsService {
     return new Map(
       reversals.map((r) => [
         r.reversalOf!.toString(),
-        formatVoucherNumber(r.voucherType, r.financialYear, r.voucherNumber),
+        { id: r._id.toString(), voucherNumber: formatVoucherNumber(r.voucherType, r.financialYear, r.voucherNumber) },
       ]),
     );
+  }
+
+  /** The vouchers these reversals cancel: id → number. */
+  private async reversesMap(orgId: string, journals: JournalDocument[]): Promise<Map<string, string>> {
+    const ids = journals.filter((j) => j.reversalOf).map((j) => j.reversalOf);
+    if (!ids.length) return new Map();
+    const originals = await withOrg(orgId, () => this.journalModel.find({ _id: { $in: ids } }, { voucherType: 1, financialYear: 1, voucherNumber: 1 }).lean().exec());
+    return new Map(originals.map((o) => [String(o._id), formatVoucherNumber(o.voucherType, o.financialYear, o.voucherNumber)]));
+  }
+
+  /**
+   * The number the next journal will get, for the form to show. Only a
+   * preview: the number is allocated when the journal posts, in the same
+   * transaction, so the series stays gapless.
+   */
+  async nextNumber(orgId: string, date: string): Promise<{ voucherNumber: string; financialYear: string }> {
+    const financialYear = financialYearOf(date);
+    const counter = await this.counterModel.findById(`${orgId}:${VoucherType.JOURNAL}:${financialYear}`).lean().exec();
+    return { voucherNumber: formatVoucherNumber(VoucherType.JOURNAL, financialYear, (counter?.seq ?? 0) + 1), financialYear };
   }
 
   private toListItem(
     j: JournalDocument,
     accountNames: Map<string, string>,
-    reversedByMap: Map<string, string>,
+    reversedByMap: Map<string, { id: string; voucherNumber: string }>,
+    reversesMap: Map<string, string> = new Map(),
   ): JournalListItem {
     const totalDebitPaise = j.lines.reduce((s, l) => s + l.debitPaise, 0);
     const totalCreditPaise = j.lines.reduce((s, l) => s + l.creditPaise, 0);
-    const reversedBy = reversedByMap.get(j._id.toString());
+    const reversal = reversedByMap.get(j._id.toString());
+    const reversedBy = reversal?.voucherNumber;
+    const reversesId = j.reversalOf ? String(j.reversalOf) : null;
 
     return {
       _id: j._id.toString(),
@@ -140,6 +178,11 @@ export class JournalsService {
       status: reversedBy ? JournalStatus.REVERSED : j.status,
       financialYear: j.financialYear,
       reversedBy,
+      reversedById: reversal?.id,
+      reverses: reversesId ? { id: reversesId, voucherNumber: reversesMap.get(reversesId) ?? '' } : null,
+      reference: j.reference ?? null,
+      journalNumber: j.journalNumber ?? null,
+      autoReverse: j.autoReverse?.on ? { on: j.autoReverse.on, publishOnDate: j.autoReverse.publishOnDate !== false } : null,
       lines: j.lines.map((l) => ({
         accountId: l.accountId?.toString() ?? '',
         accountName: accountNames.get(l.accountId?.toString() ?? '') ?? l.description ?? 'Unmapped',
@@ -147,6 +190,7 @@ export class JournalsService {
         debitPaise: l.debitPaise,
         creditPaise: l.creditPaise,
         projectId: l.projectId ? String(l.projectId) : null,
+        contact: l.contact?.id ? { kind: l.contact.kind, id: String(l.contact.id), name: l.contact.name ?? '' } : null,
       })),
     };
   }
