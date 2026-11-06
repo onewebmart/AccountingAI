@@ -471,12 +471,12 @@ export function SaleLinesTable({ lines, onChange, customerId, money = { kind: 'i
   );
 }
 
-/** Tick several items and their quantities, and add them as lines at once. */
-function BulkItems({ onAdd, onClose }: { onAdd: (picked: Array<{ item: ItemOption; qty: string }>) => void; onClose: () => void }) {
+/** Tick several items and their quantities, and add them as lines at once: the items sold, or on a purchase the items bought. */
+export function BulkItems({ onAdd, onClose, side = 'sale' }: { onAdd: (picked: Array<{ item: ItemOption; qty: string }>) => void; onClose: () => void; side?: 'sale' | 'purchase' }) {
   const { data, isLoading } = useItems();
   const [query, setQuery] = useState('');
   const [chosen, setChosen] = useState<Map<string, string>>(new Map());
-  const items = (data ?? []).filter((i) => i.isActive && onSide(i, 'sale'));
+  const items = (data ?? []).filter((i) => i.isActive && onSide(i, side));
   const q = query.trim().toLowerCase();
   const shown = items.filter((i) => !q || [i.name, i.code, i.hsnSac, i.description].some((v) => v?.toLowerCase().includes(q))).slice(0, 100);
   const toggle = (id: string) =>
@@ -513,7 +513,7 @@ function BulkItems({ onAdd, onClose }: { onAdd: (picked: Array<{ item: ItemOptio
                   {i.name}
                   {i.hsnSac && <span className="ml-2 font-mono text-caption text-ink-400">{i.hsnSac}</span>}
                 </label>
-                <span className="font-mono text-caption tabular-nums text-ink-500">{i.salePricePaise != null ? formatPaise(i.salePricePaise) : '—'}</span>
+                <span className="font-mono text-caption tabular-nums text-ink-500">{(side === 'sale' ? i.salePricePaise : i.purchasePricePaise) != null ? formatPaise((side === 'sale' ? i.salePricePaise : i.purchasePricePaise)!) : '—'}</span>
                 <input
                   className="w-20 rounded-md border border-line-200 px-2 py-1 text-right font-mono text-caption tabular-nums disabled:bg-surface-sink"
                   inputMode="decimal"
@@ -608,6 +608,8 @@ export function TotalsPanel({ pricing, interState, discount, adjustment, foreign
             )}
           </div>
         )}
+        {/* A discount given line by line (on a bill): what the lines' discounts come to. */}
+        {!discount && pricing.discountPaise > 0 && <Row label="Discount (on the lines)">− {formatPaise(pricing.discountPaise)}</Row>}
         {pricing.discountPaise > 0 && <Row label="Taxable value">{formatPaise(a.taxableValue)}</Row>}
         {!noTax &&
           (interState ? (

@@ -8,6 +8,8 @@
  *  ✓ A recurring invoice drafts, and takes its serial when posted
  *  ✓ A recurring invoice with lines is priced on the server (discount, adjustment), repeats weekly, every two or six months, carries its words
  *  ✓ A recurring expense drafts a draft expense once on its date, never posted; it pays only from bank or cash
+ *  ✓ An itemized weekly recurring expense for a customer drafts its lines, customer and billable on each date until it ends
+ *  ✓ An itemized recurring expense is checked as an expense is; one with no end date runs every two months on the last day
  *  ✓ The ladder is off until switched on, sends each rung once, and jumps to the latest rung
  *  ✓ A customer with no email or phone is reported, not skipped silently
  *  ✓ Chasing one invoice works with the ladder off, but not twice in a day nor once paid
@@ -260,6 +262,57 @@ describe('recurring expenses', () => {
     const run = await recurring.runDue(orgId, '2026-10-01');
     expect(run.drafted).toHaveLength(1);
     expect((await expenseModel.findById(run.drafted[0].documentId).lean().exec())?.status).toBe('draft');
+  });
+
+  it('drafts an itemized weekly expense for a customer on each date until it ends, never posted', async () => {
+    const { orgId, vendorId } = await org();
+    const id = await chart(orgId);
+    const [customer] = (await customers.create([{ orgId, name: 'Acme Ltd' }])) as Array<{ _id: Types.ObjectId }>;
+    const template = await recurring.create(orgId, ACTOR, {
+      kind: 'expense', name: 'Site visits', partyId: vendorId, frequency: 'weekly', dayOfMonth: 4, startDate: '2026-11-04', endDate: '2026-11-18', notes: 'Cab and tea',
+      expense: {
+        paidThroughAccountId: id('Cash in Hand'), customerId: String(customer._id), billable: true,
+        lines: [
+          { expenseAccountId: id('Travelling & Conveyance'), amountPaise: 80000, gstRatePct: 5 },
+          { expenseAccountId: id('Office & Stationery'), amountPaise: 20000, description: 'Tea' },
+        ],
+      },
+    });
+    expect(template.toObject()).toMatchObject({ frequency: 'weekly', nextRunDate: '2026-11-04', endDate: '2026-11-18', amountsPaise: { taxableValue: 100000, cgst: 2000, sgst: 2000, total: 104000 } });
+    expect(template.expense!.lines).toHaveLength(2);
+
+    const run = await recurring.runDue(orgId, '2026-11-30');
+    expect(run.drafted.map((d) => d.documentDate)).toEqual(['2026-11-04', '2026-11-11', '2026-11-18']);
+    const drafted = (await expenseModel.find({ orgId }).sort({ date: 1 }).lean().exec()) as unknown as DirectExpense[];
+    expect(drafted.map((d) => d.number)).toEqual(['EXP/2026-27/0001', 'EXP/2026-27/0002', 'EXP/2026-27/0003']);
+    for (const d of drafted) {
+      expect(d).toMatchObject({ status: 'draft', taxablePaise: 100000, cgstPaise: 2000, sgstPaise: 2000, totalPaise: 104000, billable: true, notes: 'Site visits — Cab and tea', journalId: null });
+      expect(d.lines.map((l) => [String(l.expenseAccountId), l.amountPaise, l.description])).toEqual([[id('Travelling & Conveyance'), 80000, null], [id('Office & Stationery'), 20000, 'Tea']]);
+      expect(String(d.customerId)).toBe(String(customer._id));
+    }
+    // Drafted, never posted.
+    expect(await journalModel.countDocuments({ orgId })).toBe(0);
+
+    const listed = (await recurring.list(orgId)).find((t) => t._id === String(template._id))!;
+    expect(listed).toMatchObject({ status: 'ended', nextRunDate: null, frequency: 'weekly', draftedCount: 3, notes: 'Cab and tea' });
+    expect(listed.expense).toMatchObject({
+      customerId: String(customer._id), customerName: 'Acme Ltd', billable: true,
+      lines: [expect.objectContaining({ expenseAccountId: id('Travelling & Conveyance'), amountPaise: 80000, gstRatePct: 5 }), expect.objectContaining({ description: 'Tea' })],
+    });
+  });
+
+  it('checks an itemized recurring expense as an expense is, and runs with no end date', async () => {
+    const { orgId } = await org();
+    const id = await chart(orgId);
+    const base = { kind: 'expense' as const, name: 'Software', frequency: 'bimonthly' as const, dayOfMonth: 31, startDate: '2026-10-01' };
+    await expect(recurring.create(orgId, ACTOR, { ...base, expense: { paidThroughAccountId: id('Bank Accounts'), lines: [{ expenseAccountId: id('Rent'), amountPaise: 100 }, { expenseAccountId: id('Bank Accounts'), amountPaise: 100 }] } })).rejects.toThrow(/Line 2: Pick an expense account/);
+    await expect(recurring.create(orgId, ACTOR, { ...base, expense: { paidThroughAccountId: id('Bank Accounts'), expenseAccountId: id('Rent'), taxablePaise: 100, billable: true } })).rejects.toThrow(/needs the customer/);
+    const ok = await recurring.create(orgId, ACTOR, { ...base, endDate: null, expense: { paidThroughAccountId: id('Bank Accounts'), expenseAccountId: id('Telephone & Internet'), taxablePaise: 99900 } });
+    expect(ok.toObject()).toMatchObject({ nextRunDate: '2026-10-31', endDate: null, status: 'active' });
+    const run = await recurring.runDue(orgId, '2027-03-01');
+    // Every two months on the last day: 31 Oct, 31 Dec, 28 Feb.
+    expect(run.drafted.map((d) => d.documentDate)).toEqual(['2026-10-31', '2026-12-31', '2027-02-28']);
+    expect((await recurring.list(orgId))[0]).toMatchObject({ status: 'active', nextRunDate: '2027-04-30' });
   });
 });
 

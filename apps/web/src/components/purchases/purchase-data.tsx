@@ -67,7 +67,32 @@ export interface BillRecord {
   status: BillStatus;
   financialYear: string | null;
   amountsPaise: Amounts;
-  lineItems: Array<{ description: string; hsnSac: string | null; qty: number; ratePaise: number; amountPaise: number; taxRatePct: number; itemId: string | null; projectId: string | null }>;
+  lineItems: Array<{
+    description: string;
+    hsnSac: string | null;
+    qty: number;
+    ratePaise: number;
+    amountPaise: number;
+    taxRatePct: number;
+    itemId: string | null;
+    projectId: string | null;
+    uqc?: string | null;
+    /** Where the line is booked; null for the item's, or Purchases. */
+    accountId?: string | null;
+    /** Its discount before tax: its own, or its share of the bill's. */
+    discountPaise?: number;
+    discountPercent?: number | null;
+    /** The customer the cost is for, and whether it is billed on to them. */
+    customerId?: string | null;
+    billable?: boolean;
+  }>;
+  /** The discount asked for, where it was given, and the adjustment already in the total. */
+  discount?: { percent: number | null; amountPaise: number } | null;
+  discountLevel?: 'transaction' | 'line' | null;
+  adjustment?: { label: string; paise: number } | null;
+  orderNumber?: string | null;
+  subject?: string | null;
+  paymentTerms?: string | null;
   journalId: string | null;
   amountPaidPaise: number;
   payments: Array<{ _id: string; journalId: string; amountPaise: number; paidOn: string }>;

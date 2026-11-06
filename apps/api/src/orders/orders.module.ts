@@ -23,6 +23,7 @@ import { GoodsReceipt, GoodsReceiptSchema, PurchaseOrder, PurchaseOrderSchema } 
 import { PurchaseModule } from '../purchase/purchase.module';
 import { PurchaseBill, PurchaseBillSchema } from '../purchase/schemas/purchase-bill.schema';
 import { Vendor, VendorSchema } from '../purchase/schemas/vendor.schema';
+import { LedgerAccount, LedgerAccountSchema } from '../gl/schemas/ledger-account.schema';
 
 /** Quotes the model drafts from a message, one job each, off the request path. */
 @Processor(QUOTE_DRAFT_QUEUE)
@@ -52,6 +53,8 @@ export class QuoteDraftProcessor extends WorkerHost {
       { name: GoodsReceipt.name, schema: GoodsReceiptSchema },
       { name: PurchaseBill.name, schema: PurchaseBillSchema },
       { name: Vendor.name, schema: VendorSchema },
+      // Read only: the account a PO line's bill books it to.
+      { name: LedgerAccount.name, schema: LedgerAccountSchema },
     ]),
     BullModule.registerQueue({ name: QUOTE_DRAFT_QUEUE }),
     GlModule,

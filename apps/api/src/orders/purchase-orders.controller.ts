@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Param, Post, Request, Res, UseGuards } from '@nestjs/common';
 import { Type } from 'class-transformer';
-import { IsArray, IsInt, IsMongoId, IsNumber, IsOptional, IsString, Length, Matches, Min, ValidateNested } from 'class-validator';
+import { IsArray, IsIn, IsInt, IsMongoId, IsNumber, IsOptional, IsString, Length, Matches, Min, ValidateNested } from 'class-validator';
 import { Response } from 'express';
 import { Permission } from '@ai-accounting/shared';
 import { RequirePermission } from '../auth/decorators';
@@ -8,6 +8,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionGuard } from '../auth/guards/permission.guard';
 import { PurchaseDocsService } from './purchase-docs.service';
 import { DocLineDto } from './orders.controller';
+import { AdjustmentDto, DiscountDto } from './doc-extras.dto';
 
 interface AuthRequest {
   user: { orgId: string; sub: string };
@@ -15,12 +16,33 @@ interface AuthRequest {
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
+/** A PO line: a document line, and the account the bill made from it books it to. */
+class PoLineDto extends DocLineDto {
+  @IsOptional() @IsMongoId() accountId?: string | null;
+}
+
+/** Our own address, or a customer's when the goods go straight to them. */
+class DeliverToDto {
+  @IsIn(['organisation', 'customer']) kind: 'organisation' | 'customer';
+  @IsOptional() @IsMongoId() customerId?: string | null;
+}
+
 class PoDto {
   @IsMongoId() vendorId: string;
+  /** Typed by a person; blank takes the next in the series. */
+  @IsOptional() @IsString() @Length(0, 16) number?: string | null;
   @IsOptional() @Matches(DATE) date?: string;
+  /** The delivery date. */
   @IsOptional() @Matches(DATE) expectedBy?: string | null;
-  @IsArray() @ValidateNested({ each: true }) @Type(() => DocLineDto) lines: DocLineDto[];
-  @IsOptional() @IsString() @Length(0, 1000) notes?: string | null;
+  @IsArray() @ValidateNested({ each: true }) @Type(() => PoLineDto) lines: PoLineDto[];
+  @IsOptional() @IsString() @Length(0, 60) referenceNumber?: string | null;
+  @IsOptional() @IsString() @Matches(/^(due_on_receipt|net_\d{1,3}|end_of_month|end_of_next_month)$/, { message: 'paymentTerms is due_on_receipt, net_<days>, end_of_month or end_of_next_month' }) paymentTerms?: string | null;
+  @IsOptional() @IsString() @Length(0, 60) shipmentPreference?: string | null;
+  @IsOptional() @ValidateNested() @Type(() => DeliverToDto) deliverTo?: DeliverToDto | null;
+  @IsOptional() @IsString() @Length(0, 2000) notes?: string | null;
+  @IsOptional() @IsString() @Length(0, 3000) termsAndConditions?: string | null;
+  @IsOptional() @ValidateNested() @Type(() => DiscountDto) discount?: DiscountDto | null;
+  @IsOptional() @ValidateNested() @Type(() => AdjustmentDto) adjustment?: AdjustmentDto | null;
 }
 
 class PoLineQtyDto {

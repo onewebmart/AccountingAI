@@ -12,6 +12,7 @@ import {
 } from '@nestjs/common';
 import { Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
   IsArray,
   IsBoolean,
   IsIn,
@@ -35,6 +36,7 @@ import { RemindersService } from './reminders.service';
 import { RecurringKind } from './schemas/recurring-template.schema';
 import { FREQUENCIES, Frequency } from './schedule';
 import { AdjustmentDto, DiscountDto } from '../orders/doc-extras.dto';
+import { ExpenseLineDto } from '../direct-expenses/direct-expenses.controller';
 
 interface AuthRequest {
   user: { orgId: string; sub: string; role: string };
@@ -61,6 +63,11 @@ class LineDto {
   @IsOptional() @Min(0) @Max(100) taxRatePct?: number;
   @IsOptional() @IsMongoId() itemId?: string | null;
   @IsOptional() @IsString() @Length(0, 3) uqc?: string | null;
+  /** Bills: the account the line is booked to, its own discount, and the customer it is for. */
+  @IsOptional() @IsMongoId() accountId?: string | null;
+  @IsOptional() @ValidateNested() @Type(() => DiscountDto) discount?: DiscountDto | null;
+  @IsOptional() @IsMongoId() customerId?: string | null;
+  @IsOptional() @IsBoolean() billable?: boolean;
 }
 
 class CreateRecurringDto {
@@ -82,6 +89,8 @@ class CreateRecurringDto {
   @IsOptional() @IsString() @Length(0, 3000) termsAndConditions?: string | null;
   @IsOptional() @ValidateNested() @Type(() => DiscountDto) discount?: DiscountDto | null;
   @IsOptional() @ValidateNested() @Type(() => AdjustmentDto) adjustment?: AdjustmentDto | null;
+  /** Bills: the terms each bill is due by. */
+  @IsOptional() @IsString() @Matches(/^(due_on_receipt|net_\d{1,3}|end_of_month|end_of_next_month)$/, { message: 'paymentTerms is due_on_receipt, net_<days>, end_of_month or end_of_next_month' }) paymentTerms?: string | null;
 }
 
 class ReminderSettingsDto {
@@ -115,15 +124,19 @@ class CreateRecurringExpenseDto {
   @IsInt() @Min(1) @Max(31) dayOfMonth: number;
   @Matches(DATE, { message: 'startDate must be a date like 2026-10-01' }) startDate: string;
   @IsOptional() @Matches(DATE, { message: 'endDate must be a date like 2027-03-31' }) endDate?: string | null;
-  @IsMongoId({ message: 'Pick the expense account.' }) expenseAccountId: string;
+  /** One account and amount; or lines, for an itemized expense (checked by the expenses service). */
+  @IsOptional() @IsMongoId({ message: 'Pick the expense account.' }) expenseAccountId?: string | null;
   @IsMongoId({ message: 'Pick the bank or cash account it is paid from.' }) paidThroughAccountId: string;
-  @IsInt({ message: 'taxablePaise must be whole paise' }) @Min(1) taxablePaise: number;
+  @IsOptional() @IsInt({ message: 'taxablePaise must be whole paise' }) @Min(1) taxablePaise?: number | null;
   @IsOptional() @IsIn([0, 3, 5, 12, 18, 28, 40]) gstRatePct?: number;
+  @IsOptional() @IsArray() @ArrayMaxSize(50) @ValidateNested({ each: true }) @Type(() => ExpenseLineDto) lines?: ExpenseLineDto[] | null;
   @IsOptional() @IsBoolean() interState?: boolean;
   @IsOptional() @IsBoolean() claimable?: boolean;
   @IsOptional() @IsString() @Length(0, 15) vendorGstin?: string | null;
   @IsOptional() @IsString() @Length(0, 120) reference?: string | null;
   @IsOptional() @IsMongoId() projectId?: string | null;
+  @IsOptional() @IsMongoId() customerId?: string | null;
+  @IsOptional() @IsBoolean() billable?: boolean;
   @IsOptional() @IsString() @Length(0, 500) notes?: string | null;
 }
 
@@ -173,11 +186,11 @@ export class AutomationController {
   @Post('recurring/expenses')
   @RequirePermission(Permission.MANAGE_PURCHASE)
   createExpense(@Request() req: AuthRequest, @Body() body: CreateRecurringExpenseDto) {
-    const { expenseAccountId, paidThroughAccountId, taxablePaise, gstRatePct, interState, claimable, vendorGstin, reference, projectId, ...rest } = body;
+    const { expenseAccountId, paidThroughAccountId, taxablePaise, gstRatePct, lines, interState, claimable, vendorGstin, reference, projectId, customerId, billable, ...rest } = body;
     return this.recurring.create(req.user.orgId, req.user.sub, {
       ...rest,
       kind: 'expense',
-      expense: { expenseAccountId, paidThroughAccountId, taxablePaise, gstRatePct, interState, claimable, vendorGstin, reference, projectId },
+      expense: { expenseAccountId, paidThroughAccountId, taxablePaise, gstRatePct, lines, interState, claimable, vendorGstin, reference, projectId, customerId, billable },
     });
   }
 

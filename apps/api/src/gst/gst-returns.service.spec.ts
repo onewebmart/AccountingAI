@@ -209,6 +209,24 @@ describe('GSTR-3B', () => {
     expect(r.itcOther).toMatchObject({ iamt: 5000, camt: 17991 + 9000, samt: 17991 + 9000 });
   });
 
+  it("takes an itemized expense's credit from its totals, the sum of its lines", async () => {
+    const { orgId } = await seedOrg();
+    const model = moduleRef.get<Model<unknown>>(getModelToken(DirectExpense.name));
+    const account = () => new Types.ObjectId();
+    const base = { orgId, date: '2026-09-03', vendorGstin: '27AAACS1234A1Z1', expenseAccountId: account(), paidThroughAccountId: account(), claimable: true, status: 'posted', createdBy: 'tester' };
+    // Saved through the model: the lines must add up to the totals, or it is refused.
+    await expect(model.create({ ...base, number: 'EXP/2026-27/0009', taxablePaise: 15001, cgstPaise: 1025, sgstPaise: 1025, igstPaise: 0, totalPaise: 17051, lines: [{ expenseAccountId: account(), amountPaise: 10000, gstRatePct: 18, cgstPaise: 900, sgstPaise: 900, igstPaise: 0 }] })).rejects.toThrow(/lines must add up/);
+    await model.create({
+      ...base, number: 'EXP/2026-27/0010', taxablePaise: 15001, cgstPaise: 1025, sgstPaise: 1025, igstPaise: 0, totalPaise: 17051,
+      lines: [
+        { expenseAccountId: account(), amountPaise: 10000, gstRatePct: 18, cgstPaise: 900, sgstPaise: 900, igstPaise: 0 },
+        { expenseAccountId: account(), amountPaise: 5001, gstRatePct: 5, cgstPaise: 125, sgstPaise: 125, igstPaise: 0 },
+      ],
+    });
+    const r = await returns.gstr3b(orgId, '2026-09');
+    expect(r.itcOther).toMatchObject({ iamt: 0, camt: 1025, samt: 1025 });
+  });
+
   it('claims only what the 2B carries, and reverses credit on bills unpaid after 180 days', async () => {
     const { orgId, bill } = await seedOrg();
     const gstin = '27AAACS1234A1Z1';

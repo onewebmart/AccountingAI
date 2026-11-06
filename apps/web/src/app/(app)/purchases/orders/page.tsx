@@ -19,7 +19,7 @@ export default function PurchaseOrdersPage() {
   const [filter, setFilter] = useState('open');
   const all = pos.data ?? [];
   const q = search.trim().toLowerCase();
-  const rows = all.filter((p) => filter === 'all' || p.status === filter).filter((p) => !q || [p.number, p.vendorName].some((s) => s.toLowerCase().includes(q)));
+  const rows = all.filter((p) => filter === 'all' || p.status === filter).filter((p) => !q || [p.number, p.vendorName, p.referenceNumber ?? ''].some((s) => s.toLowerCase().includes(q)));
 
   return (
     <div>
@@ -32,7 +32,7 @@ export default function PurchaseOrdersPage() {
       <ListToolbar
         search={search}
         onSearch={setSearch}
-        placeholder="Search PO number or vendor"
+        placeholder="Search PO number, reference or vendor"
         filters={{ value: filter, onChange: setFilter, options: [['open', 'Open'], ['closed', 'Closed'], ['cancelled', 'Cancelled'], ['all', 'All']] }}
       />
       {pos.data && all.length === 0 ? (
@@ -50,7 +50,7 @@ export default function PurchaseOrdersPage() {
                 <th className={th}>PO</th>
                 <th className={th}>Vendor</th>
                 <th className={th}>Date</th>
-                <th className={th}>Needed by</th>
+                <th className={th}>Delivery date</th>
                 <th className={th}>Received</th>
                 <th className={th}>Status</th>
                 <th className={`${th} text-right`}>Total</th>

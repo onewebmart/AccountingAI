@@ -13,6 +13,7 @@ import {
 import { todayIst } from './schedule';
 import { MonthEndSweepService } from '../month-end/month-end-sweep.service';
 import { ReportSchedulesService } from '../reports/report-schedules.service';
+import { ScheduledReversalsService } from '../journals/scheduled-reversals.service';
 
 /**
  * Two jobs on one queue:
@@ -32,6 +33,8 @@ export class AutomationProcessor extends WorkerHost {
     private readonly reminders: RemindersService,
     private readonly monthEnd: MonthEndSweepService,
     @Optional() private readonly reportSchedules?: ReportSchedulesService,
+    // Journals with a reverse journal date reverse themselves on it.
+    @Optional() private readonly journalReversals?: ScheduledReversalsService,
   ) {
     super();
   }
@@ -46,6 +49,11 @@ export class AutomationProcessor extends WorkerHost {
 
     const today = (job.data as { today?: string })?.today ?? todayIst();
     await this.monthEnd.sweep(today);
+    try {
+      await this.journalReversals?.runDue(today);
+    } catch (err) {
+      this.logger.error(`Scheduled journal reversals failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
     try {
       const reports = await this.reportSchedules?.runDue(today);
       if (reports && (reports.sent || reports.failed)) this.logger.log(`Report emails: ${reports.sent} sent, ${reports.failed} failed`);

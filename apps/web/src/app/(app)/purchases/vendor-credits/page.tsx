@@ -24,6 +24,10 @@ interface DebitNoteRow {
   amountsPaise: Amounts;
   totalPaise: number;
   journalId: string;
+  /** By value, or typed item by item; the vendor's own credit note number. */
+  kind?: 'value' | 'itemised';
+  vendorCreditNumber?: string | null;
+  lines?: Array<{ description: string }>;
 }
 
 /** Debit notes raised on bills: goods returned, short supply, a rate agreed lower. */
@@ -37,7 +41,7 @@ export default function VendorCreditsPage() {
   const q = search.trim().toLowerCase();
   const rows = all
     .filter((n) => filter === 'all' || n.status === filter)
-    .filter((n) => !q || [n.noteNumber, n.vendorName, n.billNumber, n.reason].some((s) => s?.toLowerCase().includes(q)));
+    .filter((n) => !q || [n.noteNumber, n.vendorName, n.billNumber, n.reason, n.vendorCreditNumber].some((s) => s?.toLowerCase().includes(q)));
 
   return (
     <div>
@@ -47,14 +51,14 @@ export default function VendorCreditsPage() {
         subtitle="Debit notes on bills. What a note takes off a paid bill becomes the vendor's credit, owed back to you."
         actions={
           <Button asChild>
-            <Link href="/purchases/vendor-credits/new"><Plus size={14} /> New debit note</Link>
+            <Link href="/purchases/vendor-credits/new"><Plus size={14} /> New vendor credit</Link>
           </Button>
         }
       />
       <ListToolbar
         search={search}
         onSearch={setSearch}
-        placeholder="Search note, vendor, bill or reason"
+        placeholder="Search note, their credit note, vendor, bill or reason"
         filters={{ value: filter, onChange: setFilter, options: [['all', 'All'], ['posted', 'Posted'], ['reversed', 'Reversed']] }}
       />
       {notes.data && all.length === 0 ? (
@@ -62,7 +66,7 @@ export default function VendorCreditsPage() {
           guide="vendorCredits"
           title="No debit notes yet"
           body="Raise one from a posted bill when goods come back or the bill was too high."
-          action={<Button asChild><Link href="/purchases/vendor-credits/new">New debit note</Link></Button>}
+          action={<Button asChild><Link href="/purchases/vendor-credits/new">New vendor credit</Link></Button>}
         />
       ) : (
         <TableCard>
@@ -88,13 +92,19 @@ export default function VendorCreditsPage() {
               ) : (
                 rows.map((n) => (
                   <tr key={n._id} className={rowLink} onClick={() => router.push(`/purchases/bills/${n.billId}`)}>
-                    <td className={`${td} font-mono text-caption`}>{n.noteNumber}</td>
+                    <td className={`${td} font-mono text-caption`}>
+                      {n.noteNumber}
+                      {n.vendorCreditNumber && <span className="block text-ink-400">their {n.vendorCreditNumber}</span>}
+                    </td>
                     <td className={`${td} text-caption`}>{shortDate(n.noteDate)}</td>
                     <td className={td}>{n.vendorName}</td>
                     <td className={`${td} font-mono text-caption`}>
                       <Link href={`/purchases/bills/${n.billId}`} onClick={(e) => e.stopPropagation()} className="hover:underline">{n.billNumber ?? 'No number'}</Link>
                     </td>
-                    <td className={`${td} text-caption text-ink-600`}>{n.reason}</td>
+                    <td className={`${td} text-caption text-ink-600`}>
+                      {n.reason}
+                      {n.kind === 'itemised' && (n.lines?.length ?? 0) > 0 && <span className="block text-ink-400">{n.lines!.length} line{n.lines!.length === 1 ? '' : 's'}</span>}
+                    </td>
                     <td className={td}>{n.status === 'posted' ? <StatusChip tone="success">Posted</StatusChip> : <StatusChip tone="neutral">Reversed</StatusChip>}</td>
                     <td className={tdMoney}>{formatPaise(n.totalPaise)}</td>
                   </tr>

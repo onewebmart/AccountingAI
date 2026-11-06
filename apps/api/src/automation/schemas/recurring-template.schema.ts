@@ -33,20 +33,42 @@ class TemplateLine {
   @Prop({ type: String, default: null }) uqc: string | null;
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'LedgerAccount', default: null }) accountId: Types.ObjectId | null;
   @Prop({ type: Number, default: 0, min: 0, validate: { validator: Number.isInteger, message: 'must be whole paise' } }) discountPaise: number;
+  /** Bills: the percent asked for on this line ("at line item level"); null for an amount or a share of the bill's. */
+  @Prop({ type: Number, default: null }) discountPercent: number | null;
+  /** Bills: the customer this cost is for, and whether it is billed on to them. */
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Customer', default: null }) customerId: Types.ObjectId | null;
+  @Prop({ type: Boolean, default: false }) billable: boolean;
 }
+
+/** Expenses only: one account of an itemized recurring expense, before tax. */
+@Schema({ _id: false })
+export class TemplateExpenseLine {
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'LedgerAccount', required: true }) expenseAccountId: Types.ObjectId;
+  @Prop(paise) amountPaise: number;
+  @Prop({ type: Number, default: 0 }) gstRatePct: number;
+  @Prop({ type: String, default: null }) description: string | null;
+}
+const TemplateExpenseLineSchema = SchemaFactory.createForClass(TemplateExpenseLine);
 
 /** Expenses only: what each drafted expense is booked to and paid from. */
 @Schema({ _id: false })
 export class TemplateExpense {
+  /** The first line's account when itemized. */
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'LedgerAccount', required: true }) expenseAccountId: Types.ObjectId;
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'LedgerAccount', required: true }) paidThroughAccountId: Types.ObjectId;
+  /** Before tax: the lines' sum when itemized. */
   @Prop(paise) taxablePaise: number;
   @Prop({ type: Number, default: 0 }) gstRatePct: number;
+  /** Itemized: each drafted expense is split across these. Empty: one account, the fields above. */
+  @Prop({ type: [TemplateExpenseLineSchema], default: [] }) lines: TemplateExpenseLine[];
   @Prop({ type: Boolean, default: false }) interState: boolean;
   @Prop({ type: Boolean, default: false }) claimable: boolean;
   @Prop({ type: String, default: null }) vendorGstin: string | null;
   @Prop({ type: String, default: null }) reference: string | null;
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Project', default: null }) projectId: Types.ObjectId | null;
+  /** The customer each one is spent for, and whether it is billed on to them. */
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Customer', default: null }) customerId: Types.ObjectId | null;
+  @Prop({ type: Boolean, default: false }) billable: boolean;
 }
 
 @Schema({ _id: false })
@@ -105,6 +127,15 @@ export class RecurringTemplate {
   @Prop({ type: String, default: null }) termsAndConditions: string | null;
   @Prop({ type: Object, default: null }) discount: { percent: number | null; amountPaise: number } | null;
   @Prop({ type: Object, default: null }) adjustment: { label: string; paise: number } | null;
+
+  /**
+   * Bills set up from lines: each bill is drafted as a typed bill is, priced
+   * on the server on its date. referenceNumber is the order number; the
+   * discount is on the whole bill or line by line; the terms give the due date.
+   */
+  @Prop({ type: Boolean, default: false }) billFromLines: boolean;
+  @Prop({ type: String, enum: ['transaction', 'line', null], default: null }) discountLevel: 'transaction' | 'line' | null;
+  @Prop({ type: String, default: null }) paymentTerms: string | null;
 
   @Prop({ type: String, enum: ['active', 'paused', 'ended'], default: 'active', index: true })
   status: RecurringStatus;

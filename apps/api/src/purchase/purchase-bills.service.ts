@@ -86,8 +86,21 @@ export interface CreateBillInput {
     uqc?: string | null;
     accountId?: Types.ObjectId | null;
     projectId?: Types.ObjectId | null;
+    /** The line's discount before tax: its own, or its share of the bill's. */
+    discountPaise?: number;
+    discountPercent?: number | null;
+    /** The customer the cost is for, and whether it is billed on to them. */
+    customerId?: Types.ObjectId | null;
+    billable?: boolean;
   }>;
   notes?: string | null;
+  /** Priced from the lines: the discount asked for, and the adjustment already in amountsPaise.total. */
+  discount?: { percent: number | null; amountPaise: number } | null;
+  discountLevel?: 'transaction' | 'line' | null;
+  adjustment?: { label: string; paise: number } | null;
+  orderNumber?: string | null;
+  subject?: string | null;
+  paymentTerms?: string | null;
   /** A bill in a foreign currency: its own amounts beside the INR ones. */
   foreign?: PurchaseBill['foreign'];
   /** GST on this purchase is ours to pay (reverse charge). */
@@ -97,7 +110,7 @@ export interface CreateBillInput {
   tdsRateBps?: number;
   /** Set when a recurring template drafts this bill. */
   recurringTemplateId?: string | null;
-  source?: { kind: 'purchase_order'; id: string; lines: Array<{ poLine: number; qty: number }> } | null;
+  source?: { kind: 'purchase_order'; id: string; lines: Array<{ poLine: number; qty: number; discountPaise?: number }> } | null;
 }
 
 function getFY(dateStr: string): string {
@@ -134,6 +147,7 @@ function billTds(
 }
 
 import { splitByAccount } from '../items/line-accounts';
+import { ADJUSTMENT_LIMIT_PAISE } from '../orders/doc-lines';
 import { ApprovalsService } from '../approvals/approvals.service';
 const rupeesOf = (p: number) => `₹${(p / 100).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
 @Injectable()
@@ -174,6 +188,12 @@ export class PurchaseBillsService {
       amountsPaise: input.amountsPaise,
       lineItems: input.lineItems ?? [],
       notes: input.notes ?? null,
+      discount: input.discount && input.discount.amountPaise > 0 ? input.discount : null,
+      discountLevel: input.discount && input.discount.amountPaise > 0 ? input.discountLevel ?? 'transaction' : null,
+      adjustment: input.adjustment && input.adjustment.paise !== 0 ? input.adjustment : null,
+      orderNumber: input.orderNumber ?? null,
+      subject: input.subject ?? null,
+      paymentTerms: input.paymentTerms ?? null,
       createdBy: input.actorId && Types.ObjectId.isValid(input.actorId) ? input.actorId : null,
       isReverseCharge: input.isReverseCharge ?? false,
       source: input.source ?? null,
@@ -193,6 +213,8 @@ export class PurchaseBillsService {
         totalPaise: bill.amountsPaise.total,
         tdsPaise: bill.tds?.amountPaise ?? 0,
         isReverseCharge: bill.isReverseCharge,
+        ...(bill.discount ? { discountPaise: bill.discount.amountPaise, discountLevel: bill.discountLevel } : {}),
+        ...(bill.adjustment ? { adjustmentPaise: bill.adjustment.paise } : {}),
       },
     });
     this.logger.log(`Created PurchaseBill ${bill._id} (draft) for vendor ${input.vendorId}`);
@@ -267,11 +289,12 @@ export class PurchaseBillsService {
    * Post a draft bill to the ledger via PostingService (Invariant 4).
    *
    * Journal entries:
-   *   Dr  Purchase / Expense Account   (taxableValue)
+   *   Dr  Purchase / Expense Account   (taxableValue: each line after its discount)
    *   Dr  GST Input Tax Credit         (cgst + sgst + igst + cess)
-   *   Cr  Accounts Payable             (what the vendor is owed, less TDS)
+   *   Cr  Accounts Payable             (what the vendor is owed, adjustment included, less TDS)
    *   Cr  TDS Payable                  (TDS withheld, if any)
    *   Cr  GST Payable (Reverse Charge) (the tax, under reverse charge)
+   *   Dr/Cr Round Off                  (the adjustment: debit when it adds, credit when it takes off)
    */
   async post(id: string, orgId: string, actorId: string, actorRole = ''): Promise<PurchaseBillDocument> {
     const bill = await this.findById(id, orgId);
@@ -285,8 +308,13 @@ export class PurchaseBillsService {
       });
     }
 
-    const { taxableValue, cgst, sgst, igst, cess } = bill.amountsPaise;
+    const { taxableValue, cgst, sgst, igst, cess, total } = bill.amountsPaise;
     const fy = getFY(bill.billDate);
+    // Whatever the total is beyond value plus tax: the adjustment, at most ₹99.99 either way, posted to Round Off.
+    const adjustment = total - (taxableValue + cgst + sgst + igst + cess);
+    if (Math.abs(adjustment) > ADJUSTMENT_LIMIT_PAISE) {
+      throw new BadRequestException(`The total differs from the value plus tax by ${rupees(adjustment)}; an adjustment is at most ${rupees(ADJUSTMENT_LIMIT_PAISE)}. Correct the bill.`);
+    }
 
     // Real accounts from this org's chart, resolved by their stable system key.
     // These lines used to carry `new Types.ObjectId()` — a fresh, random id per
@@ -303,6 +331,7 @@ export class PurchaseBillsService {
       SystemAccountKey.GST_INPUT_CESS,
       SystemAccountKey.TDS_PAYABLE,
       SystemAccountKey.RCM_GST_PAYABLE,
+      SystemAccountKey.ROUND_OFF,
     ]);
     const expense = accounts.get(SystemAccountKey.PURCHASE_EXPENSE)!;
     const payable = accounts.get(SystemAccountKey.ACCOUNTS_PAYABLE)!;
@@ -312,8 +341,13 @@ export class PurchaseBillsService {
     const inputCess = accounts.get(SystemAccountKey.GST_INPUT_CESS)!;
 
     // Lines whose item has its own expense or asset account are debited
-    // there; the rest go to Purchases, in proportion, to the paise.
-    const expenseParts = splitByAccount(taxableValue, bill.lineItems, expense._id.toString());
+    // there; the rest go to Purchases, in proportion to each line's value
+    // after its discount, to the paise.
+    const expenseParts = splitByAccount(
+      taxableValue,
+      bill.lineItems.map((l) => ({ amountPaise: l.amountPaise - (l.discountPaise ?? 0), accountId: l.accountId, projectId: l.projectId })),
+      expense._id.toString(),
+    );
     const names = await this.accountsService.namesOf(orgId, expenseParts.map((p) => p.accountId));
     const lines: Array<{ accountId: string; description: string; debitPaise: number; creditPaise: number; projectId?: string | null }> = expenseParts.map((p) => ({
       accountId: p.accountId,
@@ -356,6 +390,18 @@ export class PurchaseBillsService {
     if (bill.isReverseCharge && taxPaise > 0) {
       const rcm = accounts.get(SystemAccountKey.RCM_GST_PAYABLE)!;
       lines.push({ accountId: rcm._id.toString(), description: rcm.name, debitPaise: 0, creditPaise: taxPaise });
+    }
+    // The adjustment: the vendor is owed it, so Round Off takes the other
+    // side: a debit when it adds to the bill, a credit when it takes off.
+    if (adjustment !== 0) {
+      const roundOff = accounts.get(SystemAccountKey.ROUND_OFF)!;
+      const label = bill.adjustment?.label?.trim();
+      lines.push({
+        accountId: roundOff._id.toString(),
+        description: label && label.toLowerCase() !== roundOff.name.toLowerCase() ? `${roundOff.name} — ${label}` : roundOff.name,
+        debitPaise: adjustment > 0 ? adjustment : 0,
+        creditPaise: adjustment < 0 ? -adjustment : 0,
+      });
     }
 
     // The voucher names the vendor, so the day book and ledgers read as words, not ids.

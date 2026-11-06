@@ -5,6 +5,8 @@
  *  ✓ Goods are received against a PO, never beyond what is still to come
  *  ✓ A bill drafted from the PO bills what was received and not billed; the PO closes when all is billed
  *  ✓ A typed bill linked to its PO is matched line by line; a goods note behind a bill cannot be cancelled
+ *  ✓ A PO keeps its reference, terms, shipment, delivery address, typed number and line accounts; its discount carries onto its bills to the paisa
+ *  ✓ A bill for the whole PO at once carries its adjustment, and posts it to Round Off
  */
 import 'reflect-metadata';
 import mongoose, { Model, Types } from 'mongoose';
@@ -36,6 +38,8 @@ import { PurchaseBill, PurchaseBillSchema } from '../purchase/schemas/purchase-b
 import { Vendor, VendorSchema } from '../purchase/schemas/vendor.schema';
 import { SalesInvoice, SalesInvoiceSchema } from '../sales/schemas/sales-invoice.schema';
 import { OrgSettings, OrgSettingsSchema } from '../org-settings/schemas/org-settings.schema';
+import { Customer, CustomerSchema } from '../sales/schemas/customer.schema';
+import { Journal as JournalClass } from '../gl/schemas/journal.schema';
 
 describe('the 3-way match', () => {
   const po = [
@@ -73,6 +77,9 @@ let docs: PurchaseDocsService;
 let bills: PurchaseBillsService;
 let vendors: Model<{ _id: Types.ObjectId }>;
 let settings: Model<unknown>;
+let customers: Model<{ _id: Types.ObjectId }>;
+let accounts: AccountsService;
+let journals: Model<JournalClass>;
 
 beforeAll(async () => {
   moduleRef = await Test.createTestingModule({
@@ -93,6 +100,7 @@ beforeAll(async () => {
         { name: Vendor.name, schema: VendorSchema },
         { name: SalesInvoice.name, schema: SalesInvoiceSchema },
         { name: OrgSettings.name, schema: OrgSettingsSchema },
+        { name: Customer.name, schema: CustomerSchema },
       ]),
     ],
     providers: [
@@ -106,6 +114,10 @@ beforeAll(async () => {
   bills = moduleRef.get(PurchaseBillsService);
   vendors = moduleRef.get(getModelToken(Vendor.name));
   settings = moduleRef.get(getModelToken(OrgSettings.name));
+  customers = moduleRef.get(getModelToken(Customer.name));
+  accounts = moduleRef.get(AccountsService);
+  journals = moduleRef.get(getModelToken(Journal.name));
+  await journals.init();
 }, 60_000);
 
 afterAll(async () => {
@@ -168,5 +180,76 @@ describe('purchase orders', () => {
     ]);
     await expect(docs.cancelGrn(orgId, ACTOR, String(grn._id))).rejects.toThrow(/billed/);
     await expect(docs.linkBill(orgId, ACTOR, String(po._id), String(typed._id))).rejects.toThrow(/already matched/);
+  });
+});
+
+describe('a purchase order laid out in full', () => {
+  it('keeps its words, number, delivery address and line accounts; its discount carries onto its bills to the paisa', async () => {
+    const { orgId, vendorId } = await org();
+    await vendors.updateOne({ _id: vendorId }, { $set: { paymentTerms: 'net_45' } }).exec();
+    await accounts.seedDefaults(orgId);
+    const all = await accounts.list(orgId);
+    const advertising = String(all.find((a) => a.name === 'Advertising & Marketing')!._id);
+    const [mehta] = await customers.create([
+      { orgId, name: 'Mehta Interiors', shippingAddress: { attention: 'Site office', street1: '12 Carter Road', street2: null, city: 'Mumbai', stateCode: '27', pincode: '400050', country: 'India', phone: null, fax: null } },
+    ]);
+
+    const po = await docs.createPo(orgId, ACTOR, {
+      vendorId, number: 'PO-00001', date: '2026-11-02', expectedBy: '2026-11-12', referenceNumber: ' QT-55 ', shipmentPreference: 'Road',
+      deliverTo: { kind: 'customer', customerId: String(mehta._id) }, notes: 'Call before delivery', termsAndConditions: 'Deliver before 10 am.',
+      lines: [{ ...lines[0], accountId: advertising }, lines[1]], discount: { percent: 10 }, adjustment: { label: 'Round off', paise: 40 },
+    });
+    // 42,000 less 10% = 4,200, spread 3,000 and 1,200: 27,000 at 12% and 10,800 at 18%.
+    expect(po.toObject()).toMatchObject({
+      number: 'PO-00001', referenceNumber: 'QT-55', paymentTerms: 'net_45', shipmentPreference: 'Road', expectedBy: '2026-11-12',
+      deliverTo: { kind: 'customer', name: 'Mehta Interiors', address: 'Site office\n12 Carter Road\nMumbai 400050\nMaharashtra' },
+      amountsPaise: { taxableValue: 3780000, cgst: 259200, sgst: 259200, total: 4298440 },
+      discount: { percent: 10, amountPaise: 420000 }, adjustment: { label: 'Round off', paise: 40 }, termsAndConditions: 'Deliver before 10 am.',
+    });
+    expect(po.lines.map((l) => [l.discountPaise, l.accountId ? String(l.accountId) : null])).toEqual([[300000, advertising], [120000, null]]);
+
+    // The series goes on as before, and skips a number someone typed; a typed number is used once.
+    expect((await docs.createPo(orgId, ACTOR, { vendorId, date: '2026-11-02', lines })).number).toBe('PO/2026-27/0001');
+    await docs.createPo(orgId, ACTOR, { vendorId, number: 'PO/2026-27/0002', date: '2026-11-02', lines });
+    expect((await docs.createPo(orgId, ACTOR, { vendorId, date: '2026-11-02', lines })).number).toBe('PO/2026-27/0003');
+    await expect(docs.createPo(orgId, ACTOR, { vendorId, number: 'PO-00001', lines })).rejects.toThrow(/PO-00001 is already used/);
+    await expect(docs.createPo(orgId, ACTOR, { vendorId, lines: [{ ...lines[0], accountId: String(all.find((a) => a.name === 'Accounts Payable')!._id) }] })).rejects.toThrow(/Line 1: a purchase cannot be booked to/);
+    await expect(docs.createPo(orgId, ACTOR, { vendorId, deliverTo: { kind: 'customer', customerId: new Types.ObjectId().toString() }, lines })).rejects.toThrow(/Customer not found/);
+
+    // Part of it in and billed: each line takes its share of the discount; the bill that completes a line takes what is left.
+    await docs.receive(orgId, ACTOR, String(po._id), { lines: [{ poLine: 0, qty: 100 }, { poLine: 1, qty: 4 }] });
+    const first = await docs.billFromPo(orgId, ACTOR, String(po._id), { billNumber: 'SG/801', billDate: '2026-11-10' });
+    expect(first.toObject()).toMatchObject({
+      orderNumber: 'PO-00001', paymentTerms: 'net_45', dueDate: '2026-12-25', adjustment: null,
+      discount: { percent: 10, amountPaise: 250000 + 120000 }, discountLevel: 'transaction',
+      amountsPaise: { taxableValue: 2250000 + 1080000, cgst: 135000 + 97200, sgst: 135000 + 97200, total: 3330000 + 464400 },
+    });
+    expect(first.lineItems.map((l) => [l.discountPaise, l.accountId ? String(l.accountId) : null])).toEqual([[250000, advertising], [120000, null]]);
+    expect(await docs.match(orgId, String(first._id))).toMatchObject({ linked: true, status: 'matched' });
+
+    await docs.receive(orgId, ACTOR, String(po._id), { lines: [{ poLine: 0, qty: 20 }] });
+    const last = await docs.billFromPo(orgId, ACTOR, String(po._id), { billNumber: 'SG/802', billDate: '2026-11-12' });
+    expect(last.lineItems.map((l) => l.discountPaise)).toEqual([300000 - 250000]);
+    expect(first.discount!.amountPaise + last.discount!.amountPaise).toBe(po.discount!.amountPaise);
+
+    // Posted, the line is booked to the PO's account at its discounted value.
+    const posted = await bills.post(String(first._id), orgId, ACTOR);
+    const journal = (await journals.findById(posted.journalId).lean().exec())!;
+    expect(journal.lines.filter((l) => String(l.accountId) === advertising).reduce((s, l) => s + l.debitPaise, 0)).toBe(2250000);
+  });
+
+  it('carries the adjustment onto a bill for the whole PO, posted to Round Off; delivers to our address by default', async () => {
+    const { orgId, vendorId } = await org();
+    await settings.updateOne({ orgId }, { $set: { address: 'Plot 4, MIDC Bhosari, Pune 411026' } }).exec();
+    await accounts.seedDefaults(orgId);
+    const po = await docs.createPo(orgId, ACTOR, { vendorId, lines, adjustment: { label: 'Round off', paise: -40 } });
+    expect(po.toObject()).toMatchObject({ deliverTo: { kind: 'organisation', name: 'Kumar Stationers', address: 'Plot 4, MIDC Bhosari, Pune 411026' }, paymentTerms: null, amountsPaise: { total: 4200000 + 576000 - 40 } });
+
+    await docs.receive(orgId, ACTOR, String(po._id), { lines: [{ poLine: 0, qty: 120 }, { poLine: 1, qty: 4 }] });
+    const bill = await docs.billFromPo(orgId, ACTOR, String(po._id), { billNumber: 'SG/900' });
+    expect(bill.toObject()).toMatchObject({ adjustment: { label: 'Round off', paise: -40 }, discount: null, amountsPaise: po.toObject().amountsPaise });
+    const journal = (await journals.findById((await bills.post(String(bill._id), orgId, ACTOR)).journalId).lean().exec())!;
+    expect(journal.lines.reduce((s, l) => s + l.debitPaise, 0)).toBe(journal.lines.reduce((s, l) => s + l.creditPaise, 0));
+    expect(journal.lines.find((l) => l.description === 'Round Off — Round off' || l.description === 'Round Off')).toMatchObject({ debitPaise: 0, creditPaise: 40 });
   });
 });

@@ -15,9 +15,11 @@ import { api, ApiError } from '@/lib/api';
 import { formatPaise } from '@/lib/gst';
 import { parseRupees } from '@/lib/money';
 import { PoMatch } from '@/components/purchases/po-match';
-import { AmountsSummary } from '@/components/purchases/bill-lines';
+import { DocTotalsSummary } from '@/components/purchases/purchase-doc-parts';
+import { termsLabel } from '@/components/parties/party-profile';
+import { useCustomers } from '@/components/sales/sales-data';
 import {
-  BillStatusChip, HistoryLink, Line, Voucher, dueInfo, errorText, formatMinor, parseMinor, rupeesText, shortDate, todayIso, useBills, useLedgerRefresh,
+  BillStatusChip, HistoryLink, Line, Voucher, dueInfo, errorText, formatMinor, parseMinor, rupeesText, shortDate, todayIso, useAccounts, useBills, useLedgerRefresh,
   type BillRecord, type VendorRecord,
 } from '@/components/purchases/purchase-data';
 
@@ -105,6 +107,8 @@ export default function BillPage() {
   });
   const row = (useBills().data ?? []).find((b) => b._id === id);
   const projects = useProjects();
+  const chart = useAccounts();
+  const customers = useCustomers();
   const [held, setHeld] = useState<string | null>(null);
 
   const post = useMutation({
@@ -132,6 +136,10 @@ export default function BillPage() {
   const due = b.status === 'posted' ? dueInfo(b.dueDate) : null;
   const projectName = (pid: string | null) => (pid ? projects.data?.find((p) => p.id === String(pid))?.name ?? 'Project' : null);
   const hasProjects = b.lineItems.some((l) => l.projectId);
+  const hasDiscount = b.lineItems.some((l) => (l.discountPaise ?? 0) > 0);
+  const hasCustomers = b.lineItems.some((l) => l.customerId);
+  const accountName = (accountId: string | null | undefined) => (accountId ? chart.data?.find((x) => x._id === String(accountId))?.name ?? 'Account' : null);
+  const customerName = (customerId: string | null | undefined) => (customerId ? customers.data?.find((c) => c._id === String(customerId))?.name ?? 'Customer' : null);
 
   return (
     <div className="space-y-5">
@@ -150,7 +158,7 @@ export default function BillPage() {
             <HistoryLink entityType="PurchaseBill" entityId={b._id} />
             {(b.status === 'posted' || b.status === 'paid') && (
               <Button variant="secondary" asChild>
-                <Link href={`/purchases/vendor-credits/new?billId=${b._id}`}>Debit note</Link>
+                <Link href={`/purchases/vendor-credits/new?billId=${b._id}`}>Vendor credit</Link>
               </Button>
             )}
             {b.status === 'posted' && (
@@ -183,26 +191,42 @@ export default function BillPage() {
               <tr>
                 <th className={th}>Description</th>
                 <th className={th}>HSN/SAC</th>
+                <th className={th}>Account</th>
                 <th className={`${th} text-right`}>Qty</th>
                 <th className={`${th} text-right`}>Rate</th>
+                {hasDiscount && <th className={`${th} text-right`}>Discount</th>}
                 <th className={`${th} text-right`}>GST</th>
+                {hasCustomers && <th className={th}>Customer</th>}
                 {hasProjects && <th className={th}>Project</th>}
                 <th className={`${th} text-right`}>Amount</th>
               </tr>
             </thead>
             <tbody>
               {b.lineItems.length === 0 ? (
-                <tr><td colSpan={7} className="px-3 py-4 text-caption text-ink-500">No lines: the bill was entered as a total.</td></tr>
+                <tr><td colSpan={10} className="px-3 py-4 text-caption text-ink-500">No lines: the bill was entered as a total.</td></tr>
               ) : (
                 b.lineItems.map((l, i) => (
                   <tr key={i} className="border-b border-line-100 last:border-0">
                     <td className={td}>{l.description}</td>
                     <td className={`${td} font-mono text-caption`}>{l.hsnSac ?? '—'}</td>
+                    <td className={`${td} text-caption`}>{accountName(l.accountId) ?? (l.itemId ? 'The item’s account' : 'Purchases')}</td>
                     <td className={`${td} text-right font-mono`}>{l.qty}</td>
                     <td className={tdMoney}>{formatPaise(l.ratePaise)}</td>
+                    {hasDiscount && (
+                      <td className={tdMoney}>
+                        {(l.discountPaise ?? 0) > 0 ? `− ${formatPaise(l.discountPaise ?? 0)}` : '—'}
+                        {l.discountPercent ? <span className="block text-[0.6875rem] text-ink-500">{l.discountPercent}%</span> : null}
+                      </td>
+                    )}
                     <td className={`${td} text-right text-caption`}>{l.taxRatePct}%</td>
+                    {hasCustomers && (
+                      <td className={`${td} text-caption`}>
+                        {l.customerId ? <Link href={`/sales/customers/${l.customerId}`} className="hover:underline">{customerName(l.customerId)}</Link> : '—'}
+                        {l.billable && <span className="ml-1.5"><StatusChip tone="pending">Billable</StatusChip></span>}
+                      </td>
+                    )}
                     {hasProjects && <td className={`${td} text-caption`}>{projectName(l.projectId) ?? '—'}</td>}
-                    <td className={tdMoney}>{formatPaise(l.amountPaise)}</td>
+                    <td className={tdMoney}>{formatPaise(l.amountPaise - (l.discountPaise ?? 0))}</td>
                   </tr>
                 ))
               )}
@@ -210,8 +234,12 @@ export default function BillPage() {
           </table>
         </TableCard>
         <div className="mt-4">
-          <AmountsSummary
+          <DocTotalsSummary
             amounts={a}
+            lines={b.lineItems}
+            discount={b.discount}
+            discountLevel={b.discountLevel}
+            adjustment={b.adjustment}
             note={
               <>
                 {b.isReverseCharge ? 'Reverse charge: the GST is ours to pay; the vendor is owed the amount before tax. ' : ''}
@@ -228,6 +256,9 @@ export default function BillPage() {
             items={[
               ['Bill date', shortDate(b.billDate)],
               ['Due', shortDate(b.dueDate)],
+              ...((b.paymentTerms ? [['Payment terms', termsLabel(b.paymentTerms) ?? b.paymentTerms]] : []) as Array<[string, React.ReactNode]>),
+              ...((b.orderNumber ? [['Order number', <span key="o" className="font-mono">{b.orderNumber}</span>]] : []) as Array<[string, React.ReactNode]>),
+              ...((b.subject ? [['Subject', b.subject]] : []) as Array<[string, React.ReactNode]>),
               ['Financial year', b.financialYear],
               ['MSME pay by', row?.msmePayBy ? shortDate(row.msmePayBy) : null],
               ['Currency', b.foreign ? `${b.foreign.currency} at ₹${b.foreign.rate}` : 'INR'],

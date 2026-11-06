@@ -7,6 +7,7 @@ import { DebitNotesService } from './debit-notes.service';
 import { BillsFromLinesService } from './bills-from-lines.service';
 import { OrgSettings, OrgSettingsSchema } from '../org-settings/schemas/org-settings.schema';
 import { LedgerAccount, LedgerAccountSchema } from '../gl/schemas/ledger-account.schema';
+import { Customer, CustomerSchema } from '../sales/schemas/customer.schema';
 import { VendorsService } from './vendors.service';
 import { PurchaseBillsService } from './purchase-bills.service';
 import { PurchaseController } from './purchase.controller';
@@ -26,6 +27,8 @@ import { ApprovalsModule } from '../approvals/approvals.module';
       { name: OrgSettings.name, schema: OrgSettingsSchema },
       // Read only: the account a typed bill line is booked to.
       { name: LedgerAccount.name, schema: LedgerAccountSchema },
+      // Read only: the customer a bill line is for, to bill on to them.
+      { name: Customer.name, schema: CustomerSchema },
     ]),
     GlModule, // for PostingService
     ItemsModule, // lines that pick an item
@@ -35,6 +38,6 @@ import { ApprovalsModule } from '../approvals/approvals.module';
   ],
   controllers: [PurchaseController],
   providers: [VendorsService, PurchaseBillsService, DebitNotesService, BillsFromLinesService],
-  exports: [VendorsService, PurchaseBillsService, DebitNotesService],
+  exports: [VendorsService, PurchaseBillsService, DebitNotesService, BillsFromLinesService],
 })
 export class PurchaseModule {}

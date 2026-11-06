@@ -46,18 +46,54 @@ export interface Pricing {
   adjustmentProblem: string | null;
 }
 
+/**
+ * One line's own discount as typed ("at line item level", on a bill): its
+ * paise, or the problem with what was typed. A percent of the line to two
+ * decimals, or rupees no more than the line.
+ */
+export function lineDiscountOf(grossPaise: number, mode: DiscountMode, text: string): { paise: number; asked: { percent: number } | { amountPaise: number } | null; problem: string | null } {
+  const typed = text.trim();
+  if (!typed) return { paise: 0, asked: null, problem: null };
+  if (mode === 'percent') {
+    const pct = Number(typed);
+    if (!Number.isFinite(pct) || pct < 0 || pct > 100 || !/^\d+(\.\d{1,2})?$/.test(typed)) return { paise: 0, asked: null, problem: 'a percent from 0 to 100, to two decimals' };
+    if (pct === 0) return { paise: 0, asked: null, problem: null };
+    return { paise: Math.round((grossPaise * Math.round(pct * 100)) / 10_000), asked: { percent: pct }, problem: null };
+  }
+  const paise = parseRupees(typed);
+  if (paise === null || paise < 0) return { paise: 0, asked: null, problem: 'an amount in rupees, like 150' };
+  if (paise > grossPaise) return { paise: 0, asked: null, problem: 'more than the line comes to' };
+  return { paise, asked: paise > 0 ? { amountPaise: paise } : null, problem: null };
+}
+
 /** The figures for lines of `gross` paise at their slabs, with the discount and adjustment as typed. */
 export function previewPricing(
-  lines: Array<{ grossPaise: number; taxRatePct: number }>,
+  lines: Array<{ grossPaise: number; taxRatePct: number; discount?: { mode: DiscountMode; value: string } }>,
   interState: boolean,
-  opts: { discountMode?: DiscountMode; discount?: string; adjustment?: string; noTax?: boolean } = {},
+  opts: {
+    discountMode?: DiscountMode;
+    discount?: string;
+    adjustment?: string;
+    noTax?: boolean;
+    /** Each line's own discount instead of one on the whole document (a bill's "at line item level"). */
+    lineLevel?: boolean;
+  } = {},
 ): Pricing {
   const gross = lines.map((l) => l.grossPaise);
   const subTotalPaise = gross.reduce((s, a) => s + a, 0);
   let discountPaise = 0;
   let discount: Pricing['discount'] = null;
   let discountProblem: string | null = null;
-  const typed = (opts.discount ?? '').trim();
+  const typed = opts.lineLevel ? '' : (opts.discount ?? '').trim();
+  let lineShares: number[] | null = null;
+  if (opts.lineLevel) {
+    lineShares = lines.map((l, i) => {
+      const d = lineDiscountOf(l.grossPaise, l.discount?.mode ?? 'percent', l.discount?.value ?? '');
+      if (d.problem && !discountProblem) discountProblem = `Line ${i + 1}: ${d.problem}.`;
+      return d.paise;
+    });
+    discountPaise = lineShares.reduce((s, x) => s + x, 0);
+  }
   if (typed) {
     if (opts.discountMode === 'percent') {
       const pct = Number(typed);
@@ -76,7 +112,7 @@ export function previewPricing(
       }
     }
   }
-  const shares = spreadDiscount(gross, discountPaise);
+  const shares = lineShares ?? spreadDiscount(gross, discountPaise);
   const amounts: Amounts = { taxableValue: 0, cgst: 0, sgst: 0, igst: 0, cess: 0, total: 0 };
   lines.forEach((l, i) => {
     const taxable = l.grossPaise - shares[i];

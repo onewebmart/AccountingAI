@@ -19,6 +19,7 @@ import {
   ValidateIf,
   ValidateNested,
 } from 'class-validator';
+import { AdjustmentDto, DiscountDto } from '../../orders/doc-extras.dto';
 import { TDS_SECTION_CODES } from '../../gl/tds';
 import { UQC_CODES } from '../../items/hsn';
 import { AmountsPaiseDto, LineItemDto } from '../../sales/dto/sales.dto';
@@ -324,6 +325,21 @@ export class BillLineDto {
   @IsOptional()
   @IsMongoId()
   accountId?: string | null;
+
+  /** This line's own discount, before tax: a percent of the line or an amount. Not with a discount on the whole bill. */
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => DiscountDto)
+  discount?: DiscountDto | null;
+
+  /** The customer this cost is for; billable marks it to be billed on to them. */
+  @IsOptional()
+  @IsMongoId()
+  customerId?: string | null;
+
+  @IsOptional()
+  @IsBoolean()
+  billable?: boolean;
 }
 
 /** POST /purchase/bills/from-lines — a draft bill priced on the server from its lines. */
@@ -368,4 +384,88 @@ export class CreateBillFromLinesDto {
   @Min(0)
   @Max(10000)
   tdsRateBps?: number;
+
+  /** A discount on the whole bill, before tax, spread over the lines. Not with discounts on the lines. */
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => DiscountDto)
+  discount?: DiscountDto | null;
+
+  /** After tax, not taxed, at most ₹99.99 either way: posted to Round Off. */
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => AdjustmentDto)
+  adjustment?: AdjustmentDto | null;
+
+  /** Our purchase order's number, or the reference the vendor quoted. */
+  @IsOptional()
+  @IsString()
+  @Length(0, 60)
+  orderNumber?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @Length(0, 250)
+  subject?: string | null;
+
+  /** due_on_receipt, net_<days>, end_of_month, end_of_next_month: the due date when none is typed. */
+  @IsOptional()
+  @IsString()
+  @Matches(/^(due_on_receipt|net_\d{1,3}|end_of_month|end_of_next_month)$/, { message: 'paymentTerms is due_on_receipt, net_<days>, end_of_month or end_of_next_month' })
+  paymentTerms?: string | null;
+}
+
+/** POST /purchase/debit-notes — a vendor credit typed line by line against a posted bill, posted when raised. */
+export class CreateItemisedDebitNoteDto {
+  @IsMongoId({ message: 'vendorId is required — pick the vendor' })
+  vendorId: string;
+
+  @IsMongoId({ message: 'billId is required — pick the bill this credit corrects' })
+  billId: string;
+
+  @IsISO8601({}, { message: 'noteDate must be a date like 2026-11-04' })
+  noteDate: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(0, 300)
+  reason?: string | null;
+
+  /** The vendor's own credit note number. */
+  @IsOptional()
+  @IsString()
+  @Length(0, 40)
+  vendorCreditNumber?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @Length(0, 60)
+  orderNumber?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @Length(0, 250)
+  subject?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @Length(0, 2000)
+  notes?: string | null;
+
+  @IsArray()
+  @ArrayMinSize(1, { message: 'Add at least one line.' })
+  @ArrayMaxSize(200)
+  @ValidateNested({ each: true })
+  @Type(() => BillLineDto)
+  lines: BillLineDto[];
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => DiscountDto)
+  discount?: DiscountDto | null;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => AdjustmentDto)
+  adjustment?: AdjustmentDto | null;
 }

@@ -9,10 +9,13 @@ import { notify } from '@/components/page/notifier';
 import { api } from '@/lib/api';
 import { formatPaise } from '@/lib/gst';
 import { errorText, shortDate } from './purchase-data';
+import { termsLabel } from '@/components/parties/party-profile';
 import { ModuleGuide } from '@/components/guide/module-guide';
 import type { GuideKey } from '@/components/guide/keys';
+import type { Frequency as ScheduleFrequency } from '@/lib/schedule';
 
-export type Frequency = 'monthly' | 'quarterly' | 'yearly';
+/** Every schedule the server runs (automation/schedule.ts); the bill form offers the monthly ones. */
+export type Frequency = ScheduleFrequency;
 
 /** GET /recurring — every schedule; the purchase pages show bills and expenses. */
 export interface Template {
@@ -29,14 +32,62 @@ export interface Template {
   dueInDays: number;
   totalPaise: number;
   isReverseCharge: boolean;
-  expense: { expenseAccountId: string; paidThroughAccountId: string; taxablePaise: number; gstRatePct: number; claimable: boolean } | null;
+  expense: {
+    expenseAccountId: string;
+    paidThroughAccountId: string;
+    taxablePaise: number;
+    gstRatePct: number;
+    claimable: boolean;
+    /** Itemized: each drafted expense split across these. */
+    lines?: Array<{ expenseAccountId: string; amountPaise: number; gstRatePct: number; description: string | null }>;
+    customerId?: string | null;
+    customerName?: string | null;
+    billable?: boolean;
+  } | null;
   status: 'active' | 'paused' | 'ended';
   draftedCount: number;
   lastDraftedOn: string | null;
   lastError: string | null;
+  /** Bills set up from lines: each drafted as a typed bill is. */
+  billFromLines?: boolean;
+  lineItems?: Array<{ description: string; customerId?: string | null; billable?: boolean }>;
+  discount?: { percent: number | null; amountPaise: number } | null;
+  discountLevel?: 'transaction' | 'line' | null;
+  adjustment?: { label: string; paise: number } | null;
+  paymentTerms?: string | null;
+  referenceNumber?: string | null;
 }
 
-export const FREQUENCY_LABEL: Record<Frequency, string> = { monthly: 'Every month', quarterly: 'Every quarter', yearly: 'Every year' };
+/** A recurring bill's lines, discount and adjustment, in a few words. */
+function billWords(t: Template): string {
+  const lines = t.lineItems ?? [];
+  const parts = [
+    lines.length > 1 ? `${lines.length} lines` : null,
+    t.discount && t.discount.amountPaise > 0 ? (t.discountLevel === 'line' ? `discount on lines ${formatPaise(t.discount.amountPaise)}` : t.discount.percent ? `discount ${t.discount.percent}%` : `discount ${formatPaise(t.discount.amountPaise)}`) : null,
+    t.adjustment && t.adjustment.paise ? `${t.adjustment.label.toLowerCase()} ${t.adjustment.paise < 0 ? '−' : '+'}${formatPaise(Math.abs(t.adjustment.paise))}` : null,
+    lines.some((l) => l.billable) ? 'billable' : null,
+  ].filter(Boolean);
+  return parts.length ? ` · ${parts.join(' · ')}` : '';
+}
+
+export const FREQUENCY_LABEL: Record<Frequency, string> = {
+  weekly: 'Every week',
+  fortnightly: 'Every 2 weeks',
+  monthly: 'Every month',
+  bimonthly: 'Every 2 months',
+  quarterly: 'Every quarter',
+  half_yearly: 'Every 6 months',
+  yearly: 'Every year',
+};
+
+/** "Every month, 5th" or, by weeks, "Every week, Wednesdays": how a schedule repeats. */
+export function scheduleLabel(t: Pick<Template, 'frequency' | 'dayOfMonth' | 'startDate'>): string {
+  if (t.frequency === 'weekly' || t.frequency === 'fortnightly') {
+    const day = new Date(`${t.startDate}T00:00:00Z`).toLocaleDateString('en-IN', { weekday: 'long', timeZone: 'UTC' });
+    return `${FREQUENCY_LABEL[t.frequency]}, ${day}s`;
+  }
+  return `${FREQUENCY_LABEL[t.frequency] ?? t.frequency}, ${dayLabel(t.dayOfMonth)}`;
+}
 
 export function dayLabel(day: number): string {
   if (day === 31) return 'last day';
@@ -87,8 +138,8 @@ export function RecurringTable({ kind, empty, guide }: { kind: 'bill' | 'expense
       <table className="w-full">
         <thead className="border-b border-line-200 bg-surface-sink">
           <tr>
-            <th className={th}>Name</th>
-            <th className={th}>Vendor</th>
+            <th className={th}>{kind === 'expense' ? 'Profile name' : 'Name'}</th>
+            <th className={th}>{kind === 'expense' ? 'Vendor / customer' : 'Vendor'}</th>
             <th className={`${th} text-right`}>Each time</th>
             <th className={th}>Schedule</th>
             <th className={th}>Next draft</th>
@@ -111,16 +162,23 @@ export function RecurringTable({ kind, empty, guide }: { kind: 'bill' | 'expense
                   <p className="text-caption text-ink-500">
                     {t.draftedCount} drafted{t.lastDraftedOn ? `, last ${shortDate(t.lastDraftedOn)}` : ''}
                     {t.isReverseCharge ? ' · reverse charge' : ''}
+                    {kind === 'bill' ? billWords(t) : ''}
                     {t.expense?.claimable ? ' · GST claimed' : ''}
+                    {t.expense?.lines && t.expense.lines.length > 1 ? ` · itemized, ${t.expense.lines.length} lines` : ''}
                   </p>
                 </td>
-                <td className={`${td} text-caption`}>{t.partyName ?? <span className="text-ink-400">—</span>}</td>
+                <td className={`${td} text-caption`}>
+                  {t.partyName ?? <span className="text-ink-400">—</span>}
+                  {t.expense?.customerName && (
+                    <span className="block text-ink-500">For {t.expense.customerName}{t.expense.billable ? ' · billable' : ''}</span>
+                  )}
+                </td>
                 <td className={tdMoney}>{formatPaise(t.totalPaise)}</td>
                 <td className={`${td} text-caption`}>
-                  {FREQUENCY_LABEL[t.frequency]}, {dayLabel(t.dayOfMonth)}
+                  {scheduleLabel(t)}
                   <span className="block text-ink-500">
-                    {kind === 'bill' ? `due in ${t.dueInDays} days` : `from ${shortDate(t.startDate)}`}
-                    {t.endDate ? ` · until ${shortDate(t.endDate)}` : ''}
+                    {kind === 'bill' ? (t.paymentTerms ? termsLabel(t.paymentTerms) ?? t.paymentTerms : `due in ${t.dueInDays} days`) : `from ${shortDate(t.startDate)}`}
+                    {t.endDate ? ` · until ${shortDate(t.endDate)}` : kind === 'expense' ? ' · never expires' : ''}
                   </span>
                 </td>
                 <td className={`${td} font-mono text-caption`}>{t.nextRunDate ? shortDate(t.nextRunDate) : '—'}</td>

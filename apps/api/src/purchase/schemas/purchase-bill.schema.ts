@@ -41,6 +41,14 @@ class BillLineItem {
   @Prop({ type: Boolean, default: false }) notStock: boolean;
   /** The project this line's income or cost belongs to; its journal line carries it. */
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Project', default: null }) projectId: Types.ObjectId | null;
+  /** This line's discount, before tax: its own, or its share of the bill's. amountPaise less this is what is taxed and booked. */
+  @Prop({ type: Number, default: 0, min: 0, validate: { validator: Number.isInteger, message: 'Money must be integer paise (Invariant 1)' } }) discountPaise: number;
+  /** The percent asked for on this line, when its discount was given as one; null for an amount or a share of the bill's. */
+  @Prop({ type: Number, default: null }) discountPercent: number | null;
+  /** The customer this cost is for, to bill on to them. */
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Customer', default: null }) customerId: Types.ObjectId | null;
+  /** Marked to be billed on to that customer. */
+  @Prop({ type: Boolean, default: false }) billable: boolean;
 }
 
 /** TDS deducted from this bill — booked when the bill is, as the law expects. */
@@ -102,9 +110,21 @@ export class PurchaseBill {
   /** TDS withheld from the vendor, if their section applies. */
   @Prop({ type: BillTdsSchema, default: null }) tds: BillTds | null;
 
-  /** Billed against a purchase order: which, and how much of each of its lines. */
+  /** The bill's discount before tax: the percent asked for (null for an amount, or for discounts on the lines) and what it came to. */
+  @Prop({ type: Object, default: null }) discount: { percent: number | null; amountPaise: number } | null;
+  /** Where the discount was given: on the whole bill ("transaction"), or line by line. */
+  @Prop({ type: String, enum: ['transaction', 'line', null], default: null }) discountLevel: 'transaction' | 'line' | null;
+  /** Added after tax, not taxed, at most ₹99.99 either way; already in amountsPaise.total. Posted to Round Off. */
+  @Prop({ type: Object, default: null }) adjustment: { label: string; paise: number } | null;
+  /** Our purchase order's number, or the reference the vendor quoted. */
+  @Prop({ type: String, default: null }) orderNumber: string | null;
+  @Prop({ type: String, default: null }) subject: string | null;
+  /** The terms the due date was given by: due_on_receipt, net_30, end_of_month. */
+  @Prop({ type: String, default: null }) paymentTerms: string | null;
+
+  /** Billed against a purchase order: which, how much of each of its lines, and (made from the PO) each line's share of its discount. */
   @Prop({ type: Object, default: null })
-  source: { kind: 'purchase_order'; id: string; lines: Array<{ poLine: number; qty: number }> } | null;
+  source: { kind: 'purchase_order'; id: string; lines: Array<{ poLine: number; qty: number; discountPaise?: number }> } | null;
 
   /**
    * GST on this purchase is ours to pay the government (reverse charge): the

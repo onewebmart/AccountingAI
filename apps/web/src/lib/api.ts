@@ -132,6 +132,8 @@ export class ApiError extends Error {
   constructor(
     public status: number,
     message: string,
+    /** The server's whole answer, for errors that carry more than words (bulk add's bad rows). */
+    public body?: unknown,
   ) {
     super(message);
   }
@@ -185,7 +187,7 @@ async function authorisedFetch(path: string, init: RequestInit = {}): Promise<Re
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     const message = Array.isArray(body.message) ? body.message.join(', ') : body.message;
-    throw new ApiError(res.status, message ?? `HTTP ${res.status}`);
+    throw new ApiError(res.status, message ?? `HTTP ${res.status}`, body);
   }
   return res;
 }

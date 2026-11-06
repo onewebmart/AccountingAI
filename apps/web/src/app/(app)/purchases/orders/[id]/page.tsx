@@ -11,8 +11,10 @@ import { DetailGrid, Field, PageHeader, Section, StatusChip, TableCard, inputCla
 import { notify } from '@/components/page/notifier';
 import { api } from '@/lib/api';
 import { formatPaise } from '@/lib/gst';
-import { AmountsSummary } from '@/components/purchases/bill-lines';
-import { HistoryLink, errorText, shortDate, todayIso, useLedgerRefresh } from '@/components/purchases/purchase-data';
+import { AttachmentsSection } from '@/components/shell/attachments-section';
+import { termsLabel } from '@/components/parties/party-profile';
+import { DocTotalsSummary } from '@/components/purchases/purchase-doc-parts';
+import { HistoryLink, errorText, shortDate, todayIso, useAccounts, useLedgerRefresh } from '@/components/purchases/purchase-data';
 import { PoStatusChip, useGrns, usePurchaseOrder, type PoRow } from '@/components/purchases/po-data';
 
 const round3 = (n: number) => Math.round(n * 1000) / 1000;
@@ -140,6 +142,8 @@ export default function PurchaseOrderPage() {
   const { id } = useParams<{ id: string }>();
   const pos = usePurchaseOrder(id);
   const grns = useGrns();
+  const chart = useAccounts();
+  const accountName = (accountId: string | null | undefined) => (accountId ? chart.data?.find((a) => a._id === String(accountId))?.name ?? 'Account' : null);
   const refetch = () => {
     void pos.refetch();
     void grns.refetch();
@@ -176,7 +180,7 @@ export default function PurchaseOrderPage() {
       <PageHeader
         title={<>Purchase order <span className="font-mono">{po.number}</span></>}
         meta={<PoStatusChip po={po} />}
-        subtitle={<><Link href={`/purchases/vendors/${po.vendorId}`} className="hover:underline">{po.vendorName}</Link> · dated {shortDate(po.date)}{po.expectedBy ? ` · needed by ${shortDate(po.expectedBy)}` : ''}</>}
+        subtitle={<><Link href={`/purchases/vendors/${po.vendorId}`} className="hover:underline">{po.vendorName}</Link> · dated {shortDate(po.date)}{po.expectedBy ? ` · delivery by ${shortDate(po.expectedBy)}` : ''}</>}
         back={{ href: '/purchases/orders', label: 'Purchase orders' }}
         actions={
           <>
@@ -204,6 +208,7 @@ export default function PurchaseOrderPage() {
               <tr>
                 <th className={th}>Description</th>
                 <th className={th}>HSN/SAC</th>
+                <th className={th}>Account</th>
                 <th className={`${th} text-right`}>Ordered</th>
                 <th className={`${th} text-right`}>Received</th>
                 <th className={`${th} text-right`}>Billed</th>
@@ -217,25 +222,53 @@ export default function PurchaseOrderPage() {
                 <tr key={i} className="border-b border-line-100 last:border-0">
                   <td className={td}>{l.description}</td>
                   <td className={`${td} font-mono text-caption`}>{l.hsnSac ?? '—'}</td>
+                  <td className={`${td} text-caption`}>{accountName(l.accountId) ?? (l.itemId ? 'The item’s account' : 'Purchases')}</td>
                   <td className={`${td} text-right font-mono`}>{l.qty}</td>
                   <td className={`${td} text-right font-mono`}>{l.receivedQty}</td>
                   <td className={`${td} text-right font-mono`}>{l.billedQty}</td>
                   <td className={tdMoney}>{formatPaise(l.ratePaise)}</td>
                   <td className={`${td} text-right text-caption`}>{l.taxRatePct}%</td>
-                  <td className={tdMoney}>{formatPaise(l.amountPaise)}</td>
+                  <td className={tdMoney}>
+                    {formatPaise(l.amountPaise)}
+                    {(l.discountPaise ?? 0) > 0 && <span className="block text-[0.6875rem] text-ink-500">less {formatPaise(l.discountPaise ?? 0)}</span>}
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </TableCard>
         <div className="mt-4 grid gap-4 lg:grid-cols-2">
-          <DetailGrid items={[['Sent', po.sentAt ? new Date(po.sentAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Not yet'], ['Notes', po.notes]]} />
-          <AmountsSummary amounts={po.amountsPaise} />
+          <DetailGrid
+            items={[
+              ['Reference#', po.referenceNumber ? <span key="r" className="font-mono">{po.referenceNumber}</span> : null],
+              ['Delivery date', po.expectedBy ? shortDate(po.expectedBy) : null],
+              ['Payment terms', po.paymentTerms ? termsLabel(po.paymentTerms) ?? po.paymentTerms : null],
+              ['Shipment preference', po.shipmentPreference ?? null],
+              [
+                'Deliver to',
+                po.deliverTo ? (
+                  <span key="d">
+                    {po.deliverTo.kind === 'customer' && po.deliverTo.customerId ? <Link href={`/sales/customers/${po.deliverTo.customerId}`} className="hover:underline">{po.deliverTo.name}</Link> : po.deliverTo.name}
+                    {po.deliverTo.kind === 'customer' ? ' (customer)' : ''}
+                    {po.deliverTo.address && <span className="block whitespace-pre-line text-caption text-ink-500">{po.deliverTo.address}</span>}
+                  </span>
+                ) : null,
+              ],
+              ['Sent', po.sentAt ? new Date(po.sentAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Not yet'],
+              ['Notes', po.notes],
+              ['Terms & conditions', po.termsAndConditions ? <span key="t" className="whitespace-pre-line">{po.termsAndConditions}</span> : null],
+            ].filter(([label, v]) => v != null || label === 'Sent') as Array<[string, React.ReactNode]>}
+          />
+          <DocTotalsSummary amounts={po.amountsPaise} lines={po.lines} discount={po.discount} adjustment={po.adjustment} note={po.discount || po.adjustment ? 'Each bill made from this PO carries its share of the discount; a bill for all of it at once carries the adjustment.' : undefined} />
         </div>
       </Section>
 
       {toReceive && <ReceiveGoods key={`r:${po.lines.map((l) => l.receivedQty).join(',')}`} po={po} onDone={refetch} />}
       {toBill && <BillFromPo key={`b:${po.lines.map((l) => l.billedQty).join(',')}`} po={po} />}
+
+      <Section>
+        <AttachmentsSection entityType="PurchaseOrder" entityId={po._id} />
+      </Section>
 
       <Section title="Goods received">
         {notes.length === 0 ? (

@@ -39,6 +39,22 @@ export const LANGUAGES = ['en', 'hi', 'bn', 'gu', 'kn', 'ml', 'mr', 'or', 'pa', 
 export const PAYMENT_TERMS = ['due_on_receipt', 'net_7', 'net_15', 'net_30', 'net_45', 'net_60', 'net_90', 'end_of_month', 'end_of_next_month'] as const;
 export type PaymentTerms = (typeof PAYMENT_TERMS)[number];
 
+/** The due date terms give a document dated `date` (YYYY-MM-DD); null for no terms or one not known. */
+export function termsDueDate(terms: string | null | undefined, date: string): string | null {
+  if (!terms || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
+  const d = new Date(`${date}T00:00:00Z`);
+  if (terms === 'due_on_receipt') return date;
+  const net = /^net_(\d+)$/.exec(terms);
+  if (net) return new Date(d.getTime() + Number(net[1]) * 86_400_000).toISOString().slice(0, 10);
+  if (terms === 'end_of_month' || terms === 'end_of_next_month') {
+    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + (terms === 'end_of_month' ? 1 : 2), 0)).toISOString().slice(0, 10);
+  }
+  return null;
+}
+
+/** One of the terms above, or any number of days as net_<days> (0 to 365). */
+export const isPaymentTerms = (terms: string): boolean => (PAYMENT_TERMS as readonly string[]).includes(terms) || (/^net_(\d{1,3})$/.test(terms) && Number(terms.slice(4)) <= 365);
+
 /** INR, or a currency the currency module keeps rates for. */
 export const PARTY_CURRENCIES = ['INR', ...Object.keys(CURRENCIES)];
 

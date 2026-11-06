@@ -17,6 +17,10 @@ export interface PoLine {
   taxRatePct: number;
   receivedQty: number;
   billedQty: number;
+  /** Its share of the PO's discount, before tax. */
+  discountPaise?: number;
+  /** Where the bill made from it books it; null for the item's, or Purchases. */
+  accountId?: string | null;
 }
 
 /** GET /orders/purchase-orders — each PO with what has been received and billed against each line. */
@@ -32,6 +36,13 @@ export interface PoRow {
   amountsPaise: Amounts;
   lines: PoLine[];
   notes: string | null;
+  referenceNumber?: string | null;
+  paymentTerms?: string | null;
+  shipmentPreference?: string | null;
+  deliverTo?: { kind: 'organisation' | 'customer'; customerId: string | null; name: string; address: string | null } | null;
+  termsAndConditions?: string | null;
+  discount?: { percent: number | null; amountPaise: number } | null;
+  adjustment?: { label: string; paise: number } | null;
 }
 
 export interface GrnRow {

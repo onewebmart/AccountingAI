@@ -15,7 +15,7 @@ import { PermissionGuard } from '../auth/guards/permission.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { VendorsService } from './vendors.service';
 import { PurchaseBillsService } from './purchase-bills.service';
-import { CreateVendorDto, CreateBillDto, CreateBillFromLinesDto, PayBillDto, CreateDebitNoteDto, UpdateVendorDto } from './dto/purchase.dto';
+import { CreateVendorDto, CreateBillDto, CreateBillFromLinesDto, PayBillDto, CreateDebitNoteDto, CreateItemisedDebitNoteDto, UpdateVendorDto } from './dto/purchase.dto';
 import { BillsFromLinesService } from './bills-from-lines.service';
 import { DebitNotesService } from './debit-notes.service';
 import { ItemsService } from '../items/items.service';
@@ -133,6 +133,13 @@ export class PurchaseController {
   @RequirePermission(Permission.POST_JOURNAL)
   createDebitNote(@Request() req: AuthRequest, @Param('id') id: string, @Body() body: CreateDebitNoteDto) {
     return this.debitNotesService.create(id, req.user.orgId, req.user.sub, body);
+  }
+
+  /** A vendor credit typed line by line against a posted bill: taxed as the bill was, posted when raised. */
+  @Post('debit-notes')
+  @RequirePermission(Permission.POST_JOURNAL)
+  createItemisedDebitNote(@Request() req: AuthRequest, @Body() body: CreateItemisedDebitNoteDto) {
+    return this.debitNotesService.createItemised(req.user.orgId, req.user.sub, body);
   }
 
   @Get('debit-notes')

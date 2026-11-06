@@ -16,7 +16,8 @@ import {
 import { addDays, firstOccurrence, Frequency, nextOccurrence, todayIst } from './schedule';
 import { OrgSettings, OrgSettingsDocument } from '../org-settings/schemas/org-settings.schema';
 import { ItemsService } from '../items/items.service';
-import { DiscountInput, isInterState, lineAmount, lineProblem, priceDoc, text } from '../orders/doc-lines';
+import { DiscountInput, discountAsked, isInterState, lineAmount, lineDiscountAsked, lineProblem, priceDoc, text } from '../orders/doc-lines';
+import { BillsFromLinesService } from '../purchase/bills-from-lines.service';
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -45,8 +46,15 @@ export interface CreateRecurringInput {
     taxRatePct?: number;
     itemId?: string | null;
     uqc?: string | null;
+    /** Bills: the account the line is booked to, its own discount, and the customer it is for. Invoices: the item's income account. */
+    accountId?: string | Types.ObjectId | null;
+    discount?: DiscountInput | null;
+    customerId?: string | null;
+    billable?: boolean;
   }>;
   isReverseCharge?: boolean;
+  /** Bills: due_on_receipt, net_<days>, end_of_month, end_of_next_month; each bill is due by them. */
+  paymentTerms?: string | null;
   notes?: string | null;
   /** Invoices: carried onto each draft. */
   referenceNumber?: string | null;
@@ -55,17 +63,20 @@ export interface CreateRecurringInput {
   termsAndConditions?: string | null;
   discount?: DiscountInput | null;
   adjustment?: { label?: string | null; paise?: number | null } | null;
-  /** Expenses: what each one is booked to and paid from. partyId, when given, is the vendor. */
+  /** Expenses: what each one is booked to and paid from. partyId, when given, is the vendor. One account and amount, or lines. */
   expense?: {
-    expenseAccountId: string;
+    expenseAccountId?: string | null;
     paidThroughAccountId: string;
-    taxablePaise: number;
+    taxablePaise?: number | null;
     gstRatePct?: number;
+    lines?: Array<{ expenseAccountId: string; amountPaise: number; gstRatePct?: number; description?: string | null }> | null;
     interState?: boolean;
     claimable?: boolean;
     vendorGstin?: string | null;
     reference?: string | null;
     projectId?: string | null;
+    customerId?: string | null;
+    billable?: boolean;
   };
 }
 
@@ -99,6 +110,8 @@ export class RecurringService {
     // Invoices priced from their lines: our state, and the items the lines pick.
     @Optional() @InjectModel(OrgSettings.name) private settingsModel?: Model<OrgSettingsDocument>,
     @Optional() private items?: ItemsService,
+    // Bills set up from lines are priced, and drafted, as a typed bill is.
+    @Optional() private billsFromLines?: BillsFromLinesService,
   ) {}
 
   async create(orgId: string, actorId: string, input: CreateRecurringInput): Promise<RecurringTemplateDocument> {
@@ -107,7 +120,12 @@ export class RecurringService {
     // An invoice with lines is priced here, as any invoice is: the discount
     // spread over the lines, tax on what is left for the customer's state, the
     // adjustment after tax. What the browser previewed is not what is stored.
-    const priced = input.kind === 'invoice' && input.lineItems?.length ? await this.priceInvoice(orgId, input) : null;
+    const priced =
+      input.kind === 'invoice' && input.lineItems?.length
+        ? await this.priceInvoice(orgId, input)
+        : input.kind === 'bill' && input.lineItems?.length && this.billsFromLines
+          ? await this.priceBill(orgId, input)
+          : null;
     if (priced) input = { ...input, amountsPaise: priced.amounts, lineItems: priced.lines };
     const a = input.amountsPaise;
     if (!a) throw new BadRequestException('A recurring bill or invoice needs its amounts.');
@@ -160,6 +178,17 @@ export class RecurringService {
             termsAndConditions: text(input.termsAndConditions, 3000),
             discount: priced?.discount ?? null,
             adjustment: priced?.adjustment ?? null,
+          }
+        : {}),
+      ...(input.kind === 'bill' && priced
+        ? {
+            billFromLines: true,
+            referenceNumber: text(input.referenceNumber, 60),
+            subject: text(input.subject, 250),
+            discount: priced.discount ?? null,
+            discountLevel: priced.discountLevel ?? null,
+            adjustment: priced.adjustment ?? null,
+            paymentTerms: input.paymentTerms?.trim() || null,
           }
         : {}),
       status: 'active',
@@ -224,7 +253,10 @@ export class RecurringService {
       startDate: input.startDate, endDate: input.endDate ?? null, nextRunDate, amountsPaise,
       expense: {
         expenseAccountId: checked.expenseAccountId, paidThroughAccountId: checked.paidThroughAccountId, taxablePaise: checked.taxablePaise, gstRatePct: checked.gstRatePct,
+        // Itemized: the lines as checked, each drafted expense split the same way.
+        lines: e.lines?.length ? checked.lines.map((l) => ({ expenseAccountId: l.expenseAccountId, amountPaise: l.amountPaise, gstRatePct: l.gstRatePct, description: l.description })) : [],
         interState: checked.interState, claimable: checked.claimable, vendorGstin: checked.vendorGstin, reference: checked.reference, projectId: checked.projectId,
+        customerId: checked.customerId, billable: checked.billable,
       },
       notes: input.notes?.trim() || null, status: 'active', createdBy: actorId,
     });
@@ -235,9 +267,11 @@ export class RecurringService {
   async list(orgId: string) {
     const templates = await this.templateModel.find({ orgId }).sort({ status: 1, nextRunDate: 1 }).lean().exec();
     const ids = (kind: RecurringKind) => templates.filter((t) => t.kind === kind).map((t) => t.partyId);
+    // A recurring expense may be for a customer too.
+    const expenseCustomers = templates.map((t) => t.expense?.customerId).filter(Boolean);
     const [vendors, customers] = await Promise.all([
       this.vendorModel.find({ orgId, _id: { $in: [...ids('bill'), ...ids('expense')].filter(Boolean) } }).lean().exec(),
-      this.customerModel.find({ orgId, _id: { $in: ids('invoice') } }).lean().exec(),
+      this.customerModel.find({ orgId, _id: { $in: [...ids('invoice'), ...expenseCustomers] } }).lean().exec(),
     ]);
     const names = new Map([...vendors, ...customers].map((p) => [p._id.toString(), p.name]));
     return templates.map((t) => ({
@@ -264,8 +298,20 @@ export class RecurringService {
       termsAndConditions: t.termsAndConditions ?? null,
       discount: t.discount ?? null,
       adjustment: t.adjustment ?? null,
+      discountLevel: t.discountLevel ?? null,
+      paymentTerms: t.paymentTerms ?? null,
+      billFromLines: !!t.billFromLines,
       expense: t.expense
-        ? { ...t.expense, expenseAccountId: String(t.expense.expenseAccountId), paidThroughAccountId: String(t.expense.paidThroughAccountId), projectId: t.expense.projectId ? String(t.expense.projectId) : null }
+        ? {
+            ...t.expense,
+            expenseAccountId: String(t.expense.expenseAccountId),
+            paidThroughAccountId: String(t.expense.paidThroughAccountId),
+            projectId: t.expense.projectId ? String(t.expense.projectId) : null,
+            lines: (t.expense.lines ?? []).map((l) => ({ ...l, expenseAccountId: String(l.expenseAccountId) })),
+            customerId: t.expense.customerId ? String(t.expense.customerId) : null,
+            customerName: t.expense.customerId ? names.get(t.expense.customerId.toString()) ?? 'Unknown' : null,
+            billable: !!t.expense.billable,
+          }
         : null,
       status: t.status,
       draftedCount: t.generated.length,
@@ -410,10 +456,15 @@ export class RecurringService {
       if (!this.directExpenses || !t.expense) throw new Error('Recurring expenses need the expenses module.');
       const e = t.expense;
       // A draft, dated the occurrence, for a person to check and post. Never posted here.
+      const lines = e.lines ?? [];
       const expense = await this.directExpenses.create(orgId, actorId, {
-        date, vendorId: t.partyId ? t.partyId.toString() : null, expenseAccountId: e.expenseAccountId.toString(), paidThroughAccountId: e.paidThroughAccountId.toString(),
-        taxablePaise: e.taxablePaise, gstRatePct: e.gstRatePct, interState: e.interState, claimable: e.claimable, vendorGstin: e.vendorGstin, reference: e.reference,
-        notes: t.notes ? `${t.name} — ${t.notes}` : t.name, projectId: e.projectId ? e.projectId.toString() : null, recurringTemplateId: t._id.toString(),
+        date, vendorId: t.partyId ? t.partyId.toString() : null, paidThroughAccountId: e.paidThroughAccountId.toString(),
+        ...(lines.length
+          ? { lines: lines.map((l) => ({ expenseAccountId: l.expenseAccountId.toString(), amountPaise: l.amountPaise, gstRatePct: l.gstRatePct, description: l.description })) }
+          : { expenseAccountId: e.expenseAccountId.toString(), taxablePaise: e.taxablePaise, gstRatePct: e.gstRatePct }),
+        interState: e.interState, claimable: e.claimable, vendorGstin: e.vendorGstin, reference: e.reference,
+        notes: t.notes ? `${t.name} — ${t.notes}` : t.name, projectId: e.projectId ? e.projectId.toString() : null,
+        customerId: e.customerId ? e.customerId.toString() : null, billable: !!e.billable, recurringTemplateId: t._id.toString(),
       });
       return expense._id as Types.ObjectId;
     }
@@ -426,6 +477,28 @@ export class RecurringService {
       notes: t.notes ? `${t.name} — ${t.notes}` : t.name,
       recurringTemplateId: t._id.toString(),
     };
+    if (t.kind === 'bill' && t.billFromLines && this.billsFromLines) {
+      // Drafted as a typed bill is: priced on its date from the template's lines. Never posted here.
+      const bill = await this.billsFromLines.create(orgId, actorId, {
+        vendorId: t.partyId!.toString(),
+        billDate: date,
+        dueDate: t.paymentTerms ? null : addDays(date, t.dueInDays),
+        lines: t.lineItems.map((l) => ({
+          description: l.description, itemId: l.itemId ? String(l.itemId) : null, hsnSac: l.hsnSac, uqc: l.uqc, qty: l.qty, ratePaise: l.ratePaise, taxRatePct: l.taxRatePct,
+          accountId: l.accountId ? String(l.accountId) : null, discount: t.discountLevel === 'line' ? lineDiscountAsked(l) : null,
+          customerId: l.customerId ? String(l.customerId) : null, billable: !!l.billable,
+        })),
+        discount: t.discountLevel === 'transaction' ? discountAsked(t.discount) : null,
+        adjustment: t.adjustment,
+        orderNumber: t.referenceNumber,
+        subject: t.subject,
+        paymentTerms: t.paymentTerms,
+        notes: common.notes,
+        isReverseCharge: t.isReverseCharge,
+        recurringTemplateId: t._id.toString(),
+      });
+      return bill._id;
+    }
     if (t.kind === 'bill') {
       const bill = await this.bills.create({
         ...common,
@@ -475,6 +548,36 @@ export class RecurringService {
     return {
       ...priced,
       lines: priced.lines.map((l) => ({ description: l.description, hsnSac: l.hsnSac, qty: l.qty, ratePaise: l.ratePaise, amountPaise: l.amountPaise, taxRatePct: l.taxRatePct, itemId: l.itemId ? String(l.itemId) : null, uqc: l.uqc ?? null, accountId: l.accountId ?? null, discountPaise: l.discountPaise })),
+    };
+  }
+
+  /**
+   * A recurring bill's lines priced as a typed bill's are, on its start date:
+   * the vendor's state, the items, each line's account and customer, the
+   * discount on the lines or the whole bill, and the adjustment after tax.
+   */
+  private async priceBill(orgId: string, input: CreateRecurringInput) {
+    if (!input.partyId || !Types.ObjectId.isValid(input.partyId)) throw new BadRequestException('Pick the vendor.');
+    const { lineItems, priced } = await this.billsFromLines!.price(orgId, {
+      vendorId: input.partyId,
+      billDate: input.startDate,
+      lines: (input.lineItems ?? []).map((l) => ({
+        description: l.description, itemId: l.itemId ?? null, hsnSac: l.hsnSac ?? null, uqc: l.uqc ?? null, qty: l.qty ?? 1, ratePaise: l.ratePaise, taxRatePct: l.taxRatePct ?? 0,
+        accountId: l.accountId ? String(l.accountId) : null, discount: l.discount ?? null, customerId: l.customerId ?? null, billable: l.billable,
+      })),
+      discount: input.discount,
+      adjustment: input.adjustment,
+      paymentTerms: input.paymentTerms,
+    });
+    return {
+      amounts: priced.amounts,
+      discount: priced.discount,
+      discountLevel: priced.discountLevel,
+      adjustment: priced.adjustment,
+      lines: lineItems.map((l) => ({
+        description: l.description, hsnSac: l.hsnSac ?? null, qty: l.qty, ratePaise: l.ratePaise, amountPaise: l.amountPaise, taxRatePct: l.taxRatePct, itemId: l.itemId ? String(l.itemId) : null,
+        uqc: l.uqc ?? null, accountId: l.accountId ? String(l.accountId) : null, discountPaise: l.discountPaise, discountPercent: l.discountPercent, customerId: l.customerId ? String(l.customerId) : null, billable: l.billable,
+      })),
     };
   }
 

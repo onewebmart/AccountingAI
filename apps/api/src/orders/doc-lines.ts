@@ -154,18 +154,50 @@ export function adjustmentOf(input: { label?: string | null; paise?: number | nu
 export function priceDoc<L extends { qty: number; ratePaise: number; taxRatePct: number }>(
   lines: L[],
   interState: boolean,
-  opts: { discount?: DiscountInput | null; adjustment?: { label?: string | null; paise?: number | null } | null } = {},
-): { lines: Array<L & { discountPaise: number }>; amounts: Amounts; discount: DocDiscount | null; adjustment: DocAdjustment | null; subTotalPaise: number } {
+  opts: {
+    discount?: DiscountInput | null;
+    adjustment?: { label?: string | null; paise?: number | null } | null;
+    /** A discount on each line instead (a bill's "at line item level"): a percent of the line, or an amount, per line. */
+    lineDiscounts?: Array<DiscountInput | null | undefined> | null;
+  } = {},
+): { lines: Array<L & { discountPaise: number; discountPercent: number | null }>; amounts: Amounts; discount: DocDiscount | null; adjustment: DocAdjustment | null; subTotalPaise: number; discountLevel: DiscountLevel | null } {
   const gross = lines.map(lineAmount);
   const subTotalPaise = gross.reduce((s, a) => s + a, 0);
-  const discount = discountOf(subTotalPaise, opts.discount);
-  const shares = spreadDiscount(gross, discount?.amountPaise ?? 0);
-  const priced = lines.map((l, i) => ({ ...l, discountPaise: shares[i] }));
+  const perLine = linesDiscounted(gross, opts.lineDiscounts);
+  if (perLine && discountOf(subTotalPaise, opts.discount)) throw new BadRequestException('A discount is on the lines or on the whole document, not both.');
+  const discount = perLine ? perLine.total : discountOf(subTotalPaise, opts.discount);
+  const shares = perLine ? perLine.shares.map((d) => d?.amountPaise ?? 0) : spreadDiscount(gross, discount?.amountPaise ?? 0);
+  const priced = lines.map((l, i) => ({ ...l, discountPaise: shares[i], discountPercent: perLine?.shares[i]?.percent ?? null }));
   const amounts = docAmounts(priced, interState);
   const adjustment = adjustmentOf(opts.adjustment, amounts.total);
   if (adjustment) amounts.total += adjustment.paise;
-  return { lines: priced, amounts, discount, adjustment, subTotalPaise };
+  return { lines: priced, amounts, discount, adjustment, subTotalPaise, discountLevel: perLine ? 'line' : discount ? 'transaction' : null };
 }
+
+/** Where a document's discount was given: on the whole document, spread over its lines, or on each line. */
+export type DiscountLevel = 'transaction' | 'line';
+
+/**
+ * Each line's own discount, checked as a document's is (a percent to two
+ * decimals, or an amount no larger than the line), naming the line. Null
+ * when no line has one.
+ */
+function linesDiscounted(gross: number[], inputs: Array<DiscountInput | null | undefined> | null | undefined): { shares: Array<DocDiscount | null>; total: DocDiscount } | null {
+  if (!inputs?.some((d) => !!d && (!!d.percent || !!d.amountPaise))) return null;
+  const shares = gross.map((g, i) => {
+    try {
+      return discountOf(g, inputs[i]);
+    } catch (e) {
+      throw new BadRequestException(`Line ${i + 1}: ${(e as Error).message.replace(' the lines come to', ' the line comes to')}`);
+    }
+  });
+  const amountPaise = shares.reduce((s, d) => s + (d?.amountPaise ?? 0), 0);
+  return amountPaise > 0 ? { shares, total: { percent: null, amountPaise } } : null;
+}
+
+/** A line's stored discount as it was asked for: its percent, or else its amount. */
+export const lineDiscountAsked = (l: { discountPaise?: number | null; discountPercent?: number | null }): DiscountInput | null =>
+  l.discountPercent ? { percent: l.discountPercent } : l.discountPaise ? { amountPaise: l.discountPaise } : null;
 
 /** The adjustment in a set of amounts: whatever the total is beyond value plus tax. */
 export const adjustmentIn = (a: Amounts) => a.total - (a.taxableValue + a.cgst + a.sgst + a.igst + a.cess);
