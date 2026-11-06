@@ -1,4 +1,5 @@
-import { AlertCircle, AlertTriangle } from 'lucide-react';
+import Link from 'next/link';
+import { AlertCircle, AlertTriangle, Receipt } from 'lucide-react';
 
 const TITLE: Record<string, string> = {
   duplicate_number: 'Likely a duplicate',
@@ -6,15 +7,18 @@ const TITLE: Record<string, string> = {
   gstin_differs: 'Not the GSTIN on file',
   new_vendor_large: 'New vendor, large bill',
   blocked_itc: 'GST likely not claimable',
+  paid_at_counter: 'Already paid',
+  tds_section: 'TDS may apply',
 };
 
 /**
  * What the checks against the books found. Red when approving would likely
  * book something twice; amber when it needs a look. Neither stops approval:
  * the reviewer decides, but this proposal is never swept up by the bulk
- * approve.
+ * approve. A bill paid at the counter offers the expense form instead, with
+ * the document and what was read from it filled in.
  */
-export function ChecksBanner({ checks }: { checks: Array<{ code: string; severity: 'high' | 'medium'; message: string }> }) {
+export function ChecksBanner({ checks, documentId }: { checks: Array<{ code: string; severity: 'high' | 'medium'; message: string }>; documentId?: string | null }) {
   if (checks.length === 0) return null;
   const sorted = [...checks].sort((a, b) => (a.severity === b.severity ? 0 : a.severity === 'high' ? -1 : 1));
   return (
@@ -29,9 +33,19 @@ export function ChecksBanner({ checks }: { checks: Array<{ code: string; severit
             className={`flex items-start gap-2 rounded-md border px-3 py-2 ${high ? 'border-error-fg/40 bg-error-bg' : 'border-marigold-400 bg-honey-100'}`}
           >
             <Icon size={14} className={`mt-0.5 shrink-0 ${high ? 'text-error-fg' : 'text-pending-fg'}`} aria-hidden="true" />
-            <p className={`text-caption ${high ? 'text-error-fg' : 'text-pending-fg'}`}>
-              <span className="font-semibold">{TITLE[c.code] ?? 'Check this'}.</span> {c.message}
-            </p>
+            <div className="min-w-0 flex-1">
+              <p className={`text-caption ${high ? 'text-error-fg' : 'text-pending-fg'}`}>
+                <span className="font-semibold">{TITLE[c.code] ?? 'Check this'}.</span> {c.message}
+              </p>
+              {c.code === 'paid_at_counter' && documentId && (
+                <Link
+                  href={`/purchases/expenses/new?document=${documentId}`}
+                  className="mt-1.5 inline-flex items-center gap-1.5 rounded-md border border-line-200 bg-surface-card px-2.5 py-1 text-caption font-semibold text-navy-900 hover:border-ink-300"
+                >
+                  <Receipt size={13} aria-hidden="true" /> Record as expense
+                </Link>
+              )}
+            </div>
           </div>
         );
       })}

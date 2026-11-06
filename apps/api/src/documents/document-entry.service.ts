@@ -6,6 +6,8 @@ import { ExtractedDocument, ExtractedDocumentDocument } from '../extraction/sche
 import { Vendor, VendorDocument } from '../purchase/schemas/vendor.schema';
 import { Customer, CustomerDocument } from '../sales/schemas/customer.schema';
 import { withOrg } from '../database/tenant.plugin';
+import { ProposedEntry, ProposedEntryDocument } from '../proposals/schemas/proposed-entry.schema';
+import { ProposedEntryStatus } from '@ai-accounting/shared';
 
 /** What a form needs to start from a scanned document: what the AI read, and who it is from, if we know them. */
 export interface DocumentExtraction {
@@ -31,6 +33,19 @@ export interface DocumentExtraction {
   confidence: number | null;
   /** Already entered by hand as this record. */
   enteredAs: { entityType: string; entityId: string; label: string } | null;
+  /**
+   * What the AI's proposal for this document worked out, for the form to
+   * start from: the cost account it chose, whether the GST is blocked
+   * (17(5)) so not claimed, and whether the bill says it was paid at the
+   * counter, and how. Null when no proposal is waiting.
+   */
+  suggested: {
+    accountId: string | null;
+    accountName: string | null;
+    reason: string | null;
+    gstBlocked: boolean;
+    paid: { mode: string; evidence: string } | null;
+  } | null;
 }
 
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -47,6 +62,7 @@ export class DocumentEntryService {
     @InjectModel(ExtractedDocument.name) private extractedModel: Model<ExtractedDocumentDocument>,
     @InjectModel(Vendor.name) private vendorModel: Model<VendorDocument>,
     @InjectModel(Customer.name) private customerModel: Model<CustomerDocument>,
+    @InjectModel(ProposedEntry.name) private proposalModel: Model<ProposedEntryDocument>,
   ) {}
 
   async extraction(orgId: string, documentId: string): Promise<DocumentExtraction> {
@@ -80,6 +96,32 @@ export class DocumentEntryService {
       lines: (x?.lineItems ?? []).map((l) => ({ description: l.description, hsnSac: l.hsnSac ?? null, qty: l.qty, ratePaise: l.ratePaise, taxRatePct: l.taxRatePct, amountPaise: l.amountPaise })),
       confidence: x?.confidenceOverall ?? null,
       enteredAs: doc.enteredAs ? { entityType: doc.enteredAs.entityType, entityId: doc.enteredAs.entityId, label: doc.enteredAs.label } : null,
+      suggested: await this.suggested(orgId, doc._id, x?.paidAtCounter ?? null, x?.amountsPaise ?? null),
+    };
+  }
+
+  /** The waiting proposal's choices, in the shape a form can start from. */
+  private async suggested(
+    orgId: string,
+    documentId: Types.ObjectId,
+    paid: { mode: string; evidence: string } | null,
+    a: { cgst: number; sgst: number; igst: number; cess: number } | null,
+  ): Promise<DocumentExtraction['suggested']> {
+    const p = await withOrg(orgId, () =>
+      this.proposalModel.findOne({ documentId, status: ProposedEntryStatus.PROPOSED }).sort({ createdAt: -1 }).lean().exec(),
+    );
+    if (!p && !paid) return null;
+    const lines = p?.suggestedLines ?? [];
+    const isGst = (name: string) => /^input (cgst|sgst|igst|cess)/i.test(name);
+    const cost = p?.category?.accountName ? lines.find((l) => l.accountName === p.category!.accountName && l.debitPaise > 0) : null;
+    const gst = a ? a.cgst + a.sgst + a.igst + a.cess : 0;
+    return {
+      accountId: cost ? String(cost.accountId) : null,
+      accountName: cost?.accountName ?? null,
+      reason: p?.category?.reason ?? null,
+      // GST on the bill, none of it on input lines, and a blocked-credit check: the proposal moved it into the cost.
+      gstBlocked: gst > 0 && !lines.some((l) => isGst(l.accountName)) && !!p?.checks?.some((c) => c.code === 'blocked_itc'),
+      paid,
     };
   }
 

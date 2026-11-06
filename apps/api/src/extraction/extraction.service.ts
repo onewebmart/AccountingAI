@@ -5,7 +5,8 @@ import { ExtractedDocument, ExtractedDocumentDocument } from './schemas/extracte
 import { GeminiExtractionService, OrgContext } from './gemini-extraction.service';
 import { UsageMeterService } from '../ocr/usage-meter.service';
 import { Organization, OrganizationDocument } from '../tenancy/schemas/organization.schema';
-import { invoiceProblems, ROUNDING_TOLERANCE_PAISE } from './invoice-checks';
+import { fullGstRates, invoiceProblems, ROUNDING_TOLERANCE_PAISE } from './invoice-checks';
+import { paidAtCounter } from '../proposals/checks/bill-checks';
 
 export interface ExtractionInput {
   documentId: string;
@@ -154,6 +155,7 @@ function validateAndNormalize(raw: unknown): ReturnType<typeof buildDbPayload> |
   warnings.push(...problems);
 
   const payload = buildDbPayload(d, amounts, vendor, invoiceNumber, invoiceDate, lineItems, warnings);
+  payload.lineItems = fullGstRates(payload.lineItems, payload.amountsPaise);
   if (problems.length > 0) {
     payload.confidenceOverall = Math.min(payload.confidenceOverall, CHECK_FAILED_CONFIDENCE_CAP);
   }
@@ -316,7 +318,7 @@ export class ExtractionService {
     };
 
     if (normalized) {
-      return this.extractedModel.create({ ...base, status: 'extracted', ...normalized });
+      return this.extractedModel.create({ ...base, status: 'extracted', ...normalized, paidAtCounter: paidAtCounter(ocrText) });
     }
 
     // Both attempts failed — route to manual entry

@@ -103,6 +103,10 @@ export class ExtractedDocument {
 
   @Prop({ type: [String], default: [] })
   rawWarnings: string[];
+
+  /** The bill says it was paid there and then ("Paid by UPI"), read from its text; null when it does not. */
+  @Prop({ type: { mode: { type: String }, evidence: { type: String } }, default: null, _id: false })
+  paidAtCounter?: { mode: string; evidence: string } | null;
 }
 
 export const ExtractedDocumentSchema = SchemaFactory.createForClass(ExtractedDocument);

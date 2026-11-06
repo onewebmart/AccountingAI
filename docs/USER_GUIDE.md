@@ -223,13 +223,21 @@ The confidence column shows how sure the reading is: green at 85% and above, amb
    - **Likely a duplicate** / **Possibly a duplicate**
    - **Not the GSTIN on file**
    - **New vendor, large bill**
-   - **GST likely not claimable**
+   - **GST likely not claimable**: GST the law blocks under section 17(5), such as on a restaurant meal, a salon visit or a club membership. When the bill shows it plainly (the restaurant's SAC code, or a vendor named as a restaurant, dhaba or caterer), the entry already adds the GST to the cost instead of claiming it. If you can claim it, move it back to Input GST with **Edit lines** before approving. Food bought to resell is only flagged, never moved.
+   - **Already paid**: the bill says "Paid by UPI", "Payment mode: Cash" or similar. Click **Record as expense** to record it as an expense paid from your bank (or cash), with the file and everything read from it filled in. The account the AI chose is selected, and blocked GST is not claimed. Or approve it as a bill and record the payment.
+   - **TDS may apply**: the bill looks like contract work (194C), professional or technical fees (194J), rent (194I) or commission (194H), and this bill or the vendor's bills this year are past the section's limit (₹30,000 on one bill or ₹1,00,000 in the year for 194C; ₹50,000 in the year for 194J; ₹50,000 a month for rent; ₹20,000 in the year for 194H). Set the vendor's TDS section and it is withheld from this bill and the next.
 4. To change the accounts or amounts, click **Edit lines**, then **Done editing**.
 5. Click **Approve & post** to put it in the books (toast: **Posted to ledger**), or **Reject** to set it aside. A rejected entry is kept for the audit and never posts.
 
+**How the account is chosen**
+- A person's past choice for the vendor comes first.
+- Then the HSN/SAC code or the wording. Toner, ink, cables and anything under ₹5,000 a unit are expenses, not fixed assets, even when their HSN code is a printer's or a laptop's.
+- A bill of different things is split: a laptop goes to Office Equipment and the paper with it to Office & Stationery.
+- Only then the AI model, choosing from your own accounts. If the AI could not be reached, the entry says so.
+
 **Approve & post** stays greyed out until every line has an account and debits equal credits.
 
-**Approve all high-confidence** posts in one go every entry at 90% or above with no warnings. A flagged entry is never included; it waits for you.
+**Approve all high-confidence** posts in one go every entry at 90% or above with no warnings, whose account came from your past choice or a rule. An entry with a warning, or whose account the AI model picked or nothing matched, is never included; it waits for you.
 
 Month-end entries, opening and closing stock, exchange revaluations and bank lines sent for categorising also come here, each labelled with what made it.
 

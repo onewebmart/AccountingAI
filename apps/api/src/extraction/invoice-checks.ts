@@ -89,3 +89,24 @@ export function dueDateFromTerms(invoiceDate: string | null, terms: string | nul
   due.setUTCDate(due.getUTCDate() + Number(days[1]));
   return due.toISOString().slice(0, 10);
 }
+
+/** Half of each GST slab: what an intra-state bill prints as CGST and again as SGST. */
+const HALF_RATES = new Set([0.125, 1.5, 2.5, 6, 9, 14]);
+
+/**
+ * An intra-state bill prints "CGST 9%" and "SGST 9%"; the model sometimes
+ * gives that 9 as the line's GST rate when the rate is 18. When every line
+ * carries a half rate and doubling them accounts for the CGST and SGST on the
+ * bill better than leaving them, double them. Anything else stays as read.
+ */
+export function fullGstRates<L extends { amountPaise: number; taxRatePct: number }>(
+  lines: L[],
+  a: { cgst: number; sgst: number; igst: number },
+): L[] {
+  const gst = a.cgst + a.sgst;
+  if (!lines.length || a.cgst <= 0 || a.sgst <= 0 || a.igst > 0) return lines;
+  if (!lines.every((l) => HALF_RATES.has(l.taxRatePct))) return lines;
+  const at = (k: number) => lines.reduce((s, l) => s + (l.amountPaise * l.taxRatePct * k) / 100, 0);
+  if (Math.abs(at(2) - gst) >= Math.abs(at(1) - gst)) return lines;
+  return lines.map((l) => ({ ...l, taxRatePct: l.taxRatePct * 2 }));
+}

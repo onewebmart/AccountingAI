@@ -16,6 +16,7 @@ import { Fact, NarrativeInput, PlFigures, narrativeFacts, narrativePrompt, readN
 import { SUGGESTED, ToolCall, answerPrompt, parseQuestion, planPrompt, readAnswer, readPlan, ruleAnswer } from './ask';
 import { ReportTable } from './report-table';
 import { REPORT_MODEL, ReportModel } from './report-model';
+import { aiFailureReason } from '../common/ai-failure';
 
 export const REPORT_AI_QUEUE = 'report-ai';
 /** The model's own word is checked, but a person still reads it: never shown as certain. */
@@ -132,7 +133,7 @@ export class ReportAiService {
       orgId, kind: 'narrative', status: queued ? 'queued' : facts.length ? 'done' : 'none', requestedBy: actorId,
       input: { period, facts: facts.map((f) => ({ id: f.id, text: f.text, figures: f.figures, weight: f.weight })) },
       result: { sentences: rule, dropped: 0 }, source: 'rule', confidence: 1,
-      reason: facts.length ? 'Written by the rules from the books.' : `Nothing posted for ${monthLabel(period)} yet.`,
+      reason: facts.length ? 'Written by the rules from the books.' : `No income or expenses posted for ${monthLabel(period)} yet, so there is nothing to sum up.`,
     });
     if (queued) await this.queue.add('narrative', { orgId, suggestionId: s._id.toString() }, { attempts: 2, backoff: { type: 'exponential', delay: 5000 }, removeOnComplete: 100, removeOnFail: 100 });
     return this.narrativeView(s.toObject());
@@ -142,7 +143,15 @@ export class ReportAiService {
     const s = await this.suggestionModel.findOne({ _id: suggestionId, orgId, kind: 'narrative' }).exec();
     if (!s || s.status !== 'queued') return;
     const { period, facts } = s.input as { period: string; facts: Fact[] };
-    const answer = await this.model.json(narrativePrompt(period, facts));
+    let answer: Awaited<ReturnType<ReportModel['json']>>;
+    try {
+      answer = await this.model.json(narrativePrompt(period, facts));
+    } catch (err) {
+      // The AI is down or out of credit: the rules' words stand, and the card stops waiting.
+      s.set({ status: 'done', reason: `${aiFailureReason(err)} Meanwhile the rules' words are shown.` });
+      await s.save();
+      return;
+    }
     if (answer) await this.usageMeter.recordAiTokens(orgId, answer.tokensIn, answer.tokensOut);
     const read = answer ? readNarrative(answer.raw, facts) : { sentences: [], dropped: 0 };
     // Two checked sentences or more, or the rules' words stand.
@@ -241,6 +250,16 @@ export class ReportAiService {
   async runAsk(orgId: string, suggestionId: string) {
     const s = await this.suggestionModel.findOne({ _id: suggestionId, orgId, kind: 'ask' }).exec();
     if (!s || s.status !== 'queued') return;
+    try {
+      await this.answerWithModel(orgId, s);
+    } catch (err) {
+      // A model error must not leave the question waiting for ever: say why, so it can be asked again.
+      s.set({ status: 'failed', reason: aiFailureReason(err) });
+      await s.save();
+    }
+  }
+
+  private async answerWithModel(orgId: string, s: AiSuggestionDocument) {
     const question = String((s.input as { question: string }).question);
     const names = await this.accountNames(orgId);
     const today = todayIst();

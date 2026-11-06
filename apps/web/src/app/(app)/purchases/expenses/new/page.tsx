@@ -12,7 +12,7 @@ import { ExpenseFields, emptyExpense, expenseBody, useInterState, type ExpenseFo
 import { MILEAGE_SETTINGS_HREF, MileageFields, emptyMileage, mileageBody, useMileageSettings, type MileageFormValue } from '@/components/purchases/mileage';
 import { BulkGrid, firstRows, isFilled, rowBody, rowProblem, type BulkRow } from '@/components/purchases/bulk-expenses';
 import { ExpenseTabs, useCanManageSettings, type ExpenseTab } from '@/components/purchases/expense-tabs';
-import { errorText } from '@/components/purchases/purchase-data';
+import { errorText, usePaidThroughAccounts } from '@/components/purchases/purchase-data';
 import { DocumentEntry, EntryActions, PartyFound, gstSlab, rupeesOf, scanTaxRate, scanTaxable, useDocumentEntry, usePrefill } from '@/components/documents/document-entry';
 
 /**
@@ -88,6 +88,19 @@ function NewExpenseForm({ documentId }: { documentId: string | null }) {
   const interState = useInterState(value);
   const save = useSaveExpense();
 
+  // Paid at the counter, as the bill says: from cash when it says cash, else
+  // from the bank (UPI, card, transfer). Only while nothing is picked, and
+  // only once the accounts have loaded.
+  const { extraction } = useDocumentEntry();
+  const paidThrough = usePaidThroughAccounts();
+  const paidMode = extraction?.suggested?.paid?.mode ?? null;
+  useEffect(() => {
+    if (!paidMode || !paidThrough.data?.length) return;
+    const want = paidMode === 'cash' ? 'cash' : 'bank';
+    const pick = paidThrough.data.find((a) => a.kind === want);
+    if (pick) setValue((v) => (v.paidThroughAccountId ? v : { ...v, paidThroughAccountId: pick._id }));
+  }, [paidMode, paidThrough.data]);
+
   // From a scan: the amount before tax, its one GST rate, who was paid and the receipt number.
   usePrefill((x) => {
     const taxable = scanTaxable(x);
@@ -102,8 +115,11 @@ function NewExpenseForm({ documentId }: { documentId: string | null }) {
       gstRatePct: rate,
       // The tax heads charged say where the supplier is: IGST from another state.
       interState: a && a.igst > 0 ? true : a && a.cgst + a.sgst > 0 ? false : null,
-      // Input credit needs the supplier's GSTIN on the invoice.
-      claimable: rate > 0 && !!x.party.gstin,
+      // The account the AI chose for this bill, unless one is picked already.
+      expenseAccountId: v.expenseAccountId || x.suggested?.accountId || '',
+      // Input credit needs the supplier's GSTIN on the invoice, and is never
+      // taken on GST the law blocks (a restaurant meal, 17(5)).
+      claimable: rate > 0 && !!x.party.gstin && !x.suggested?.gstBlocked,
       vendorGstin: x.party.gstin ?? '',
       reference: x.number ? x.number.slice(0, 120) : v.reference,
       notes: v.notes || (x.lines[0]?.description ?? '').trim().slice(0, NOTES_MAX),

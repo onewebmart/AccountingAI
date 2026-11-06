@@ -86,6 +86,7 @@ function mapApiProposal(p: ApiProposal): ProposedEntryData {
     rawWarnings: p.rawWarnings ?? p.warnings ?? [],
     amountsPaise: amounts,
     documentUrl: p.documentUrl,
+    documentId: p.documentId ? String(p.documentId) : null,
     category: p.category ?? null,
     checks: p.checks ?? [],
     narration: p.narration ?? null,
@@ -218,7 +219,9 @@ export default function ReviewQueuePage() {
     // A flagged entry (likely duplicate, GST likely blocked…) is never approved
     // in bulk, however confident the extraction was: a person looks at it.
     const confident = allEntries.filter((e) => e.confidenceOverall >= 0.9);
-    const highConf = confident.filter((e) => !(e.checks ?? []).length);
+    // Nor is one whose account the AI model picked, or nothing fitted: only an
+    // account from a rule or your own past choice goes through in bulk.
+    const highConf = confident.filter((e) => !(e.checks ?? []).length && !['ai', 'default'].includes(e.category?.source ?? ''));
     const flagged = confident.length - highConf.length;
     if (!highConf.length) {
       showToast(flagged ? `${flagged} confident ${flagged === 1 ? 'entry needs' : 'entries need'} a look first, so none were approved` : 'No high-confidence entries to approve');
@@ -279,16 +282,16 @@ export default function ReviewQueuePage() {
   return (
     <div className="space-y-6 max-w-[1100px] mx-auto">
       {/* Header */}
-      <div className="flex items-start justify-between">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-h1 font-display text-ink-900">
+          <h1 className="text-h1 font-display text-navy-900">
             Review &amp; post
           </h1>
           <p className="text-body text-ink-500 mt-1">
             I&apos;ve pulled the details. Confirm or fix, then post.
           </p>
         </div>
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <GuideButton guide="review" />
           <Button
             variant="secondary"
@@ -359,7 +362,7 @@ export default function ReviewQueuePage() {
               onClick={() => setCurrentIndex(i)}
               className={`shrink-0 rounded-md border-2 px-3 py-2 text-caption text-left transition-colors min-w-[140px] ${
                 i === currentIndex
-                  ? 'border-saffron-600 bg-honey-50 text-ink-900'
+                  ? 'border-brand-600 bg-honey-50 text-ink-900'
                   : 'border-line-200 bg-surface-card text-ink-500 hover:border-ink-400'
               }`}
             >

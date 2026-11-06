@@ -16,10 +16,11 @@ import { AccountsService } from '../gl/accounts.service';
 import { SystemAccountKey } from '../gl/schemas/ledger-account.schema';
 import { LearningService } from './learning.service';
 import { SubledgerSyncService } from './subledger-sync.service';
-import { ExpenseCategorizerService } from './categorisation/expense-categorizer.service';
+import { CategorySuggestion, ExpenseCategorizerService } from './categorisation/expense-categorizer.service';
 import { BillChecksService } from './checks/bill-checks.service';
+import { BillCheck, paidCheck } from './checks/bill-checks';
 import { withOrg } from '../database/tenant.plugin';
-import { dueDateFromTerms } from '../extraction/invoice-checks';
+import { dueDateFromTerms, ROUNDING_TOLERANCE_PAISE } from '../extraction/invoice-checks';
 import { Vendor, VendorDocument } from '../purchase/schemas/vendor.schema';
 import { BankStatementLine, BankStatementLineDocument } from '../banking/schemas/bank-statement-line.schema';
 import { TdsSection, defaultTdsRateBps, tdsOn } from '../gl/tds';
@@ -70,6 +71,8 @@ interface SuggestedLineDraft {
 /** Map extracted documentType to VoucherType for the journal. */
 /** Document types whose main account is worth remembering per party. */
 const LEARNABLE = new Set(['purchase_invoice', 'bill', 'receipt', 'bank_payment', 'bank_receipt']);
+/** Bulk approval never takes less confidence than this. */
+export const BULK_APPROVE_FLOOR = 0.9;
 
 function toVoucherType(docType: string): VoucherType {
   switch (docType) {
@@ -213,6 +216,79 @@ export class ProposalsService {
     return lines;
   }
 
+  /**
+   * A bill whose lines are different things (a laptop and a ream of paper)
+   * books each to its own account, by the rules for each line, instead of the
+   * whole bill under one. Only when the lines' amounts account for the cost
+   * line, so the split never changes the total. Returns how it split, or null.
+   */
+  private async splitByLine(
+    orgId: string,
+    lines: SuggestedLineDraft[],
+    idx: number,
+    items: Array<{ description?: string | null; hsnSac?: string | null; qty?: number | null; ratePaise?: number | null; amountPaise?: number | null }>,
+    pick: CategorySuggestion,
+  ): Promise<string | null> {
+    if (items.length < 2) return null;
+    const cost = lines[idx].debitPaise;
+    const sum = items.reduce((s, l) => s + (l.amountPaise ?? 0), 0);
+    if (sum <= 0 || Math.abs(sum - cost) > ROUNDING_TOLERANCE_PAISE) return null;
+    const perLine = await this.categorizer.forLines(orgId, items);
+    const groups = new Map<string, { s: CategorySuggestion; paise: number }>();
+    items.forEach((it, i) => {
+      const s = perLine[i] ?? pick;
+      const g = groups.get(s.accountId) ?? { s, paise: 0 };
+      g.paise += it.amountPaise ?? 0;
+      groups.set(s.accountId, g);
+    });
+    if (groups.size < 2) return null;
+    const parts = [...groups.values()].sort((a, b) => b.paise - a.paise);
+    // The cost line's amount is kept to the paisa: any rounding stays with the largest part.
+    parts[0].paise += cost - sum;
+    const base = lines[idx];
+    lines.splice(
+      idx,
+      1,
+      ...parts.map((p) => ({
+        ...base,
+        accountName: p.s.accountName,
+        accountCode: p.s.accountCode,
+        accountId: new Types.ObjectId(p.s.accountId),
+        debitPaise: p.paise,
+        confidence: Math.min(p.s.confidence, 0.75),
+        isAiSuggested: true,
+      })),
+    );
+    return `The lines are different things, so each goes to its own account: ${parts
+      .map((p) => `${p.s.accountName} ₹${(p.paise / 100).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`)
+      .join(', ')}`;
+  }
+
+  /**
+   * GST that section 17(5) blocks is part of the cost: take the input GST
+   * lines out and add their amount to the cost lines, in proportion. The
+   * credit side is untouched (under reverse charge the tax is still payable).
+   */
+  private async moveGstToCost(orgId: string, lines: SuggestedLineDraft[]): Promise<void> {
+    const keys = [SystemAccountKey.GST_INPUT_CGST, SystemAccountKey.GST_INPUT_SGST, SystemAccountKey.GST_INPUT_IGST, SystemAccountKey.GST_INPUT_CESS];
+    const gstIds = new Set<string>();
+    for (const k of keys) gstIds.add(String((await this.accountsService.resolveSystemAccount(orgId, k))._id));
+    const roundOff = String((await this.accountsService.resolveSystemAccount(orgId, SystemAccountKey.ROUND_OFF))._id);
+    const gst = lines.filter((l) => gstIds.has(String(l.accountId)) && l.debitPaise > 0);
+    const blocked = gst.reduce((s, l) => s + l.debitPaise, 0);
+    const costs = lines.filter((l) => l.debitPaise > 0 && !gstIds.has(String(l.accountId)) && String(l.accountId) !== roundOff);
+    const base = costs.reduce((s, l) => s + l.debitPaise, 0);
+    if (blocked <= 0 || base <= 0) return;
+    let left = blocked;
+    const sorted = [...costs].sort((a, b) => b.debitPaise - a.debitPaise);
+    sorted.forEach((l, i) => {
+      const share = i === sorted.length - 1 ? left : Math.floor((blocked * l.debitPaise) / base);
+      l.debitPaise += share;
+      left -= share;
+    });
+    for (const g of gst) lines.splice(lines.indexOf(g), 1);
+  }
+
   /** Create a ProposedEntry from an ExtractedDocument. Called by the processor after extraction. */
   async createFromExtracted(
     extractedDocId: string,
@@ -238,10 +314,11 @@ export class ProposalsService {
         .filter(({ l }) => l.debitPaise > 0 && !l.accountName.toLowerCase().includes('gst'))
         .sort((a, b) => b.l.debitPaise - a.l.debitPaise)[0]?.i;
       if (primaryIdx !== undefined) {
+        const items = (extracted.lineItems ?? []).map((l) => ({ description: l.description, hsnSac: l.hsnSac, qty: l.qty, ratePaise: l.ratePaise, amountPaise: l.amountPaise }));
         const pick = await this.categorizer.suggest(orgId, {
           kind: 'bill',
           partyName: extracted.vendor?.name ?? null,
-          lines: (extracted.lineItems ?? []).map((l) => ({ description: l.description, hsnSac: l.hsnSac })),
+          lines: items,
           amountPaise: suggestedLines[primaryIdx].debitPaise,
         });
         const line = suggestedLines[primaryIdx];
@@ -251,6 +328,12 @@ export class ProposalsService {
         line.confidence = pick.confidence;
         line.isAiSuggested = pick.source !== 'learned';
         category = { source: pick.source, reason: pick.reason, accountName: pick.accountName, confidence: pick.confidence };
+        // A bill of different things books each to its own account. A party a
+        // person has filed before keeps their one account.
+        if (pick.source !== 'learned') {
+          const split = await this.splitByLine(orgId, suggestedLines, primaryIdx, items, pick);
+          if (split) category = { source: 'rule', reason: split, accountName: pick.accountName, confidence: Math.min(pick.confidence, 0.75) };
+        }
       }
     }
 
@@ -259,7 +342,7 @@ export class ProposalsService {
     // Before a person sees it: is this a bill we already have, from whom it
     // says it is, and with GST that can be claimed?
     const a = extracted.amountsPaise;
-    const checks =
+    const checks: BillCheck[] =
       isPurchase || extracted.documentType === 'receipt'
         ? await this.billChecks.check({
             orgId,
@@ -268,10 +351,16 @@ export class ProposalsService {
             invoiceNumber: extracted.invoiceNumber?.value ?? null,
             invoiceDate: extracted.invoiceDate?.value ?? null,
             totalPaise: a?.total ?? 0,
+            taxablePaise: a?.taxableValue ?? 0,
             gstPaise: (a?.cgst ?? 0) + (a?.sgst ?? 0) + (a?.igst ?? 0) + (a?.cess ?? 0),
             lines: (extracted.lineItems ?? []).map((l) => ({ description: l.description, hsnSac: l.hsnSac })),
           })
         : [];
+    // Paid at the counter: an expense paid, not a bill to pay later.
+    if (isPurchase) checks.push(...paidCheck(extracted.paidAtCounter as Parameters<typeof paidCheck>[0]));
+    // GST the law blocks (17(5)) is part of the cost, not input credit: the
+    // safer side, and the reviewer can move it back before approving.
+    if (checks.some((c) => c.code === 'blocked_itc' && c.moveToCost)) await this.moveGstToCost(orgId, suggestedLines);
 
     const proposal = await this.proposalModel.create({
       orgId,
@@ -610,10 +699,21 @@ export class ProposalsService {
     actorId: string,
     threshold = 0.9,
   ): Promise<{ approved: number }> {
+    // Never below 0.9, whatever a caller asks: bulk approval is for entries
+    // nobody needs to read line by line.
+    const floor = Number.isFinite(threshold) ? Math.min(1, Math.max(BULK_APPROVE_FLOOR, threshold)) : BULK_APPROVE_FLOOR;
     const highConf = await withOrg(orgId, () =>
       this.proposalModel
-        // A flagged proposal (possible duplicate, blocked GST…) always gets a person's look.
-        .find({ status: ProposedEntryStatus.PROPOSED, confidenceOverall: { $gte: threshold }, 'checks.0': { $exists: false } })
+        // A flagged proposal (possible duplicate, blocked GST…) always gets a
+        // person's look, and so does one whose account the AI model picked or
+        // nothing fitted: only an account from a rule or a person's past
+        // choice is approved in bulk.
+        .find({
+          status: ProposedEntryStatus.PROPOSED,
+          confidenceOverall: { $gte: floor },
+          'checks.0': { $exists: false },
+          'category.source': { $nin: ['ai', 'default'] },
+        })
         .exec(),
     );
 

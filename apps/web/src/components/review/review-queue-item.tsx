@@ -11,6 +11,8 @@ import { CheckCircle, X, Pencil, FileText } from 'lucide-react';
 
 export interface ProposedEntryData {
   id: string;
+  /** The upload behind it, when there is one: "Record as expense" opens it in the expense form. */
+  documentId?: string | null;
   documentType: string;
   vendorName: string | null;
   vendorGstin: string | null;
@@ -280,7 +282,7 @@ export function ReviewQueueItem({ entry, accounts, onApprove, onReject }: Review
         </div>
 
         {/* Checks against the books, then extraction's own warnings */}
-        <ChecksBanner checks={entry.checks ?? []} />
+        <ChecksBanner checks={entry.checks ?? []} documentId={entry.documentId} />
         <WarningsBanner warnings={entry.rawWarnings} />
 
         {/* Actions */}

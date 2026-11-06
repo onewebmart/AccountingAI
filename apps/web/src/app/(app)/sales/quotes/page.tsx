@@ -80,6 +80,7 @@ function DraftFromMessage() {
         {pending && <span className="text-caption text-pending-fg">The AI is reading it…</span>}
         {draft.isError && <span className="text-caption text-error-fg">{errorText(draft.error)}</span>}
         {poll.data?.status === 'none' && <span className="text-caption text-ink-500">{poll.data.message}</span>}
+        {poll.data?.status === 'failed' && <span className="text-caption text-error-fg">{poll.data.message}</span>}
       </div>
     </Section>
   );

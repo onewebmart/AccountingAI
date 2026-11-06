@@ -306,9 +306,11 @@ describe('approveHighConfidence', () => {
   it('only approves proposals at or above the confidence threshold', async () => {
     // Create two high-confidence and one low-confidence proposal
     // Three different vendors' bills, so none is a duplicate of another.
+    // Paper (HSN 4802): a rule reads the account, so these may go in bulk.
     const vendor = (name: string, number: string) => ({
       vendor: { name, gstin: null, confidence: 0.95 },
       invoiceNumber: { value: number, confidence: 0.95 },
+      lineItems: [{ description: 'A4 copier paper', hsnSac: '4802', qty: 1, ratePaise: 1000000, amountPaise: 1000000, taxRatePct: 18 }],
     });
     const highConf1 = await seedExtracted(extractedModel, {
       ...vendor('Bulk Vendor One', 'B1-001'),
@@ -345,6 +347,7 @@ describe('approveHighConfidence', () => {
       invoiceNumber: { value: 'TB/77', confidence: 0.98 },
       invoiceDate: { value: '2025-08-10', confidence: 0.98 },
       confidenceOverall: 0.97,
+      lineItems: [{ description: 'A4 copier paper', hsnSac: '4802', qty: 1, ratePaise: 1000000, amountPaise: 1000000, taxRatePct: 18 }],
     };
     const first = await svc.createFromExtracted((await seedExtracted(extractedModel, same))._id.toString(), ORG_ID);
     const second = await svc.createFromExtracted((await seedExtracted(extractedModel, same))._id.toString(), ORG_ID);
@@ -576,5 +579,117 @@ describe('TDS and reverse charge on proposed bills', () => {
 
     const approved = await svc.approve({ proposalId: proposal._id.toString(), orgId: ORG_ID, actorId: ACTOR_ID });
     expect((await bills().findOne({ journalId: approved.journalId }).exec())?.isReverseCharge).toBe(true);
+  });
+});
+
+// ── What the AI proposes for an Indian bill ───────────────────────────────
+
+describe('AI bookkeeping for Indian bills', () => {
+  /** Net amount per account on a proposal: debit positive, credit negative. */
+  const byAccount = (p: { suggestedLines: Array<{ accountName: string; debitPaise: number; creditPaise: number }> }) =>
+    p.suggestedLines.reduce<Record<string, number>>((m, l) => ({ ...m, [l.accountName]: (m[l.accountName] ?? 0) + l.debitPaise - l.creditPaise }), {});
+  const balanced = (p: { suggestedLines: Array<{ debitPaise: number; creditPaise: number }> }) =>
+    p.suggestedLines.reduce((s, l) => s + l.debitPaise, 0) === p.suggestedLines.reduce((s, l) => s + l.creditPaise, 0);
+  const amounts = (taxable: number, half: number) => ({ taxableValue: taxable, cgst: half, sgst: half, igst: 0, cess: 0, total: taxable + 2 * half, confidence: 0.9 });
+
+  it('books toner and box files as stationery, not as a fixed asset', async () => {
+    const ex = await seedExtracted(extractedModel, {
+      vendor: { name: 'Shree Ganesh Stationers', gstin: null, confidence: 0.9 },
+      invoiceNumber: { value: 'SGS/26-27/0457', confidence: 0.9 },
+      amountsPaise: amounts(575000, 51750),
+      lineItems: [
+        { description: 'Printer toner cartridge HP 88A', hsnSac: '8443', qty: 2, ratePaise: 145000, amountPaise: 290000, taxRatePct: 18 },
+        { description: 'Box files, foolscap (pack of 10)', hsnSac: '4820', qty: 5, ratePaise: 57000, amountPaise: 285000, taxRatePct: 18 },
+      ],
+    });
+    const p = await svc.createFromExtracted(String(ex._id), ORG_ID);
+    const a = byAccount(p);
+    expect(a['Office & Stationery']).toBe(575000);
+    expect(a['Office Equipment']).toBeUndefined();
+    expect(balanced(p)).toBe(true);
+  });
+
+  it('splits a laptop and paper between the asset and stationery', async () => {
+    const ex = await seedExtracted(extractedModel, {
+      vendor: { name: 'Pune Computers', gstin: null, confidence: 0.9 },
+      invoiceNumber: { value: 'PC-881', confidence: 0.9 },
+      amountsPaise: amounts(5800000, 522000),
+      lineItems: [
+        { description: 'Dell Latitude laptop with charger', hsnSac: '8471', qty: 1, ratePaise: 5500000, amountPaise: 5500000, taxRatePct: 18 },
+        { description: 'A4 copier paper, 500 sheets', hsnSac: '4802', qty: 10, ratePaise: 30000, amountPaise: 300000, taxRatePct: 18 },
+      ],
+    });
+    const p = await svc.createFromExtracted(String(ex._id), ORG_ID);
+    const a = byAccount(p);
+    expect(a['Office Equipment']).toBe(5500000);
+    expect(a['Office & Stationery']).toBe(300000);
+    expect(a['Input CGST']).toBe(522000);
+    expect(balanced(p)).toBe(true);
+    expect(p.category?.reason).toMatch(/each goes to its own account/);
+  });
+
+  it('books the GST on a restaurant bill into the cost (17(5)), not as input credit', async () => {
+    const ex = await seedExtracted(extractedModel, {
+      vendor: { name: 'Hotel Annapurna Veg', gstin: null, confidence: 0.9 },
+      invoiceNumber: { value: '1182', confidence: 0.9 },
+      amountsPaise: amounts(44000, 1100),
+      lineItems: [
+        { description: 'Veg Thali x2', hsnSac: null, qty: 2, ratePaise: 18000, amountPaise: 36000, taxRatePct: 5 },
+        { description: 'Masala Chaas x2', hsnSac: null, qty: 2, ratePaise: 4000, amountPaise: 8000, taxRatePct: 5 },
+      ],
+    });
+    const p = await svc.createFromExtracted(String(ex._id), ORG_ID);
+    const a = byAccount(p);
+    expect(a['Input CGST']).toBeUndefined();
+    expect(a['Input SGST']).toBeUndefined();
+    const cost = p.suggestedLines.filter((l) => l.debitPaise > 0).reduce((s, l) => s + l.debitPaise, 0);
+    expect(cost).toBe(46200);
+    expect(a['Accounts Payable']).toBe(-46200);
+    expect(p.checks.map((c) => c.code)).toContain('blocked_itc');
+    expect(balanced(p)).toBe(true);
+  });
+
+  it('keeps GST claimable on tea bought from a trader: flagged, not moved', async () => {
+    const ex = await seedExtracted(extractedModel, {
+      vendor: { name: 'Assam Tea Traders', gstin: null, confidence: 0.9 },
+      invoiceNumber: { value: 'ATT-77', confidence: 0.9 },
+      amountsPaise: amounts(100000, 2500),
+      lineItems: [{ description: 'Tea CTC 25 kg', hsnSac: '0902', qty: 1, ratePaise: 100000, amountPaise: 100000, taxRatePct: 5 }],
+    });
+    const p = await svc.createFromExtracted(String(ex._id), ORG_ID);
+    expect(byAccount(p)['Input CGST']).toBe(2500);
+    expect(p.checks.map((c) => c.code)).toContain('blocked_itc');
+  });
+
+  it('says so when the bill was paid at the counter', async () => {
+    const ex = await seedExtracted(extractedModel, {
+      vendor: { name: 'Quick Print Xerox', gstin: null, confidence: 0.9 },
+      invoiceNumber: { value: 'QP-12', confidence: 0.9 },
+      paidAtCounter: { mode: 'upi', evidence: 'Paid by UPI' },
+    });
+    const p = await svc.createFromExtracted(String(ex._id), ORG_ID);
+    const paid = p.checks.find((c) => c.code === 'paid_at_counter');
+    expect(paid?.message).toMatch(/paid by UPI/);
+  });
+
+  it('suggests TDS under 194J for professional fees past ₹50,000 in the year', async () => {
+    const ex = await seedExtracted(extractedModel, {
+      vendor: { name: 'Mehta & Associates', gstin: null, confidence: 0.9 },
+      invoiceNumber: { value: 'MA/26/045', confidence: 0.9 },
+      amountsPaise: amounts(6000000, 540000),
+      lineItems: [{ description: 'Professional fees for statutory audit', hsnSac: '998221', qty: 1, ratePaise: 6000000, amountPaise: 6000000, taxRatePct: 18 }],
+    });
+    const p = await svc.createFromExtracted(String(ex._id), ORG_ID);
+    const tds = p.checks.find((c) => c.code === 'tds_section');
+    expect(tds?.message).toMatch(/194J-b/);
+    expect(byAccount(p)['Professional Fees']).toBe(6000000);
+  });
+
+  it('bulk approval leaves a proposal whose account the AI model picked, at any threshold', async () => {
+    const ex = await seedExtracted(extractedModel, { vendor: { name: 'Model Picked Co', gstin: null, confidence: 0.95 }, invoiceNumber: { value: 'MPC-1', confidence: 0.95 }, confidenceOverall: 0.97 });
+    const p = await svc.createFromExtracted(String(ex._id), ORG_ID);
+    await proposalModel.updateOne({ _id: p._id }, { $set: { 'category.source': 'ai', checks: [] } }).exec();
+    await svc.approveHighConfidence(ORG_ID, ACTOR_ID, 0);
+    expect((await proposalModel.findById(p._id).lean().exec())?.status).toBe(ProposedEntryStatus.PROPOSED);
   });
 });

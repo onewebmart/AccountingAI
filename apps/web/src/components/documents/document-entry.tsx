@@ -38,6 +38,14 @@ export interface DocumentExtraction {
   lines: Array<{ description: string; hsnSac: string | null; qty: number; ratePaise: number; taxRatePct: number; amountPaise: number }>;
   confidence: number | null;
   enteredAs: EnteredAs | null;
+  /** What the AI's proposal worked out: its account, blocked GST (17(5)), and a payment made at the counter. */
+  suggested?: {
+    accountId: string | null;
+    accountName: string | null;
+    reason: string | null;
+    gstBlocked: boolean;
+    paid: { mode: string; evidence: string } | null;
+  } | null;
 }
 
 export interface EnteredAs {

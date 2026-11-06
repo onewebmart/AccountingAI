@@ -22,6 +22,17 @@ interface CodeRule {
   name: string;
   confidence: number;
   what: string;
+  /** A fixed asset account: only for things kept, at or above the capitalisation limit. */
+  capital?: boolean;
+}
+
+/** One line of a bill, as read off it. Amounts in paise. */
+export interface CategoryLine {
+  description?: string | null;
+  hsnSac?: string | null;
+  qty?: number | null;
+  ratePaise?: number | null;
+  amountPaise?: number | null;
 }
 
 /** HSN (goods) and SAC (services, chapter 99) prefixes, most specific first. */
@@ -40,9 +51,61 @@ const CODE_RULES: CodeRule[] = [
   { prefixes: ['2716'], code: '6120', name: 'Electricity & Utilities', confidence: 0.9, what: 'electrical energy' },
   { prefixes: ['2710'], code: '6140', name: 'Travelling & Conveyance', confidence: 0.7, what: 'petrol and diesel' },
   { prefixes: ['48', '9608', '9609'], code: '6170', name: 'Office & Stationery', confidence: 0.75, what: 'paper and stationery' },
-  { prefixes: ['8471', '8443', '8517'], code: '1510', name: 'Office Equipment', confidence: 0.7, what: 'computers, printers and phones' },
-  { prefixes: ['9401', '9403'], code: '1520', name: 'Furniture & Fixtures', confidence: 0.7, what: 'furniture' },
+  { prefixes: ['8471', '8443', '8517'], code: '1510', name: 'Office Equipment', confidence: 0.7, what: 'computers, printers and phones', capital: true },
+  { prefixes: ['9401', '9403'], code: '1520', name: 'Furniture & Fixtures', confidence: 0.7, what: 'furniture', capital: true },
 ];
+
+/**
+ * A fixed asset is something the business keeps and uses for more than a
+ * year. Under the same HSN as a printer or a laptop sit things that are used
+ * up — toner, ink, cables, a mouse — and those are expenses. So is anything
+ * below the capitalisation limit a unit: most Indian SMEs expense items under
+ * ₹5,000 rather than carry them in the fixed asset register.
+ */
+export const CAPITALISE_FROM_PAISE = 5_000_00;
+/** Always used up, whatever else the line names ("Printer toner cartridge"). */
+const CONSUMABLE = /\b(toner|cartridges?|ink|refills?|drum units?|ribbons?|recharge|repairs?|servicing|amc)\b/i;
+/** Used up when sold on their own; part of the asset when it is named too ("Laptop with charger"). */
+const ACCESSORY =
+  /\b(cables?|adapters?|chargers?|mouse|mice|keyboards?|pen ?drives?|memory cards?|sd cards?|batter(y|ies)|spares?|spare parts?|accessor(y|ies)|covers?|cases?|tempered glass|screen guards?)\b/i;
+const EQUIPMENT =
+  /\b(laptops?|desktops?|computers?|notebooks?|printers?|scanners?|copiers?|phones?|mobiles?|smartphones?|tablets?|monitors?|servers?|projectors?|routers?|chairs?|tables?|desks?|cupboards?|almirahs?|sofas?|cabinets?|workstations?)\b/i;
+
+function usedUp(description: string | null | undefined): string | null {
+  const d = description ?? '';
+  const strong = d.match(CONSUMABLE);
+  if (strong) return strong[0];
+  const weak = d.match(ACCESSORY);
+  return weak && !EQUIPMENT.test(d) ? weak[0] : null;
+}
+const SMALL_ITEMS = { code: '6170', name: 'Office & Stationery', confidence: 0.75 };
+
+/** A line's value for one unit: its rate, or its amount over its quantity. */
+function unitValuePaise(line: CategoryLine): number | null {
+  if (line.ratePaise && line.ratePaise > 0) return line.ratePaise;
+  if (line.amountPaise && line.amountPaise > 0) return line.qty && line.qty > 0 ? Math.round(line.amountPaise / line.qty) : line.amountPaise;
+  return null;
+}
+
+/** The rule a line's HSN/SAC code satisfies, with assets kept apart from what is used up. */
+function codeRuleFor(line: CategoryLine): RuleHit | null {
+  const hsn = line.hsnSac?.replace(/\D/g, '') ?? '';
+  if (!hsn) return null;
+  const rule = CODE_RULES.find((r) => r.prefixes.some((p) => hsn.startsWith(p)));
+  if (!rule) return null;
+  if (rule.capital) {
+    const used = usedUp(line.description);
+    if (used) {
+      return { ...SMALL_ITEMS, reason: `HSN ${hsn} is ${rule.what}, but "${used}" is used up, not kept: an expense, not a fixed asset` };
+    }
+    const unit = unitValuePaise(line);
+    if (unit !== null && unit < CAPITALISE_FROM_PAISE) {
+      const rupees = `₹${(unit / 100).toLocaleString('en-IN')}`;
+      return { ...SMALL_ITEMS, reason: `HSN ${hsn} is ${rule.what}, but at ${rupees} a unit it is below the ₹5,000 capitalisation limit: an expense` };
+    }
+  }
+  return { code: rule.code, name: rule.name, confidence: rule.confidence, reason: `HSN/SAC ${hsn} is ${rule.what}` };
+}
 
 interface WordRule {
   pattern: RegExp;
@@ -88,19 +151,18 @@ export function ruleFor(input: {
   kind: CategoryKind;
   partyName?: string | null;
   narration?: string | null;
-  lines?: Array<{ description?: string | null; hsnSac?: string | null }>;
+  lines?: CategoryLine[];
 }): RuleHit | null {
   const lines = input.lines ?? [];
 
-  // Codes are the stronger signal: they are what the supplier declared.
+  // Codes are the stronger signal: they are what the supplier declared. On a
+  // bill of several lines the largest line speaks for the bill; each line's
+  // own account is worked out separately (ruleForLine) when they differ.
   if (input.kind === 'bill') {
-    for (const line of lines) {
-      const hsn = line.hsnSac?.replace(/\D/g, '') ?? '';
-      if (!hsn) continue;
-      const rule = CODE_RULES.find((r) => r.prefixes.some((p) => hsn.startsWith(p)));
-      if (rule) {
-        return { code: rule.code, name: rule.name, confidence: rule.confidence, reason: `HSN/SAC ${hsn} is ${rule.what}` };
-      }
+    const byValue = [...lines].sort((a, b) => (b.amountPaise ?? 0) - (a.amountPaise ?? 0));
+    for (const line of byValue) {
+      const hit = codeRuleFor(line);
+      if (hit) return hit;
     }
   }
 
@@ -114,6 +176,15 @@ export function ruleFor(input: {
     }
   }
   return null;
+}
+
+/**
+ * One bill line's own account, from its code or its words: so a bill for a
+ * laptop and a box of paper books the laptop as an asset and the paper as
+ * stationery, rather than the whole bill under one of them.
+ */
+export function ruleForLine(line: CategoryLine): RuleHit | null {
+  return codeRuleFor(line) ?? ruleFor({ kind: 'bill', lines: [{ description: line.description }] });
 }
 
 /** Words in bank narrations that name the rail or the bank, not the party. */

@@ -223,4 +223,22 @@ describe('ask your books', () => {
     await ai.runAsk(orgId, q3.id);
     expect(await ai.answer(orgId, q3.id)).toMatchObject({ status: 'none', answer: null, table: null });
   });
+
+  it('ends the wait with a reason when the AI provider fails, for a question and for the summary', async () => {
+    const orgId = await withSales();
+    model.available = true;
+    const q = await ai.ask(orgId, ACTOR, 'Which customer brought in the most this autumn?');
+    model.json.mockRejectedValueOnce(new Error('[GoogleGenerativeAI Error]: [402 Payment Required] credits are depleted'));
+    await ai.runAsk(orgId, q.id);
+    const failed = await ai.answer(orgId, q.id);
+    expect(failed.status).toBe('failed');
+    expect(failed.reason).toMatch(/no credit left/);
+
+    const n = await ai.requestNarrative(orgId, ACTOR, '2026-10');
+    model.json.mockRejectedValueOnce(new Error('fetch failed'));
+    await ai.runNarrative(orgId, n.id);
+    const words = await ai.narrative(orgId, n.id);
+    expect(words.status).toBe('done');
+    expect(words.reason).toMatch(/could not be reached.*rules' words/);
+  });
 });

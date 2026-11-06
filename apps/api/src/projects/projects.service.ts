@@ -18,6 +18,7 @@ import { AiSuggestion, AiSuggestionDocument } from '../ai-suggestions/schemas/ai
 import { UsageMeterService } from '../ocr/usage-meter.service';
 import { ManagementReportsService } from '../reports/management.service';
 import { REPORT_MODEL, ReportModel } from '../reports/report-model';
+import { aiFailureReason } from '../common/ai-failure';
 import { addDays, todayIst } from '../automation/schedule';
 import { docAmounts, isInterState, lineAmount } from '../orders/doc-lines';
 import { Project, ProjectDocument, ProjectMember, ProjectTask } from './schemas/project.schema';
@@ -817,7 +818,15 @@ export class ProjectsService {
     const s = await this.suggestionModel.findOne({ _id: suggestionId, orgId, kind: 'time_lines' }).exec();
     if (!s || s.status !== 'queued') return;
     const { project, groups, stamp } = s.input as { project: string; groups: TimeGroup[]; stamp: string };
-    const answer = await this.model.json(timeLinesPrompt(project, groups), 500);
+    let answer: Awaited<ReturnType<ReportModel['json']>>;
+    try {
+      answer = await this.model.json(timeLinesPrompt(project, groups), 500);
+    } catch (err) {
+      // A model error ends the wait; the draft keeps the task and dates as its wording.
+      s.set({ status: 'none', reason: `${aiFailureReason(err)} The lines keep the task and dates.` });
+      await s.save();
+      return;
+    }
     if (answer) await this.usageMeter.recordAiTokens(orgId, answer.tokensIn, answer.tokensOut);
     const read = answer ? readTimeLines(answer.raw, groups) : new Map<number, string>();
     if (!read.size) {

@@ -6,7 +6,8 @@ import { DOCUMENT_PROCESSING_QUEUE } from './documents.service';
 import { DocumentsService } from './documents.service';
 import { StorageService } from './storage.service';
 import { OcrCascadeService } from '../ocr/ocr-cascade.service';
-import { ExtractionService } from '../extraction/extraction.service';
+import { ExtractionService, readFailureReason } from '../extraction/extraction.service';
+import { isAiProviderError } from '../common/ai-failure';
 import { ProposalsService } from '../proposals/proposals.service';
 import { SpreadsheetIngestService } from '../ingest/spreadsheet-ingest.service';
 import { isSpreadsheet } from '../ingest/spreadsheet-parser.service';
@@ -119,8 +120,11 @@ export class DocumentProcessingProcessor extends WorkerHost {
         : null;
       await this.tickChecklist(documentId, orgId, originalName, extractedType);
     } catch (err) {
-      const reason = err instanceof Error ? err.message : String(err);
-      this.logger.error(`Document ${documentId} pipeline failed: ${reason}`);
+      const raw = err instanceof Error ? err.message : String(err);
+      this.logger.error(`Document ${documentId} pipeline failed: ${raw}`);
+      // A scan the AI could not read (no credit, a limit, a refused key) says
+      // so in words a person can act on, as extraction failures already do.
+      const reason = isAiProviderError(raw) ? readFailureReason(raw) : raw;
       await this.docs.updateStatus(documentId, DocumentStatus.FAILED, reason);
       throw err; // re-throw so BullMQ retries per job config
     }

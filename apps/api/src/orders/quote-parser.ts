@@ -22,7 +22,7 @@ const UNIT_CODE: Record<string, string> = {
 };
 export const unitCode = (unit: string | null) => (unit ? UNIT_CODE[unit.toLowerCase()] ?? null : null);
 
-const LEAD = /^(hi|hello|dear \w+|please|pls|kindly|we need|we want|need|send|supply|quote( me)?( for)?|quotation for|price for|rates? for|can you (send|supply|quote)|i need|we require|require|also|and|plus)[\s,:-]+/i;
+const LEAD = /^(hi+|hello|hey|namaste|namaskar|good (morning|afternoon|evening)|greetings|dear \w+|sir|madam|bhai|ji|please|pls|kindly|we need|we want|need|send( us| me)?|supply|quote( me)?( for)?|quotation for|price for|rates? for|can you (send|supply|quote)|i need|we require|require|also|and|plus)[\s,:-]+/i;
 const TAIL = /[\s,.]+(by|before|on|within)\s+[\w\s,]+$|[\s,.]+(asap|urgently|urgent|thanks|thank you|regards)\.?$/i;
 const QTY_FIRST = new RegExp(`^(\\d+(?:\\.\\d+)?)\\s*${UNIT}?\\s*(?:of|x|×)?\\s+(.{2,})$`, 'i');
 const QTY_LAST = new RegExp(`^(.{2,}?)\\s*(?:[-:x×*@]|qty|quantity)\\s*(\\d+(?:\\.\\d+)?)\\s*${UNIT}?$`, 'i');
@@ -33,7 +33,20 @@ function clean(segment: string): string {
   return s.replace(/[.!]+$/, '').replace(TAIL, '').replace(/[.!]+$/, '').trim();
 }
 
+/** A quantity and item later in a sentence: "can you arrange 20 box files". */
+const QTY_INSIDE = new RegExp(`(?:^|\\s)(\\d+(?:\\.\\d+)?)\\s*${UNIT}?\\s*(?:of|x|×)?\\s+([a-z][^\\d]{1,})$`, 'i');
+
 export function parseOrderText(text: string): ParsedLine[] {
+  return parseOrderMessage(text).lines;
+}
+
+/**
+ * The lines a message asks for, and the parts that carry a number but could
+ * not be read as one: those are shown on the draft ("Not read: …") so nothing
+ * a customer asked for is dropped without a word.
+ */
+export function parseOrderMessage(text: string): { lines: ParsedLine[]; skipped: string[] } {
+  const skipped: string[] = [];
   const segments = text
     // Lines, sentences, and lists run together: "…by Friday. Also 3 lamps", "10 pens, 5 pads".
     .split(/\r?\n|;|[.!?]\s+|,(?=\s*\d)|\s+and\s+(?=\d)|\s+&\s+(?=\d)|\s+plus\s+(?=\d)/i)
@@ -47,9 +60,19 @@ export function parseOrderText(text: string): ParsedLine[] {
       continue;
     }
     m = QTY_LAST.exec(s);
-    if (m) out.push({ text: s, qty: Number(m[2]), unit: m[3]?.toLowerCase() ?? null, itemText: m[1].trim() });
+    if (m) {
+      out.push({ text: s, qty: Number(m[2]), unit: m[3]?.toLowerCase() ?? null, itemText: m[1].trim() });
+      continue;
+    }
+    m = QTY_INSIDE.exec(s);
+    if (m) {
+      out.push({ text: s, qty: Number(m[1]), unit: m[2]?.toLowerCase() ?? null, itemText: m[3].trim() });
+      continue;
+    }
+    // A number we could not place: a person reads it, rather than it vanishing.
+    if (/\d/.test(s) && !/^\s*(by|before|on|till|until)\b/i.test(s)) skipped.push(s);
   }
-  return out.filter((l) => l.qty > 0 && l.qty < 1_000_000);
+  return { lines: out.filter((l) => l.qty > 0 && l.qty < 1_000_000), skipped };
 }
 
 const STOP = new Set(['of', 'the', 'a', 'an', 'for', 'with', 'and', 'size', 'quality', 'good', 'best', 'pcs', 'nos']);

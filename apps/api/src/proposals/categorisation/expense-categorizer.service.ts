@@ -6,13 +6,14 @@ import { LedgerAccount, LedgerAccountDocument, SystemAccountKey } from '../../gl
 import { AccountsService } from '../../gl/accounts.service';
 import { LearningService } from '../learning.service';
 import { CATEGORY_MODEL, CategoryModel } from './category-model';
-import { CategoryKind, ruleFor } from './category-rules';
+import { CategoryKind, CategoryLine, ruleFor, ruleForLine } from './category-rules';
+import { aiFailureReason } from '../../common/ai-failure';
 
 export interface CategoryInput {
   kind: CategoryKind;
   partyName?: string | null;
   narration?: string | null;
-  lines?: Array<{ description?: string | null; hsnSac?: string | null }>;
+  lines?: CategoryLine[];
   amountPaise: number;
 }
 
@@ -89,6 +90,7 @@ export class ExpenseCategorizerService {
     }
 
     // 3. The model, choosing from this org's accounts only.
+    let modelDown: string | null = null;
     if (this.model.available && (input.partyName || input.narration || input.lines?.some((l) => l.description))) {
       try {
         const choice = await this.model.choose({
@@ -106,8 +108,10 @@ export class ExpenseCategorizerService {
         }
         if (choice) this.logger.warn(`Model chose ${choice.code}, which is not an account of org ${orgId}`);
       } catch (err) {
-        // The model is a nice-to-have; the proposal still gets a safe default.
+        // The model is a nice-to-have; the proposal still gets a safe default,
+        // and the reviewer is told the AI did not look, rather than left to guess.
         this.logger.warn(`Category model failed: ${err instanceof Error ? err.message : String(err)}`);
+        modelDown = aiFailureReason(err);
       }
     }
 
@@ -120,8 +124,28 @@ export class ExpenseCategorizerService {
       accountName: fallback.name,
       confidence: input.kind === 'bill' ? 0.3 : 0.2,
       source: 'default',
-      reason: input.kind === 'bill' ? 'No rule or past choice fits; check the account' : 'Unrecognised; choose the account',
+      reason: `${modelDown ? `${modelDown} ` : ''}${input.kind === 'bill' ? 'No rule or past choice fits; check the account' : 'Unrecognised; choose the account'}`,
     };
+  }
+
+  /**
+   * Each bill line's own account where a code or word rule says plainly what
+   * it is, in this org's chart; null for a line no rule reads. Rules only: a
+   * model call per line would cost more than the split is worth, and lines no
+   * rule reads stay with the bill's account.
+   */
+  async forLines(orgId: string, lines: CategoryLine[]): Promise<Array<CategorySuggestion | null>> {
+    const chart = await this.candidates(orgId, 'bill');
+    return lines.map((line) => {
+      const hit = ruleForLine(line);
+      if (!hit) return null;
+      const account =
+        chart.find((a) => a.code === hit.code && a.name.toLowerCase() === hit.name.toLowerCase()) ??
+        chart.find((a) => a.name.toLowerCase() === hit.name.toLowerCase());
+      return account
+        ? { accountId: account._id.toString(), accountCode: account.code, accountName: account.name, confidence: hit.confidence, source: 'rule' as const, reason: hit.reason }
+        : null;
+    });
   }
 
   /**

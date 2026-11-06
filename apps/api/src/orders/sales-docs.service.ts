@@ -18,8 +18,9 @@ import { InvoicePdfData, renderInvoicePdf } from '../sales/invoice-pdf';
 import { todayIst, addDays } from '../automation/schedule';
 import { ChallanReason, DeliveryChallan, DeliveryChallanDocument, DocLine, Quote, QuoteDocument, SalesOrder, SalesOrderDocument } from './schemas/sales-docs.schema';
 import { DOC_NUMBER, DiscountInput, DocLineInput, adjustmentOf, discountAsked, docAmounts, isInterState, lineAmount, lineProblem, priceDoc, text } from './doc-lines';
-import { matchItem, parseOrderText, unitCode } from './quote-parser';
+import { matchItem, parseOrderMessage, unitCode } from './quote-parser';
 import { QUOTE_MODEL, QuoteModel, readQuoteAnswer } from './quote-model';
+import { aiFailureReason } from '../common/ai-failure';
 
 export const QUOTE_DRAFT_QUEUE = 'quote-drafts';
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -241,7 +242,7 @@ export class SalesDocsService {
     const text = input.text?.trim();
     if (!text) throw new BadRequestException('Paste the customer’s message.');
     const items = await this.itemModel.find({ orgId, isActive: true }).lean().exec();
-    const parsed = parseOrderText(text);
+    const { lines: parsed, skipped } = parseOrderMessage(text);
     if (parsed.length === 0) {
       if (!this.model.available || items.length === 0) {
         throw new BadRequestException('No quantities could be read from that message. Type the quote, or set up items and AI to draft it.');
@@ -250,7 +251,7 @@ export class SalesDocsService {
       await this.queue.add('draft', { orgId, suggestionId: s._id.toString() }, { attempts: 2, removeOnComplete: true, removeOnFail: 100 });
       return { status: 'queued' as const, suggestionId: s._id.toString(), quote: null };
     }
-    const unread: string[] = [];
+    const unread: string[] = [...skipped];
     const lines: DocLineInput[] = [];
     for (const p of parsed) {
       const hit = matchItem(p.itemText, items);
@@ -267,7 +268,15 @@ export class SalesDocsService {
     if (!s || s.status !== 'queued') return;
     const { customerId, text } = s.input as { customerId: string; text: string };
     const items = await this.itemModel.find({ orgId, isActive: true }).lean().exec();
-    const answer = await this.model.read(text, items.map((i) => i.name));
+    let answer: Awaited<ReturnType<QuoteModel['read']>>;
+    try {
+      answer = await this.model.read(text, items.map((i) => i.name));
+    } catch (err) {
+      // A model error ends the wait with a reason; the quote can be typed by hand.
+      s.set({ status: 'failed', reason: `${aiFailureReason(err)} Or type the quote.` });
+      await s.save();
+      return;
+    }
     if (answer) await this.usageMeter.recordAiTokens(orgId, answer.tokensIn, answer.tokensOut);
     const read = answer ? readQuoteAnswer(answer.raw, items.map((i) => i.name)) : [];
     if (read.length === 0) {

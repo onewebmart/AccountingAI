@@ -43,7 +43,7 @@ function MoneyInput({ paise, onChange, label }: { paise: number; onChange: (pais
         setText(next);
         onChange(next ? Math.round(parseFloat(next) * 100) : 0);
       }}
-      className="w-28 rounded border border-line-200 bg-surface-card px-2 py-1 text-right font-mono text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-marigold-400"
+      className="w-28 rounded border border-line-200 bg-surface-card px-2 py-1 text-right font-mono text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-brand-600"
     />
   );
 }
@@ -86,7 +86,7 @@ export function JournalLinesEditor({ lines, editing, accounts, onChange }: Journ
                       const account = accounts.find((a) => a._id === e.target.value);
                       update(i, { accountId: e.target.value, accountName: account?.name ?? '' });
                     }}
-                    className="w-full rounded border border-line-200 bg-surface-card px-2 py-1 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-marigold-400"
+                    className="w-full rounded border border-line-200 bg-surface-card px-2 py-1 text-body text-ink-900 focus:outline-none focus:ring-2 focus:ring-brand-600"
                   >
                     <option value="">Choose an account…</option>
                     {/* Keep a suggested account selectable even if the list has not loaded it. */}

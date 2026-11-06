@@ -97,9 +97,12 @@ export const CORE_GUIDES: Record<AreaKeys<'core'>, Guide> = {
     can: [
       t('See the original document beside what the AI read, with how sure it is of each field.', 'असली डॉक्यूमेंट और AI ने जो पढ़ा, दोनों साथ देखें, हर फ़ील्ड की पक्की होने की डिग्री के साथ।'),
       t('See the account chosen and why: your past choice, the HSN/SAC or wording, or an AI suggestion.', 'चुना गया अकाउंट और उसकी वजह देखें: आपकी पिछली पसंद, HSN/SAC या शब्द, या AI का सुझाव।'),
-      t('Read the warnings: likely a duplicate, a GSTIN not on file, a new vendor with a large bill, GST likely not claimable.', 'चेतावनियाँ पढ़ें: शायद डुप्लिकेट, GSTIN मेल नहीं खाता, नए वेंडर का बड़ा बिल, GST क्रेडिट शायद नहीं मिलेगा।'),
+      t('Read the warnings: likely a duplicate, a GSTIN not on file, a new vendor with a large bill, GST likely not claimable, already paid, TDS may apply.', 'चेतावनियाँ पढ़ें: शायद डुप्लिकेट, GSTIN मेल नहीं खाता, नए वेंडर का बड़ा बिल, GST क्रेडिट शायद नहीं मिलेगा, पहले ही भुगतान हो चुका, TDS लग सकता है।'),
+      t('GST the law blocks (a restaurant meal, a salon) is already added to the cost; move it back only if you can claim it.', 'कानून जिस GST का क्रेडिट रोकता है (रेस्टोरेंट का खाना, सैलून), वह पहले से खर्च में जोड़ा गया है; क्रेडिट मिल सकता हो तभी वापस इनपुट GST में डालें।'),
+      t('A bill marked "Paid by UPI" or "Paid in cash": click **Record as expense** to book it as paid from bank or cash.', '"Paid by UPI" या नकद भुगतान वाला बिल: बैंक या कैश से भुगतान के रूप में दर्ज करने के लिए **Record as expense** दबाएँ।'),
+      t('Toner, ink and anything under ₹5,000 a unit go to expenses, not fixed assets; a bill of different things is split by line.', 'टोनर, इंक और ₹5,000 प्रति नग से कम की चीज़ें खर्च में जाती हैं, फ़िक्स्ड एसेट में नहीं; अलग-अलग चीज़ों वाला बिल लाइन के हिसाब से बँटता है।'),
       t('Fix the accounts or amounts, then approve and post, or reject.', 'अकाउंट या रकम ठीक करें, फिर मंज़ूर करके पोस्ट करें, या रिजेक्ट करें।'),
-      t('Approve in one go every entry at 90% or above with no warnings.', '90% या ज़्यादा पक्की और बिना चेतावनी वाली सारी एंट्री एक साथ मंज़ूर करें।'),
+      t('Approve in one go every entry at 90% or above with no warnings, whose account came from your past choice or a rule.', '90% या ज़्यादा पक्की, बिना चेतावनी वाली, और जिनका अकाउंट आपकी पिछली पसंद या नियम से चुना गया हो, वे सारी एंट्री एक साथ मंज़ूर करें।'),
     ],
     steps: [
       t('Open an entry. Compare the document on the left with the fields on the right.', 'एक एंट्री खोलें। बाईं ओर का डॉक्यूमेंट दाईं ओर के फ़ील्ड से मिलाएँ।'),

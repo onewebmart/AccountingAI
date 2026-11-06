@@ -538,6 +538,48 @@ Perpetual inventory (stock as an asset on purchase, cost of goods sold on each s
 | 15 | E-invoice pre-check | 4.16 | Lists what the IRP will reject, with fixes | Suggestion | E-invoice | S |
 | 16 | Ask your books | 4.20 | A question in plain words → answer with the report rows behind it | Nothing (read-only) | Report coverage | L |
 
+### 5.4 Status, November 2026
+
+Checked end to end on a live run: a scanned tax invoice and a photographed restaurant bill were read, proposed, held in Review until approved, and posted balanced. All AI model calls run in BullMQ jobs; no AI output reaches the ledger without a person's approval.
+
+**Built:**
+- **From 5.3:** 1 (partly: no "bank details changed" check on scans), 2, 3 (a suggestion; a person posts the contra), 4 (drafts only, nothing sent), 5 (new), 7–16.
+- **Not built:** 6.
+
+**Added:**
+- **Fixed asset or expense.**
+  - The HSN rules for computers, printers, phones and furniture now book consumables and anything under ₹5,000 a unit as expenses: toner, ink, cables, a mouse.
+  - A laptop at ₹55,000 is still Office Equipment, "with charger" or not.
+  - `CAPITALISE_FROM_PAISE` in `proposals/categorisation/category-rules.ts`.
+- **Split by line.** A bill of different things books each line to its own account, by the rules, when the line amounts account for the cost (`ProposalsService.splitByLine`).
+- **Blocked GST moved, not just flagged (17(5)).**
+  - The GST goes into the cost when the evidence is strong: the restaurant SAC, a vendor named as a restaurant, dhaba or caterer, a salon, a club, or leave travel.
+  - Item words alone ("tea", "juice") only flag, since a trader may resell them. Cars, construction, gifts, health and insurance only flag.
+- **Paid at the counter.**
+  - "Paid by UPI", "Payment mode: Cash" and similar wording is read from the document's text, with no model call (`paidAtCounter`).
+  - Review shows **Already paid** with **Record as expense**, which opens the expense form already set up: the account the AI chose, paid from the bank (or cash), and blocked GST not claimed.
+- **TDS section suggestion (5.3 #5).** 194C, 194J, 194I and 194H by SAC code or wording. It is shown only once this bill or the vendor's year passes the Finance Act 2025 limits (`suggestTdsSection` in `gl/tds.ts`).
+- **GST rate per line.** A CGST rate read as the line's GST rate (9 for 18) is doubled back when the bill's CGST and SGST say so (`fullGstRates`).
+- **Quotes from messages.** Greetings ("Namaste, please send…") no longer hide the items. Any part with a number that could not be read is listed as "Not read" instead of being dropped.
+
+**Fixed:**
+- **Stuck jobs.** Ask your books, quote drafting and invoice wording from time notes used to stay "queued" for ever when the AI provider failed. They now end with a reason. The monthly summary falls back to the rules' words.
+- **Bulk approval.** It never takes less than 0.9 confidence. It also skips entries whose account the AI model picked or nothing matched.
+- **Silent failures.**
+  - A categoriser that could not reach the AI now says so on the entry.
+  - A scan that fails for credit, a limit or the key shows a readable reason.
+  - With no AI key, scans fail with a reason instead of reading placeholder text (the mock OCR is for tests only).
+
+**Removed:** the Groq vision and extraction services, which were registered nowhere and read a key that was never configured. Gemini is the one provider. `GROQ_API_KEY` is gone from `.env.example`.
+
+**Still open:**
+- A second provider to fall back to when Gemini fails.
+- Metering for the category and statement models.
+- Approval policies on Review approvals (F2 of the audit).
+- The CRM support agent sends replies above 0.6 confidence without a person; the messaging provider is still a mock.
+- The statement model can name or create a bank account.
+- Chart-of-accounts suggestions (5.3 #6).
+
 **How "Ask your books" stays safe:**
 - The model gets a fixed set of read-only report tools (P&L, ledger, ageing, registers and so on), not database access.
 - Each tool call runs with the `orgId` from the JWT, through the tenant plugin.

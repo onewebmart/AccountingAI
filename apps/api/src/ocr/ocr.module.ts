@@ -38,11 +38,14 @@ import { DocumentTextExtractorService } from './document-text-extractor.service'
         mock: MockOcrProvider,
       ) => {
         const hasKey = !!config.get<string>('gemini.apiKey');
+        // Placeholder text only ever stands in for OCR under test. Anywhere
+        // else, a scan with no AI key fails with "The AI key was refused…",
+        // rather than reaching extraction as made-up text.
+        if (!hasKey && config.get<string>('nodeEnv') === 'test') return mock;
         if (!hasKey) {
           new Logger('OcrModule').warn(
-            'GEMINI_API_KEY is not set — falling back to MockOcrProvider. OCR will return placeholder text.',
+            'GEMINI_API_KEY is not set: uploads cannot be read into entries. Each fails with a reason and waits for Add to.',
           );
-          return mock;
         }
         return gemini;
       },
